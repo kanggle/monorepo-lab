@@ -78,7 +78,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 - `TASK-BE-653-login-events-carry-site-tenant-for-pool-accounts.md` — **소비자 풀 계정의 로그인 · 잠금이 사이트가 아니라 `consumer-pool` 로 기록된다** (READY, 2026-10-24 UTC): `TASK-MONO-811` AC-0 에서 나왔다(소유자 «지금 기록대로 + 후속 티켓»). 원인은 `CredentialAuthenticationProvider.java:401` 이 `credential.getTenantId()` 를 싣는 것이다. 그래서 사이트 테넌트의 IAM 실적 · 테넌트별 보안 규칙이 자기 소비자를 못 본다. 데모 소비자는 전원 풀 계정이다(`TASK-MONO-744`). 🟢 **AC-0 · AC-1 닫힘(2026-10-24 UTC): 필드 추가 `siteTenantId`**(풀 자격 · 시작 client 사이트 · 없으면 null) · `login_history` 컬럼 · 사이트 X = `tenant_id=X ∨ site_tenant_id=X` · 규칙 · 마스킹 · last-login 무변경 · `accountLocked` 는 지금대로(계약 명시). 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-BE-654-security-internal-queries-not-meta-audited.md` — **`security-query-api.md` 는 내부 조회를 모두 감사한다(A5)고 적었는데 security-service 에는 그 감사가 없다** (READY, 2026-10-24 UTC): `TASK-MONO-811` 구현 보고에서 나왔다. 🟢 **AC-0 · AC-1 닫힘: «호출자 감사 + admin 보강»** — 계약 = admin-service `admin_actions` 가 감사 · 행에 source · 기간 · 대상 · 하위 호출 실패해도 행 · `permission_used` 를 rbac.md 에 맞춤. 🔴 **선행 `TASK-BE-655`**(같은 파일). 분석=Opus 5.5 / 구현 권장=Opus.
-- `TASK-BE-655-audit-query-without-source-skips-security-event-permission.md` — **`source` 없는 감사 조회가 `security.event.read` 없이 보안 이벤트를 읽는다** (READY, 2026-10-24 UTC · 🔴 보안 결함): `TASK-BE-654` AC-0 에서 발견했고 원문으로 확인했다. `audit.read` 만 가진 운영자(`SUPPORT_LOCK`)도 `accountId` 만 넣으면 로그인 이력 · 의심 이벤트를 받는다. `rbac.md:534` 와 어긋난다. 수선 = 권한이 없으면 보안 소스를 빼고 security-service 를 부르지 않는다(403 아님 — 개요가 깨진다). 소유자 결정: 별도 티켓으로 **654 · 653 보다 먼저**. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
@@ -122,6 +121,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
 ## review
+
+- `TASK-BE-655-audit-query-without-source-skips-security-event-permission.md` — **`source` 없는 감사 조회가 `security.event.read` 없이 보안 이벤트를 읽던 결함** (REVIEW, 2026-10-24 UTC · 🔴 보안 · AC-0~3 닫힘). 콘솔 감사 화면 필터(source «전체» + 계정)로 실제로 닿는 경로였다. `AuditController` 가 권한이 없으면 실효 source 를 `admin` 으로 좁힌다(200 · DENIED 없음 · security-service 호출 0 — 기존 use-case 시험이 고정). 수정 전 코드에서 새 시험 1건만 빨강. 계약 · rbac.md 에 «source 생략» 규칙 명시. 배포 = 다음 굽기. 다음 = `TASK-BE-654`(같은 파일). 분석=Opus 5.5 / 구현=Opus 5.5.
 
 - `TASK-BE-641-end-session-endpoint-answers-401.md` — **IdP 의 `end_session_endpoint`(`/connect/logout`) 오류 경로가 401 «Missing or invalid internal credentials»** (REVIEW 2026-10-21 UTC · PR #4440 · 미머지). 소유자 결정 D1=(a): logout `errorResponseHandler` 가 400 `{error, error_description}` 을 직접 쓴다(Order 2 · `/error` 그대로). 실제 Tomcat 시험 CI 빨강 2/5(401) → 초록 5/5. 🔴 AC-1 의 소유자 브라우저 사례 · AC-3(굽기 · 라이브) 열림. 후속 = `TASK-BE-642`(authorize 오류의 같은 401). 분석=Opus 5.5 / 구현=Opus 5.5. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ✅(로그아웃 → 콘솔 `/login` 착지 · 잘못된 hint → 400 `invalid_token`) · AC-1 소유자 hint 사례 ⚪ — 티켓 § 라이브 확인.
 

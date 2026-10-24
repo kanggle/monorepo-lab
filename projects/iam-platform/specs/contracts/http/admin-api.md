@@ -489,7 +489,7 @@ base path: `/api/admin`
 | `actionCode` | string (optional) | ACCOUNT_LOCK, SESSION_REVOKE 등 |
 | `from` | ISO 8601 datetime | 시작 시각 |
 | `to` | ISO 8601 datetime | 종료 시각 |
-| `source` | string (optional) | `admin` / `login_history` / `suspicious` |
+| `source` | string (optional) | `admin` / `login_history` / `suspicious`. **생략 시**(TASK-BE-655): `security.event.read` 가 있으면 세 소스 통합(보안 소스는 `accountId` 가 있을 때만) · 없으면 **`admin` 하나로 좁힌다**(200, 403 아님 — security-service 를 부르지 않는다). 이전엔 생략 + `accountId` 가 권한 검사 없이 보안 소스를 섞었다 |
 | `tenantId` | string (optional) | **TASK-BE-249** — 조회할 테넌트. 생략 시 운영자 자신의 테넌트. `*`는 SUPER_ADMIN 전용 (크로스 테넌트). 일반 운영자가 자신의 테넌트가 아닌 값을 지정하면 `403 TENANT_SCOPE_DENIED`. **TASK-MONO-784 S3 부터**: § 행동 테넌트 — grant scope(`audit.read`) + 생략 규칙(생략 · 구체 테넌트 둘 이상 → `400 VALIDATION_ERROR`). 배정만 있는 회사의 감사는 `403`(AC-1). 결과는 `admin_actions.tenant_id` = 그 테넌트인 행 — 784 부터 그 칸은 행동 테넌트라(D-13) 홈이 다른 운영자가 이 테넌트에서 한 행위도 여기 보인다 |
 | `page` | int (default 0) | — |
 | `size` | int (default 20, max 100) | — |

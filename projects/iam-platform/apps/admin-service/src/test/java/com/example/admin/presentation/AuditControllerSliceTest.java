@@ -3,6 +3,7 @@ package com.example.admin.presentation;
 import com.example.admin.application.AdminActionAuditor;
 import com.example.admin.application.AuditQueryResult;
 import com.example.admin.application.AuditQueryUseCase;
+import com.example.admin.application.QueryAuditCommand;
 import com.example.admin.domain.rbac.Permission;
 import com.example.admin.domain.rbac.PermissionEvaluator;
 import com.example.admin.presentation.advice.AdminExceptionHandler;
@@ -26,10 +27,14 @@ import java.util.Collection;
 import java.util.List;
 
 import com.example.admin.application.exception.TenantScopeDeniedException;
+import org.mockito.ArgumentCaptor;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -134,6 +139,56 @@ class AuditControllerSliceTest {
                         .param("source", "admin_actions")
                         .header("Authorization", bearer()))
                 .andExpect(status().isOk());
+    }
+
+    /**
+     * TASK-BE-655 — no source + accountId + no security.event.read: the use-case would have mixed in the
+     * security-service sources (it does for source=null). The controller narrows to the admin source instead;
+     * AuditQueryUseCaseTest#query_sourceAdmin_securityClientNotCalled pins that "admin" never calls
+     * security-service. 200, not 403 — and no DENIED row, nothing was asked for that was refused.
+     */
+    @Test
+    void audit_query_no_source_with_account_without_security_event_read_narrows_to_admin() throws Exception {
+        when(permissionEvaluator.hasAllPermissions(anyString(), any(Collection.class))).thenReturn(false);
+
+        mockMvc.perform(get("/api/admin/audit")
+                        .param("accountId", "acc-1")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<QueryAuditCommand> cmd = ArgumentCaptor.forClass(QueryAuditCommand.class);
+        verify(useCase).query(cmd.capture());
+        assertThat(cmd.getValue().source()).isEqualTo("admin");
+        assertThat(cmd.getValue().accountId()).isEqualTo("acc-1");
+        verify(auditor, never()).recordDenied(any(), any(), any(), any(), any());
+    }
+
+    /** TASK-BE-655 control group: holding both permissions, the same query still asks for every source. */
+    @Test
+    void audit_query_no_source_with_account_with_both_permissions_keeps_all_sources() throws Exception {
+        when(permissionEvaluator.hasAllPermissions(anyString(), any(Collection.class))).thenReturn(true);
+
+        mockMvc.perform(get("/api/admin/audit")
+                        .param("accountId", "acc-1")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<QueryAuditCommand> cmd = ArgumentCaptor.forClass(QueryAuditCommand.class);
+        verify(useCase).query(cmd.capture());
+        assertThat(cmd.getValue().source()).isNull();
+    }
+
+    /** TASK-BE-655: with no accountId no security source is read anyway — the overview call is untouched. */
+    @Test
+    void audit_query_no_source_no_account_is_unchanged() throws Exception {
+        mockMvc.perform(get("/api/admin/audit")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<QueryAuditCommand> cmd = ArgumentCaptor.forClass(QueryAuditCommand.class);
+        verify(useCase).query(cmd.capture());
+        assertThat(cmd.getValue().source()).isNull();
+        verify(permissionEvaluator, never()).hasAllPermissions(anyString(), any(Collection.class));
     }
 
     @Test

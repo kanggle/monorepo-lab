@@ -35,6 +35,9 @@ public class AuditController {
     private static final String COMPOSITE_AUDIT_PERMISSION =
             Permission.AUDIT_READ + "+" + Permission.SECURITY_EVENT_READ;
 
+    /** The source value {@link AuditQueryUseCase} reads as «admin_actions only». */
+    private static final String ADMIN_SOURCE = "admin";
+
     private final AuditQueryUseCase useCase;
     private final PermissionEvaluator permissionEvaluator;
     private final AdminActionAuditor auditor;
@@ -94,8 +97,20 @@ public class AuditController {
             }
         }
 
+        // TASK-BE-655 — with no source, AuditQueryUseCase mixes in the security-service sources whenever
+        // accountId is present, and the composite check above never ran. Without security.event.read the
+        // query is narrowed to the admin source (rbac.md "no source → admin_actions 기본 소스로 제한"), so
+        // security-service is never called. Not a 403: the console overview calls with no source for every
+        // audit.read operator.
+        String effectiveSource = source;
+        if (source == null && accountId != null
+                && !permissionEvaluator.hasAllPermissions(
+                        op.operatorId(), List.of(Permission.AUDIT_READ, Permission.SECURITY_EVENT_READ))) {
+            effectiveSource = ADMIN_SOURCE;
+        }
+
         var cmd = new QueryAuditCommand(
-                accountId, actionCode, from, to, source,
+                accountId, actionCode, from, to, effectiveSource,
                 page, size, idempotencyKey, reason, op, tenantId);
 
         return ResponseEntity.ok(AuditQueryResponse.from(useCase.query(cmd)));
