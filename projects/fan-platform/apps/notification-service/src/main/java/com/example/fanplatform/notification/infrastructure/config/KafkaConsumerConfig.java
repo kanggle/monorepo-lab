@@ -10,6 +10,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
@@ -53,9 +54,9 @@ public class KafkaConsumerConfig {
                 (record, ex) -> {
                     String dlqTopic = record.topic() + ".DLT";
                     meterRegistry.counter(DLQ_METRIC, "topic", record.topic()).increment();
-                    log.warn("Routing to DLQ: topic={}, dlq={}, key={}, offset={}, reason={}",
-                            record.topic(), dlqTopic, record.key(), record.offset(),
-                            ex.getMessage());
+                    log.warn("Routing to DLQ: topic={}, dlq={}, key={}, partition={}, offset={}, cause={}",
+                            record.topic(), dlqTopic, record.key(), record.partition(), record.offset(),
+                            NestedExceptionUtils.getMostSpecificCause(ex), ex);
                     return new TopicPartition(dlqTopic, -1);
                 });
 
