@@ -293,45 +293,94 @@ public class PurchaseOrder {
     }
 
     /**
-     * Apply ASN line: increase received quantity for the matched PO line and
-     * advance PO status (CONFIRMED → PARTIALLY_RECEIVED → RECEIVED) when
-     * appropriate. Returns the previous PO status for audit, or {@code null}
-     * if status did not change.
+     * Apply one whole ASN: add each line's shipped quantity to its PO line and
+     * move the PO to {@code PARTIALLY_RECEIVED} (something still outstanding) or
+     * {@code RECEIVED} (every line complete) — through {@link PoStatusMachine}'s
+     * {@link ActorType#SYSTEM} rules, so only a {@code CONFIRMED} or
+     * {@code PARTIALLY_RECEIVED} PO can take a receipt (TASK-SCM-BE-063).
+     *
+     * <p><strong>All-or-nothing.</strong> Every check runs before anything is
+     * mutated, in this order, so a rejected ASN leaves lines and status untouched:
+     * <ol>
+     *   <li>each line exists on this PO and its quantity is positive
+     *       ({@link IllegalArgumentException}, as before);</li>
+     *   <li>no line would exceed its ordered quantity, counting repeats of the
+     *       same line within the ASN ({@link AsnOverreceiptException} — checked
+     *       first, so an ASN on an already {@code RECEIVED} PO still answers
+     *       {@code ASN_OVERRECEIPT}, unchanged);</li>
+     *   <li>the resulting status change is allowed for {@code SYSTEM}
+     *       ({@link com.example.scmplatform.procurement.domain.error.PoStatusTransitionInvalidException}
+     *       — e.g. {@code CANCELED → RECEIVED}, {@code SUBMITTED → PARTIALLY_RECEIVED}).</li>
+     * </ol>
+     *
+     * <p>The transition is evaluated once for the whole ASN, so a multi-line ASN
+     * that completes a {@code CONFIRMED} PO is one {@code CONFIRMED → RECEIVED}
+     * step, not a {@code PARTIALLY_RECEIVED} the PO never committed in between.
+     *
+     * @return the status before the ASN when it changed, otherwise {@code null}
+     *         (a further partial receipt on a {@code PARTIALLY_RECEIVED} PO)
      */
-    public PoStatus applyAsnLine(String poLineId, BigDecimal deltaQuantity) {
-        PurchaseOrderLine target = this.lines.stream()
+    public PoStatus applyAsn(List<AsnLineReceipt> receipts) {
+        Objects.requireNonNull(receipts, "receipts");
+        if (receipts.isEmpty()) {
+            throw new IllegalArgumentException("ASN for PO " + id + " has no lines");
+        }
+
+        // 1-2. Validate every line against its projected cumulative quantity.
+        java.util.Map<String, BigDecimal> projected = new java.util.LinkedHashMap<>();
+        java.util.Map<String, PurchaseOrderLine> byId = new java.util.HashMap<>();
+        for (AsnLineReceipt receipt : receipts) {
+            PurchaseOrderLine line = findLine(receipt.poLineId());
+            byId.put(line.getId(), line);
+            BigDecimal delta = receipt.quantity();
+            BigDecimal pendingDelta = projected.containsKey(line.getId())
+                    ? projected.get(line.getId()).subtract(line.getReceivedQuantity())
+                    : BigDecimal.ZERO;
+            if (delta == null || delta.signum() <= 0) {
+                throw new IllegalArgumentException("delta must be positive: " + delta);
+            }
+            try {
+                projected.put(line.getId(), line.receivedAfter(pendingDelta.add(delta)));
+            } catch (IllegalArgumentException e) {
+                if (e.getMessage() != null && e.getMessage().startsWith("ASN_OVERRECEIPT")) {
+                    throw new AsnOverreceiptException(e.getMessage());
+                }
+                throw e;
+            }
+        }
+
+        // 3. The status this ASN would produce, checked against the state machine.
+        boolean allReceived = this.lines.stream().allMatch(l -> {
+            BigDecimal received = projected.getOrDefault(l.getId(), l.getReceivedQuantity());
+            return received.compareTo(l.getQuantity()) >= 0;
+        });
+        PoStatus target = allReceived ? PoStatus.RECEIVED : PoStatus.PARTIALLY_RECEIVED;
+        PoStatus previous = this.status;
+        if (target != previous) {
+            PoStatusMachine.ensureTransitionAllowed(previous, target, ActorType.SYSTEM);
+        }
+        // target == previous is reachable only as PARTIALLY_RECEIVED → PARTIALLY_RECEIVED
+        // (a RECEIVED PO has every line full, so any positive quantity failed step 2).
+
+        // Mutate only after every check passed.
+        for (java.util.Map.Entry<String, BigDecimal> e : projected.entrySet()) {
+            PurchaseOrderLine line = byId.get(e.getKey());
+            line.addReceived(e.getValue().subtract(line.getReceivedQuantity()));
+        }
+        if (target == previous) {
+            return null;
+        }
+        this.status = target;
+        this.updatedAt = Instant.now();
+        return previous;
+    }
+
+    private PurchaseOrderLine findLine(String poLineId) {
+        return this.lines.stream()
                 .filter(l -> l.getId().equals(poLineId))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(
                         "PO line not found: " + poLineId + " in PO " + id));
-        try {
-            target.addReceived(deltaQuantity);
-        } catch (IllegalArgumentException e) {
-            if (e.getMessage() != null && e.getMessage().startsWith("ASN_OVERRECEIPT")) {
-                throw new AsnOverreceiptException(e.getMessage());
-            }
-            throw e;
-        }
-
-        boolean allReceived = this.lines.stream().allMatch(PurchaseOrderLine::isFullyReceived);
-        boolean anyReceived = this.lines.stream()
-                .anyMatch(l -> l.getReceivedQuantity().signum() > 0);
-
-        PoStatus previous = this.status;
-        if (allReceived && status == PoStatus.RECEIVED) {
-            return null;
-        }
-        if (allReceived) {
-            this.status = PoStatus.RECEIVED;
-            this.updatedAt = Instant.now();
-            return previous;
-        }
-        if (anyReceived && status == PoStatus.CONFIRMED) {
-            this.status = PoStatus.PARTIALLY_RECEIVED;
-            this.updatedAt = Instant.now();
-            return previous;
-        }
-        return null;
     }
 
     /**

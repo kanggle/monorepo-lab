@@ -295,7 +295,7 @@ envelope — the shared contract's shape), every value an integer string:
 |---|---|---|
 | `poCount` | count | POs whose `submittedAt` ∈ the window **and** whose **current** status is not `CANCELED`. A `DRAFT` has no `submittedAt` and never counts. 🔴 A PO canceled after it was submitted leaves its submit window when it is canceled — **a past window's value can decrease**. |
 | `poAmount:<CUR>` | money | Σ `totalAmount` of exactly the `poCount` set, **one key per currency** (`currency` = the PO's own 3-letter code), never converted or added across currencies (ADR-MONO-084 D2 · OD-3). The per-currency sum is taken in decimal and converted **once** to integer minor units with that currency's ISO-4217 default fraction digits (KRW 0, USD 2, …; a code that is not ISO-4217, or an ISO code with no minor unit such as `XXX` → 2), rounding **HALF_UP**. A PO drafted from a suggestion and submitted at unit price 0 counts in `poCount` and adds 0 here. Same decrease-on-cancel caveat as `poCount`. |
-| `receivedCount` | count | Distinct POs with a status-history transition **to `RECEIVED`** whose `occurredAt` ∈ the window — attributed to the **receipt time**, not the submit time (owner decision 2026-10-24), so a past window's value does not change. Its current status does not matter. 🔴 The supplier ASN path does not yet check the PO's status before applying a full receipt (`TASK-SCM-BE-063`), so a PO received after it was canceled is counted here. |
+| `receivedCount` | count | Distinct POs with a status-history transition **to `RECEIVED`** whose `occurredAt` ∈ the window — attributed to the **receipt time**, not the submit time (owner decision 2026-10-24), so a past window's value does not change. Its current status does not matter. Only an ASN on a `CONFIRMED` / `PARTIALLY_RECEIVED` PO can write that transition (§ ASN webhook, Status guard); a rejected ASN writes no history row and does not move this count. |
 
 - **Order:** `poCount`, then the `poAmount:<CUR>` keys sorted by currency code, then
   `receivedCount`.
@@ -447,6 +447,32 @@ Inbound webhook — supplier delivers an Advance Shipment Notice. Creates an
 S2 idempotency) and applies each line to the matching PO line. Status
 transitions per ASN coverage (CONFIRMED → PARTIALLY_RECEIVED → RECEIVED).
 
+**Status guard (TASK-SCM-BE-063):** only a PO in `CONFIRMED` or
+`PARTIALLY_RECEIVED` takes a receipt — the ASN's effect is checked against
+`PoStatusMachine`'s `SYSTEM` rules (`specs/services/procurement-service/architecture.md`
+§ PO State Machine). The target is `RECEIVED` when every PO line would be fully
+received after the ASN, otherwise `PARTIALLY_RECEIVED`:
+
+| PO status | partial ASN | full ASN |
+|---|---|---|
+| `CONFIRMED` | 200 → `PARTIALLY_RECEIVED` | 200 → `RECEIVED` |
+| `PARTIALLY_RECEIVED` | 200, status unchanged | 200 → `RECEIVED` |
+| `DRAFT` · `SUBMITTED` · `ACKNOWLEDGED` · `CANCELED` | 422 `PO_STATUS_TRANSITION_INVALID`, `details: { from: <status>, to: "PARTIALLY_RECEIVED", actor: "SYSTEM" }` | 422 `PO_STATUS_TRANSITION_INVALID`, `details: { from: <status>, to: "RECEIVED", actor: "SYSTEM" }` |
+| `RECEIVED` · `SETTLED` · `CLOSED` | 422 `ASN_OVERRECEIPT` (every line is already full) | 422 `ASN_OVERRECEIPT` |
+
+- **Order of checks:** duplicate `supplierAsnRef` → `PO_NOT_FOUND` → each line
+  (unknown `poLineId` → `VALIDATION_ERROR`; cumulative quantity over the ordered
+  quantity, repeats of one line within the ASN summed → `ASN_OVERRECEIPT`) → the
+  status guard. So an over-receipt answers `ASN_OVERRECEIPT` whatever the PO status.
+- **All-or-nothing:** a rejected ASN writes nothing — no `advance_shipment_notices`
+  / `asn_lines` row, no line quantity change, no `po_status_history` row, no
+  `audit_log` row, no outbox event. No line of a multi-line ASN is applied unless all are.
+- **History:** one `po_status_history` row per accepted ASN that changes the status
+  (`actor_type = SYSTEM`, `reason = "ASN <supplierAsnRef>"`). A multi-line ASN that
+  completes a `CONFIRMED` PO writes a single `CONFIRMED → RECEIVED` row, never an
+  intermediate `PARTIALLY_RECEIVED` row. A further partial ASN on a
+  `PARTIALLY_RECEIVED` PO writes none.
+
 **Headers:**
 - `X-Supplier-Signature: <lowercase-hex HMAC-SHA256>` (required)
 - `X-Supplier-Timestamp: <epoch-seconds>` (required)
@@ -500,12 +526,20 @@ Validation:
 ```
 
 **Idempotency:** duplicate webhook with the same `(tenantId, supplierAsnRef)`
-returns the previously-stored ASN with the original receivedAt.
+returns the previously-stored ASN with the original receivedAt. The duplicate
+check runs **before** the status guard, so a replay of an accepted ASN answers 200
+with the stored ASN even after the PO moved on (e.g. to `RECEIVED`). A **rejected**
+ASN was never stored, so resending it is evaluated afresh: 422 again while the PO is
+still in a status that cannot take it, 200 once it is `CONFIRMED` /
+`PARTIALLY_RECEIVED`. (A resend carrying an already-seen signature is still
+`WEBHOOK_REPLAY_DETECTED` at the signature filter, before any of this — a retry
+needs a fresh timestamp and signature.)
 
 **Errors:** `WEBHOOK_SIGNATURE_INVALID` / `WEBHOOK_TIMESTAMP_INVALID` /
 `WEBHOOK_REPLAY_DETECTED` (401, written directly by `WebhookSignatureFilter`),
 `PO_NOT_FOUND` (404),
-`PO_STATUS_TRANSITION_INVALID` (422 — e.g., applying ASN to a CANCELED PO),
+`PO_STATUS_TRANSITION_INVALID` (422 — the PO is not `CONFIRMED` / `PARTIALLY_RECEIVED`;
+see § Status guard above),
 `ASN_OVERRECEIPT` (422 — cumulative received > ordered on the line),
 `VALIDATION_ERROR` (422).
 
