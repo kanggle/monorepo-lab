@@ -8,7 +8,7 @@ The Finance transactions type filter offers `CREDIT` / `DEBIT`, which the backen
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
