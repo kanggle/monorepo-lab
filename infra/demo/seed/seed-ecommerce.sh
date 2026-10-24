@@ -512,6 +512,11 @@ ship_progress() {  # <배송id> <현재상태> <최종목표>
   seed_log "배송 $sid 현재 상태=$cur → $final 까지 진행"
   for target in SHIPPED IN_TRANSIT DELIVERED; do
     [ "$cur" = "$final" ] && break
+    # TASK-MONO-818: 이미 지난 단계는 다시 쏘지 않는다 — wms 경로로 SHIPPED 가 된 배송 건에
+    # SHIPPED 를 또 보내면 송장(wms shipmentNo)을 데모 값으로 덮을 수 있다.
+    case "$cur:$target" in
+      SHIPPED:SHIPPED|IN_TRANSIT:SHIPPED|IN_TRANSIT:IN_TRANSIT) continue ;;
+    esac
     body="{\"status\":\"$target\""
     [ "$target" = "SHIPPED" ] && body="$body,\"trackingNumber\":\"DEMO-1234567890\",\"carrier\":\"CJ대한통운\""
     body="$body}"
@@ -539,6 +544,70 @@ ship_progress() {  # <배송id> <현재상태> <최종목표>
     [ "$cur" = "$final" ] && break
   done
 }
+
+# -----------------------------------------------------------------------------
+# 슬롯 4·5 를 **wms 로 출고**한다 (TASK-MONO-818)
+# -----------------------------------------------------------------------------
+# 🔴 예전에는 아래 `ship_progress` 가 운영자 API 로 배송 건을 손으로 SHIPPED 까지 올렸다.
+# 그 요청은 `deductWmsInventory` 를 싣지 않으므로 wms 는 아무것도 듣지 못하고, 이벤트로 생긴
+# wms 출고 주문은 `PICKING` 에 영원히 남았다 — 33·34차 창이 본 «ecommerce SHIPPED/DELIVERED ·
+# wms PICKING» 이 그것이다. `deductWmsInventory=true` 로도 안 된다: wms
+# `ManualShipConfirmConsumer` 는 `PACKING_CONFIRMED` 에서만 출하를 확정하고 `PICKING` 이면
+# WARN no-op 이다(물리 불변식 — 집지도 싸지도 않은 물건을 내보내지 않는다).
+#
+# ⇒ 실제 방향대로 민다: wms 피킹 → 포장 → 출하 확정 → `wms.outbound.shipping.confirmed.v1`
+#   → shipping-service `WmsShippingConfirmedConsumer` 가 배송 건을 PREPARING → SHIPPED.
+#   wms 출고 주문의 `orderNo` 는 ecommerce 주문 id 다(그 소비자가 그 키로 배송 건을 찾는다).
+# · DELIVERED 를 내는 wms 이벤트는 없다 — 슬롯 5 는 SHIPPED 뒤를 지금처럼 손으로 잇는다.
+# · 토큰: 이 블록의 `SEED_TOKEN` 은 `ecommerce` assume 운영자다. 이벤트로 생긴 wms 행의 테넌트가
+#   봉투의 `ecommerce` 라서(`ReceiveOrderService`) `demo-corp` 토큰으로는 보이지 않는다.
+#   `ecommerce` 테넌트는 wms 도 구독한다(위 운영자 블록 주석).
+# · wms 가 안 떠 있거나 실패하면 **지금 경로로 폴백**한다 — 시드는 데모를 막지 않는다.
+#   대신 어긋남을 이름으로 남긴다(조용한 폴백이 매번 일어나도 로그가 초록이면 안 된다).
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib-wms-outbound.sh"
+WMS_GW="http://wms.${DEMO_DOMAIN}"
+
+# ship_via_wms <슬롯> <주문id> <현재 배송상태> — 0 이면 배송 건이 이벤트로 SHIPPED 가 됐다.
+ship_via_wms() {
+  local slot="$1" oid="$2" cur="$3" i rc
+  if [ "$cur" != "PREPARING" ]; then
+    seed_log "주문 $slot: 배송 건이 이미 $cur — wms 경로를 건너뜁니다(재실행)"
+    return 1
+  fi
+  if ! container_up wms-gateway-service; then
+    seed_warn "주문 $slot: wms 미기동 — 손으로 SHIPPED 로 올립니다(ecommerce SHIPPED · wms 출고 없음/PICKING 으로 어긋납니다, TASK-MONO-818)"
+    return 1
+  fi
+  # 이벤트로 오는 주문은 확정 몇 초 뒤에 생기고, wms 가 ecommerce 뒤에 떴으면 더 늦다.
+  wms_ship_outbound "$WMS_GW" "$oid" "" "BOX-EC-${oid:0:8}" 120; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    case "$SEED_LAST_STATUS" in
+      401|403|404) seed_warn "  → HTTP $SEED_LAST_STATUS: 'ecommerce' 운영자가 wms 출고 행을 못 본다/못 쓴다 — 테넌트·역할을 의심하라" ;;
+    esac
+    seed_warn "주문 $slot: wms 경로로 출고하지 못했습니다(rc=$rc) — 손으로 SHIPPED 로 올립니다(ecommerce SHIPPED · wms PICKING 으로 어긋납니다, TASK-MONO-818)"
+    return 1
+  fi
+  # 배송 건 조회는 구매자 전용 엔드포인트다(위 주석) — 소비자 토큰으로 잠시 바꾼다.
+  SEED_TOKEN="${CONSUMER_TOKEN:-}"
+  for (( i=0; i<90; i+=5 )); do
+    if shipping_of "$oid" && [ "$SHIPPING_STATUS" != "PREPARING" ]; then break; fi
+    sleep 5
+  done
+  SEED_TOKEN="$OP_TOKEN"
+  if [ "${SHIPPING_STATUS:-}" = "SHIPPED" ]; then
+    seed_log "주문 $slot: wms 출하 확정 → 이벤트로 배송 SHIPPED (wms ${WMS_SHIP_RESULT})"
+    return 0
+  fi
+  seed_warn "주문 $slot: wms 는 출하했는데 배송 건이 90초 안에 SHIPPED 가 되지 않았습니다(마지막 ${SHIPPING_STATUS:-?}) — 손으로 잇습니다. wms→ecommerce relay 와 shipping-service-wms 소비자를 확인하라"
+  return 1
+}
+
+if [ -n "${SHIP_ID_SHIPPED:-}" ] && ship_via_wms 4 "${ORDER_SLOT_IDS[4]}" "${SHIP_STATUS_SHIPPED:-}"; then
+  SHIP_STATUS_SHIPPED=SHIPPED
+fi
+if [ -n "${SHIP_ID:-}" ] && ship_via_wms 5 "${ORDER_SLOT_IDS[5]}" "${SHIP_STATUS:-}"; then
+  SHIP_STATUS=SHIPPED
+fi
 
 if [ -n "${SHIP_ID_SHIPPED:-}" ]; then
   ship_progress "$SHIP_ID_SHIPPED" "${SHIP_STATUS_SHIPPED:-}" SHIPPED

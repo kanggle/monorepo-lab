@@ -129,6 +129,11 @@ DEMO_DOMAIN=local bash infra/demo/seed/seed-ecommerce.sh
 - **도메인 규칙을 우회하지 마라.** 리뷰는 `DELIVERED` 주문에만 쓸 수 있다. 리뷰 행을
   직접 INSERT 하면 데모는 **존재할 수 없는 상태**를 보여준다. 시드는 배송을 실제로
   진행시켜 자격을 만든다 — 그 과정에서 콘솔 「배송」 탭도 함께 찬다.
+  🔵 **배송은 wms 를 거친다**(`TASK-MONO-818`): wms 로 라우팅된 주문(슬롯 4·5)은 wms 에서
+  피킹 → 포장 → 출하 확정을 하고, ecommerce 배송 건은 `wms.outbound.shipping.confirmed.v1`
+  로 SHIPPED 가 된다(DELIVERED 만 손으로). 손으로 SHIPPED 를 올리면 wms 출고는 `PICKING` 에
+  남는다 — wms 가 안 떠 있을 때만 그 폴백을 쓰고, 그때는 경고로 어긋남을 남긴다. 그 흐름은
+  `lib-wms-outbound.sh` 하나에 있고 `seed-wms.sh` 도 같은 함수를 쓴다.
 - **고정 Idempotency-Key 를 써라.** 매번 새 키면 2회차 실행이 같은 것을 또 만든다.
   🔴 **다만 상태 기계에는 반대다** — `seed-wms.sh` 는 매 호출마다 **새 키**를 만든다.
   이유 둘을 실측했다: ① **같은 키는 실패 응답까지 재생한다**(두 번째 403 의 타임스탬프가
