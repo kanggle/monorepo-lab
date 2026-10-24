@@ -22,8 +22,8 @@ import { WmsThroughputChart } from './WmsThroughputChart';
  * ACTIVE warehouses exist a selector re-queries the same-origin
  * `/api/wms/throughput` proxy for the chosen one (owner decision (a)).
  *
- * Window = the 14 UTC days ending at the server's UTC today (owner decision
- * (b)), labelled «UTC 기준». Bars = counts (inbound `putawayCount` vs outbound
+ * Window = the 14 KST days ending at the KST today (owner decision (b);
+ * KST since TASK-MONO-815), labelled «한국 시간 기준». Bars = counts (inbound `putawayCount` vs outbound
  * `shipmentCount`), zero-filled; quantities appear as totals text only (owner
  * decision (c)).
  *
@@ -145,7 +145,7 @@ export function WmsThroughputCard({ state }: { state: WmsThroughputState }) {
             data-testid="wms-throughput-window"
             className="text-xs text-muted-foreground"
           >
-            {`최근 14일 · UTC 기준 (${state.from} ~ ${state.to})`}
+            {`최근 14일 · 한국 시간 기준 (${state.from} ~ ${state.to})`}
           </p>
         </div>
         {state.warehouses.length >= 2 ? (

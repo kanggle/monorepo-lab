@@ -4,44 +4,49 @@ import {
   barPercent,
   enumerateIsoDates,
   sumThroughput,
-  utcThroughputWindow,
+  kstThroughputWindow,
   validateThroughputQuery,
   zeroFillThroughput,
 } from '@/features/wms-ops/lib/throughput';
 
 /**
  * TASK-PC-FE-358 — pure helpers behind the `/wms` 개요 throughput card
- * (contract § 2.4.5.2 «Daily throughput card»): the UTC window, zero-fill,
+ * (contract § 2.4.5.2 «Daily throughput card»): the KST window, zero-fill,
  * the proxy's pre-upstream validation, warehouse ordering and bar scaling.
  */
 
 const WH = '01910000-0000-7000-8000-000000000001';
 
-describe('utcThroughputWindow — 14 UTC days ending at the UTC date of now', () => {
-  it('late UTC evening (2026-10-22T23:30Z — already 10-23 08:30 in KST) still ends on the UTC date 10-22', () => {
-    expect(utcThroughputWindow(new Date('2026-10-22T23:30:00Z'))).toEqual({
-      from: '2026-10-09',
-      to: '2026-10-22',
+describe('kstThroughputWindow — 14 KST days ending at the KST date of now (TASK-MONO-815)', () => {
+  it('AC-1: 00:30 KST 10-25 (= 2026-10-24T15:30Z) ends on the KST date 10-25, 14 days', () => {
+    const w = kstThroughputWindow(new Date('2026-10-24T15:30:00Z'));
+    expect(w).toEqual({ from: '2026-10-12', to: '2026-10-25' });
+    expect(enumerateIsoDates(w.from, w.to)).toHaveLength(14);
+  });
+
+  it('control: 2026-10-24T05:00Z (14:00 KST) ends on 10-24', () => {
+    expect(kstThroughputWindow(new Date('2026-10-24T05:00:00Z'))).toEqual({
+      from: '2026-10-11',
+      to: '2026-10-24',
     });
   });
 
-  it('KST early morning (2026-10-22T00:30+09:00 = 10-21T15:30Z) ends on 10-21, NOT the KST date', () => {
-    // The producer has not started UTC 10-22 yet; a KST "today" would ask for it.
-    expect(utcThroughputWindow(new Date('2026-10-22T00:30:00+09:00'))).toEqual({
-      from: '2026-10-08',
-      to: '2026-10-21',
+  it('late UTC evening (2026-10-22T23:30Z — already 10-23 08:30 KST) ends on 10-23', () => {
+    expect(kstThroughputWindow(new Date('2026-10-22T23:30:00Z'))).toEqual({
+      from: '2026-10-10',
+      to: '2026-10-23',
     });
   });
 
-  it('crosses a month/year boundary', () => {
-    expect(utcThroughputWindow(new Date('2027-01-05T12:00:00Z'))).toEqual({
-      from: '2026-12-23',
-      to: '2027-01-05',
+  it('crosses a month/year boundary (2027-01-05T20:00Z = 01-06 05:00 KST)', () => {
+    expect(kstThroughputWindow(new Date('2027-01-05T20:00:00Z'))).toEqual({
+      from: '2026-12-24',
+      to: '2027-01-06',
     });
   });
 
   it('is exactly 14 inclusive dates', () => {
-    const w = utcThroughputWindow(new Date('2026-10-22T12:00:00Z'));
+    const w = kstThroughputWindow(new Date('2026-10-22T12:00:00Z'));
     expect(enumerateIsoDates(w.from, w.to)).toHaveLength(14);
   });
 });

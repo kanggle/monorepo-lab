@@ -65,6 +65,14 @@ export function kstPeriodBounds(now: Date = new Date()): KstPeriodBounds {
   };
 }
 
+/**
+ * The KST calendar date (`YYYY-MM-DD`) of an instant — same fixed +09:00 shift
+ * as {@link kstPeriodBounds} (TASK-MONO-815).
+ */
+export function kstDateOf(now: Date = new Date()): string {
+  return new Date(now.getTime() + KST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 // ---------------------------------------------------------------------------
 // Performance-metrics windows (ADR-MONO-084 D2 · D3, TASK-MONO-806)
 // ---------------------------------------------------------------------------

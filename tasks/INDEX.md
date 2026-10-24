@@ -185,7 +185,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 **`ADR-MONO-084` 실행 시리즈 (ACCEPTED 2026-10-23 — 갈래 없음 · OD 기본값)** — 도메인 개요 맨 위에 실적 줄(이번 주 · 이번 달 · 직전 대비 · 일별). 🔴 **P1 이 먼저** — P2~P7 은 P1 의 DTO · 경계 · 콘솔 컴포넌트를 쓴다. P2~P7 은 서로 독립이지만 콘솔 공유 파일을 건드리므로 **직렬 머지**. P8 = `projects/platform-console` `TASK-PC-FE-368`.
 
-- `TASK-MONO-815-wms-throughput-card-kst-window-with-bake.md` — **WMS 처리량 카드 KST 창 · 문구** (READY, 2026-10-24 UTC): 🔴 `TASK-MONO-808` admin V6 를 싣는 **굽기와 같은 창에** 머지(콘솔은 Vercel 즉시 배포 — 먼저 나가면 화면이 데이터보다 앞서 «한국 시간» 이라 말한다). 선행 808 + 굽기. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 
@@ -217,6 +216,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-815-wms-throughput-card-kst-window-with-bake.md` — **WMS 처리량 카드를 한국 시간 창 · «한국 시간 기준» 문구로** (REVIEW, 2026-10-24 UTC · AC-0~2 닫힘 · AC-3 = 데모 창 화면 확인). 34차 굽기 `ami-0d9f8da7d20d7a180`(`d5bb28f14` ⊇ 808 `4335ed688`)가 apply 된 뒤에 머지했다(굽기와 같은 창). `kstDateOf` 로 창 끝 = KST 오늘이고 14일은 유지된다. 문구는 «최근 14일 · UTC 기준» → «최근 14일 · 한국 시간 기준». 계약 § 2.4.5.2 를 정정했다. 대상 시험 7건이 수정 전 코드에서 빨강이고, console vitest 5541 통과. 분석=Opus 5.5 / 구현=Sonnet 5.5(frontend-engineer + diff 대조).
 
 - `TASK-MONO-817-performance-metrics-wildcard-tenant-reads-as-zero.md` — **실적 지표가 와일드카드 테넌트(`*`)에 «조용한 0» 으로 답하지 않는다** (REVIEW, 2026-10-24 UTC · AC-0~3 닫힘 · 소유자 결정 «조용한 0 금지»). AC-0: 0 = ecommerce · finance / 합계 = IAM(명시) / 403 = wms · erp · scm. 콘솔에서는 `*` 로 닿는 경로가 없다(잠재). 공용 계약 § «Wildcard tenant»: 명시적 합계 또는 403. ecommerce · finance 지표만 403 으로 바꿨다(다른 읽기는 불변). 수정 전 코드에서 새 시험 4건만 빨강. 콘솔 무변경. 배포 = 다음 굽기. 분석=Opus 5.5 / 구현=Opus 5.5.
 

@@ -438,8 +438,8 @@ function throughputDateMs(s: string | null): number | null {
 }
 
 /**
- * TASK-PC-FE-358 — the 개요 throughput card asks for the 14 UTC days ending
- * TODAY, so a fixed September window would leave the anonymous sample screen
+ * TASK-PC-FE-358 — the 개요 throughput card asks for the 14 KST days ending
+ * TODAY (the fixture just answers whatever window is requested), so a fixed September window would leave the anonymous sample screen
  * permanently empty. When `from`/`to` are a valid ≤ 90-day window the fixture
  * now answers THAT window, with deterministic synthetic counts derived from the
  * day number (same date ⇒ same numbers on every render). Every 5th day is

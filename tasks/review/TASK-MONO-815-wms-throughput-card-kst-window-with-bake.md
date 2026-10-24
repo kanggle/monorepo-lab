@@ -8,7 +8,7 @@ WMS 처리량 카드를 한국 시간 창 · «한국 시간 기준» 문구로 
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -52,9 +52,23 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 굽힌 AMI 가 `TASK-MONO-808` 머지 커밋을 조상으로 갖는지 확인(`git merge-base --is-ancestor`)하고 그 값을 이 파일에 적는다. 아니면 STOP.
-- [ ] **AC-1** — 00:30 KST(= 전날 15:30 UTC) 시각으로 창 끝이 KST 날짜인 시험 · 14일 길이 유지.
-- [ ] **AC-2** — 카드 문구 시험이 «한국 시간 기준» 을 단언하고 «UTC» 가 화면에 0 회.
+- [x] **AC-0** — 굽힌 AMI 가 `TASK-MONO-808` 머지 커밋을 조상으로 갖는지 확인(`git merge-base --is-ancestor`)하고 그 값을 이 파일에 적는다. 아니면 STOP.
+  - → **닫힘 2026-10-24 UTC.** 34차 굽기 `ami-0d9f8da7d20d7a180`(태그 RepoCommit `d5bb28f14`, 핀 #4533). `git merge-base --is-ancestor 4335ed688 d5bb28f14` → **yes**.
+  - 소유자 `terraform apply` 로 새 인스턴스 `i-0cebb64967faf3d33` 가 이 AMI 를 쓴다. `check-ami-generation.sh --with-aws` rc=0 «같은 세대» 다.
+  - 신선 볼륨이라 입고 옛 행(UTC 날)은 없다.
+- [x] **AC-1** — 00:30 KST(= 전날 15:30 UTC) 시각으로 창 끝이 KST 날짜인 시험 · 14일 길이 유지.
+  - → 2026-10-24 UTC. 구현은 frontend-engineer(sonnet)가 했고, diff 는 기안자가 대조했다.
+  - `shared/lib/kst-period.ts` 에 `kstDateOf(now)` 를 더했다. 기존 `KST_OFFSET_MS` 를 재사용하고 새 오프셋 상수는 없다.
+  - `lib/throughput.ts` `utcThroughputWindow` → `kstThroughputWindow` 다. `to` = KST 오늘, `from` = to − 13일.
+  - `wms-throughput-lib.test.ts`: `2026-10-24T15:30Z` → `{2026-10-12, 2026-10-25}`(14일). 대조군 `05:00Z` → `to=2026-10-24`. 연말 경계 `2027-01-05T20:00Z` → `{2026-12-24, 2027-01-06}`.
+  - `wms-throughput-state.test.ts`: 15:30Z 면 `getThroughput` 을 그 창으로 부른다.
+- [x] **AC-2** — 카드 문구 시험이 «한국 시간 기준» 을 단언하고 «UTC» 가 화면에 0 회.
+  - → 문구: «최근 14일 · UTC 기준 (from ~ to)» → **«최근 14일 · 한국 시간 기준 (from ~ to)»**.
+  - `WmsThroughputCard.test.tsx` 가 정확한 문구와 카드 전체 텍스트의 «UTC» 0 회를 단언한다.
+  - 계약 `console-integration-contract.md` § 2.4.5.2 의 «UTC, not KST» 를 KST 로 정정했다.
+  - 프록시(`app/api/wms/throughput`)는 날짜 형식만 검증해 무변경이다. 샘플 픽스처는 요청받은 from/to 를 그대로 답하므로 주석만 고쳤다.
+  - **무는가:** `src` 만 되돌리면 대상 4파일에서 7건 빨강이다(sample 파일은 import 로 파일 단위 실패). 복구 뒤 56/56 이다. `tsc` rc=0 · `lint` rc=0.
+  - 기록만: `ADR-MONO-084:108` 의 «다시 쌓기가 끝나기 전까지 화면은 «UTC 기준»» 문장은 ACCEPTED ADR 이라 고치지 않았다(이 티켓이 그 «끝난 뒤» 다).
 - [ ] **AC-3** — 데모 창에서 `/wms` 카드의 마지막 날이 KST 오늘인지 눈으로 확인(⚪ 이면 이유).
 
 # Related Specs

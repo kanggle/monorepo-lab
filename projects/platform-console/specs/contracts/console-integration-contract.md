@@ -971,24 +971,19 @@ decision is recorded in [`console-web/architecture.md` § 도메인 랜딩 운�
      fallbacks). **0 warehouses** → the card shows a "no warehouse" notice and
      **no throughput read is issued**; **1** → that warehouse, no selector;
      **≥ 2** → a selector, default = the first after sorting.
-  2. **Throughput** — op #3 `GET /dashboard/throughput?warehouseId=<default>&from=<to−13d>&to=<UTC today>`:
-     a **14-day window ending at the UTC calendar date of the request**. 🔴
-     **UTC, not KST**: the producer buckets each event by
-     `atZone(ZoneOffset.UTC).toLocalDate()` (wms `InboundProjectionService` /
-     `OutboundProjectionService`), so a KST "today" would ask for a day the
-     producer has not started between 00:00 and 09:00 KST. The card labels the
-     window as UTC on screen. This is deliberately **not** the
-     `kstPeriodBounds()` window the 배송 tile uses — that one filters
-     `shippedAt` instants, this one names producer-defined day buckets.
-     🔵 **Producer side has moved to the KST day** (wms admin V6, TASK-MONO-808,
-     `admin-service-api.md § 1.2`). This card deliberately still asks for the UTC
-     window and says «UTC 기준» until that producer is baked and an old volume's
-     inbound backfill has run — otherwise the screen would claim KST before the
-     data is. 🔴 **The reverse gap opens at the bake**: from then on the producer's
-     day strings are KST days, so «UTC 기준» becomes wrong and, between 00:00 and
-     09:00 KST, the UTC `to` omits the newest day. Switching this card to a KST
-     window + label must therefore ship **with** that bake, not after it
-     (`TASK-MONO-815`).
+  2. **Throughput** — op #3 `GET /dashboard/throughput?warehouseId=<default>&from=<to−13d>&to=<KST today>`:
+     a **14-day window ending at the KST calendar date of the request**. 🔴
+     **KST, not UTC** (TASK-MONO-808 / TASK-MONO-815): the producer buckets each
+     event by its KST calendar day (wms admin V6, `admin-service-api.md § 1.2`
+     «Day boundary = KST»), so the window's `to` is the KST date of `now`
+     (`kstDateOf`, `shared/lib/kst-period`) — a UTC `to` would omit the newest
+     day between 00:00 and 09:00 KST. The card labels the window «한국 시간 기준»
+     on screen. The window is built from day buckets, not from instants, so it
+     is not the `kstPeriodBounds()` instant window the 배송 tile uses — they only
+     share the KST offset. 🔵 **Deploy coupling**: this switch ships in the same
+     window as the AMI bake carrying admin V6 (the console is Vercel and goes
+     live on merge); an old volume's inbound days before V6 are still UTC days
+     until the `read-model-rebuild.md` § KST day rebuild has run.
   - **Zero-fill (normative).** § 1.2 lists **only days that have a row** (a
     day with no putaway and no shipment is absent, not `0`). The console fills
     every date `from..to` (inclusive) that the response omits with
