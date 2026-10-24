@@ -8,7 +8,7 @@ Demo seed: the two shipped ecommerce orders are shipped by hand in ecommerce whi
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
