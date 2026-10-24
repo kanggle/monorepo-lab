@@ -283,6 +283,14 @@ const MACHINE_KEYS = new Set([
   'loginFailure', // series value (integer string) — 로그인 실패
   'accountLocked', // series value (integer string) — 계정 잠금
   'newAccount', // series value (integer string) — 신규 계정
+  // TASK-MONO-812 — the finance «실적» strip's series value keys (same shape).
+  // The amounts are per currency (`<type>Amount:<CUR>`); the sample world is KRW only.
+  'topupCount', // series value (integer string) — 충전 건수
+  'topupAmount:KRW', // series value (integer string, KRW minor units) — 충전 금액
+  'transferCount', // series value (integer string) — 이체 건수
+  'transferAmount:KRW', // series value (integer string, KRW minor units) — 이체 금액
+  'captureCount', // series value (integer string) — 캡처 건수
+  'captureAmount:KRW', // series value (integer string, KRW minor units) — 캡처 금액
 ]);
 
 /** `*Id` (sourceId, accountId, nodeId, …) and `*At` (createdAt, asOf-like). */

@@ -197,6 +197,33 @@ class AccountBusinessRoleGateSliceTest {
         }
     }
 
+    /**
+     * TASK-MONO-812 — {@code GET /api/finance/accounts/metrics} (the overview «실적» read) sits behind
+     * exactly the account read gate: the same authorities admit it, the same ones are refused.
+     */
+    @Test
+    @DisplayName("🔴 812 AC-4: metrics read = the account read gate — read/write roles, scopes, wildcard pass; ledger-only, entry-only, generic, subscription-only 403")
+    void metrics_sameGateAsAccountReads() throws Exception {
+        String metrics = "/api/finance/accounts/metrics?period=week";
+        expectAllowed(get(metrics), roles("FINANCE_OPERATOR", "FINANCE_ACCOUNT_READ"));
+        expectAllowed(get(metrics), roles("FINANCE_ACCOUNT_WRITE"));
+        expectAllowed(get(metrics), c -> c.claim("scope", List.of("finance.read")));
+        expectAllowed(get(metrics), c -> c.claim(TenantClaimValidator.CLAIM_TENANT_ID, "*"));
+        expectDenied(get(metrics), roles("FINANCE_OPERATOR", "FINANCE_LEDGER_READ", "FINANCE_LEDGER_WRITE",
+                "FINANCE_LEDGER_CONTROL"));
+        expectDenied(get(metrics), roles("FINANCE_OPERATOR"));
+        expectDenied(get(metrics), roles("OPERATOR"));
+        expectDenied(get(metrics), c -> c.claim(TenantClaimValidator.CLAIM_TENANT_ID, "acme")
+                .claim("entitled_domains", List.of("finance")));
+    }
+
+    @Test
+    @DisplayName("812: metrics read without a token → 401 (never a 200 of zeros)")
+    void metrics_noToken_401() throws Exception {
+        mockMvc.perform(get("/api/finance/accounts/metrics?period=week"))
+                .andExpect(status().isUnauthorized());
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────────
 
     private static Consumer<JWTClaimsSet.Builder> roles(String... roles) {

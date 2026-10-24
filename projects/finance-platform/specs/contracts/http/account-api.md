@@ -231,6 +231,85 @@ Paginated (`?page=&size=&type=&status=`).
 
 **Errors**: 404 `ACCOUNT_NOT_FOUND`.
 
+## GET /api/finance/accounts/metrics
+
+Overview performance metrics — the «실적» strip of the console's Finance 개요
+(ADR-MONO-084 P7, TASK-MONO-812). Shape, windows and error semantics are the shared
+[`platform/contracts/performance-metrics-contract.md`](../../../../../platform/contracts/performance-metrics-contract.md);
+this section owns only **which keys exist and what each one counts** (ADR-MONO-084 D5).
+
+**Request**: `GET /api/finance/accounts/metrics?period=week|month` (case-insensitive; required).
+No other parameter.
+
+- **Not an account list.** The response is the **tenant-wide total** of the caller's
+  tenant — never one row per account, and no account id, owner ref, counterparty or hold id
+  appears anywhere in it (§ GET /api/finance/accounts — deliberately absent still holds).
+- **Path.** It sits under `/accounts` because that is the prefix the finance gateway routes
+  to this service (`gateway-service` `Path=/api/finance/accounts/**`); the literal
+  `/accounts/metrics` takes precedence over `/accounts/{id}`.
+- **Authorization** — exactly the account read gate above (`FINANCE_ACCOUNT_READ ∨
+  FINANCE_ACCOUNT_WRITE ∨ finance.read ∨ finance.write ∨ tenant_id='*'`). A ledger-only operator →
+  403 `PERMISSION_DENIED`.
+- **Tenancy** — the token's `tenant_id`, as every other read. A platform wildcard token
+  (`tenant_id='*'`) reads tenant `*`, which owns no transactions, so its values are `"0"` —
+  the same as every other account-service read for that token (it finds no account either).
+- **Source.** account-service `transactions` — one row per business transaction. The
+  ledger's journal is **not** used: it is double-entry, and summing its lines would count each
+  transaction twice (debit + credit).
+
+**200** — the shared shape, **bare** (no `{data, meta}` envelope):
+
+```json
+{
+  "period": "week", "timezone": "Asia/Seoul",
+  "current":  { "from": "2026-10-19T00:00:00+09:00", "to": "2026-10-23T14:05:00+09:00" },
+  "previous": { "from": "2026-10-12T00:00:00+09:00", "to": "2026-10-16T14:05:00+09:00" },
+  "metrics": [
+    { "key": "topupCount",         "unit": "count", "currency": null,  "current": "2",      "previous": "1" },
+    { "key": "topupAmount:KRW",    "unit": "money", "currency": "KRW", "current": "500000", "previous": "1000000" },
+    { "key": "topupAmount:USD",    "unit": "money", "currency": "USD", "current": "2550",   "previous": "0" },
+    { "key": "transferCount",      "unit": "count", "currency": null,  "current": "1",      "previous": "0" },
+    { "key": "transferAmount:KRW", "unit": "money", "currency": "KRW", "current": "50000",  "previous": "0" },
+    { "key": "transferAmount:USD", "unit": "money", "currency": "USD", "current": "0",      "previous": "0" },
+    { "key": "captureCount",       "unit": "count", "currency": null,  "current": "1",      "previous": "0" },
+    { "key": "captureAmount:KRW",  "unit": "money", "currency": "KRW", "current": "12000",  "previous": "0" },
+    { "key": "captureAmount:USD",  "unit": "money", "currency": "USD", "current": "0",      "previous": "0" }
+  ],
+  "series": [ { "date": "2026-10-19", "values": { "topupCount": "2", "topupAmount:KRW": "500000", "…": "…" } } ]
+}
+```
+
+**Keys (normative — one line each).** Common to all: a row counts only when its **current
+status ∈ {`SETTLED`, `COMPLETED`}**, and it is attributed to its **`settledAt`** (KST window
+and KST day per the shared contract). Amounts are integer **minor units** of the row's own
+currency, exactly as stored (F5 — no conversion, no rounding).
+
+| Key | Counts | Excludes |
+|---|---|---|
+| `topupCount` | `TOPUP` transactions settled in the window (all currencies). | every other type; `FAILED` and any non-settled status |
+| `topupAmount:<CUR>` | Sum of those `TOPUP` amounts in `<CUR>`. | other currencies (never added, never converted — OD-3) |
+| `transferCount` | `TRANSFER` transactions settled in the window — **one per transfer**: a transfer is one row (source account + counterparty), never counted as a debit plus a credit. | as above |
+| `transferAmount:<CUR>` | Sum of those `TRANSFER` amounts in `<CUR>`, each transfer once. | as above |
+| `captureCount` | `CAPTURE` transactions settled in the window — a hold counts **when, and only when, it is captured**, at the capture's `settledAt` (a hold placed last week and captured this week is this week's). | `HOLD` rows (a reservation — written `COMPLETED` the moment the hold is placed, so excluded **by type**), `RELEASE` rows and expiries (the reservation going back — it never moved) |
+| `captureAmount:<CUR>` | Sum of the **captured** amounts in `<CUR>` — a partial capture contributes only the captured part (the auto-released remainder is not a movement). | as above |
+
+- **Display order**: per type (`topup` → `transfer` → `capture`), its count, then its amounts
+  in currency-code order. **Currency set**: every currency a counted row carries in either
+  window, the same set for every type (a type with no activity in that currency is `"0"`);
+  when no counted row exists in either window the set is `KRW`, so the money cells keep their
+  place.
+- **Not reported**: `HOLD` / `RELEASE` (above), and `WITHDRAW` / `REVERSAL` — v1 has **no
+  write path** for either (no HTTP mapping, no application call site — § Error code table's
+  closing note). When one lands, its key and — for `REVERSAL` — whether it subtracts from
+  the original's type is that change's contract decision; this endpoint does not guess it.
+- **Can a past day change?** No, in v1: a counted row is written once, already `COMPLETED`
+  with its `settledAt`, and is immutable (F3). The one v1-unreachable exception is a
+  `COMPLETED → REVERSED` flip, which would drop the original from its day.
+
+**Errors**: 400 `VALIDATION_ERROR` (`period` missing or unknown — not this service's 422
+for a bare `IllegalArgumentException`), 401 (no / invalid token), 403 `PERMISSION_DENIED` /
+`TENANT_FORBIDDEN`.
+
 ---
 
 ## Error code → HTTP status (fintech)

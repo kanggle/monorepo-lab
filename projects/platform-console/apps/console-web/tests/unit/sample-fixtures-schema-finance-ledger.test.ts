@@ -123,18 +123,20 @@ describe('finance — transactions (AC-1 / AC-4)', () => {
     expect(res.meta.totalElements).toBeGreaterThan(0);
   });
 
-  it('type=CREDIT and status=FAILED each narrow to a proper, non-empty, non-vacuous subset', async () => {
+  // TASK-MONO-812 — the credit row is the producer's `TOPUP` (it was the
+  // non-producer value `CREDIT`).
+  it('type=TOPUP and status=FAILED each narrow to a proper, non-empty, non-vacuous subset', async () => {
     const all = TransactionsResponseSchema.parse(
       await (await finance(`/api/finance/accounts/${SAMPLE_ACCOUNT_ID}/transactions?page=0&size=20`)).json(),
     );
     const credits = TransactionsResponseSchema.parse(
       await (
-        await finance(`/api/finance/accounts/${SAMPLE_ACCOUNT_ID}/transactions?type=CREDIT&page=0&size=20`)
+        await finance(`/api/finance/accounts/${SAMPLE_ACCOUNT_ID}/transactions?type=TOPUP&page=0&size=20`)
       ).json(),
     );
     expect(credits.meta.totalElements).toBeGreaterThan(0);
     expect(credits.meta.totalElements).toBeLessThan(all.meta.totalElements ?? 0);
-    expect(credits.data.every((t) => t.type === 'CREDIT')).toBe(true);
+    expect(credits.data.every((t) => t.type === 'TOPUP')).toBe(true);
 
     const failed = TransactionsResponseSchema.parse(
       await (

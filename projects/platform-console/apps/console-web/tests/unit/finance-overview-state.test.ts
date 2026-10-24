@@ -31,6 +31,10 @@ const m = vi.hoisted(() => ({
   getAccount: vi.fn(),
   getBalances: vi.fn(),
   getFinanceDefaultAccountId: vi.fn(),
+  getFinanceMetrics: vi.fn(),
+}));
+vi.mock('@/features/finance-overview/api/finance-metrics-api', () => ({
+  getFinanceMetrics: m.getFinanceMetrics,
 }));
 vi.mock('@/shared/api/ledger-overview-read', () => ({
   getTrialBalance: m.getTrialBalance,
@@ -112,7 +116,37 @@ function seedHappy() {
   m.getFinanceDefaultAccountId.mockResolvedValue('acct-1');
   m.getAccount.mockResolvedValue(account());
   m.getBalances.mockResolvedValue(balances());
+  m.getFinanceMetrics.mockResolvedValue(METRICS);
 }
+
+/** `GET /api/finance/accounts/metrics` (TASK-MONO-812) — the bare shared shape. */
+const METRICS = {
+  period: 'month',
+  timezone: 'Asia/Seoul',
+  current: { from: '2026-10-01T00:00:00+09:00', to: '2026-10-24T14:05:00+09:00' },
+  previous: { from: '2026-09-01T00:00:00+09:00', to: '2026-09-24T14:05:00+09:00' },
+  metrics: [
+    { key: 'topupCount', unit: 'count', currency: null, current: '3', previous: '2' },
+    { key: 'topupAmount:KRW', unit: 'money', currency: 'KRW', current: '900000', previous: '400000' },
+    { key: 'transferCount', unit: 'count', currency: null, current: '1', previous: '0' },
+    { key: 'transferAmount:KRW', unit: 'money', currency: 'KRW', current: '50000', previous: '0' },
+    { key: 'captureCount', unit: 'count', currency: null, current: '1', previous: '1' },
+    { key: 'captureAmount:KRW', unit: 'money', currency: 'KRW', current: '12000', previous: '8000' },
+  ],
+  series: [
+    {
+      date: '2026-10-01',
+      values: {
+        topupCount: '1',
+        'topupAmount:KRW': '300000',
+        transferCount: '0',
+        'transferAmount:KRW': '0',
+        captureCount: '0',
+        'captureAmount:KRW': '0',
+      },
+    },
+  ],
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -266,6 +300,13 @@ describe('getFinanceOverviewState (TASK-PC-FE-229)', () => {
     expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
   });
 
+  it('not eligible → the «실적» read is not called either (TASK-MONO-812)', async () => {
+    const state = await getFinanceOverviewState(false, 'week');
+    expect(m.getFinanceMetrics).not.toHaveBeenCalled();
+    expect(state.period).toBe('week');
+    expect(state.performance.status).not.toBe('ok');
+  });
+
   it('empty FX cache → fxLatestAsOf null, fxStaleCount 0 (no crash on empty rates)', async () => {
     seedHappy();
     m.getFxRates.mockResolvedValue(fxRates({ rates: [] }));
@@ -273,5 +314,86 @@ describe('getFinanceOverviewState (TASK-PC-FE-229)', () => {
     expect(state.ledger?.fxLatestAsOf).toBeNull();
     expect(state.ledger?.fxStaleCount).toBe(0);
     expect(state.ledger?.fxRatesCount).toBe(0);
+  });
+});
+
+describe('getFinanceOverviewState — «실적» strip (TASK-MONO-812)', () => {
+  it('asks for the metrics once, with the period — and nothing else (no account id, no list)', async () => {
+    seedHappy();
+    const state = await getFinanceOverviewState(true, 'week');
+    expect(m.getFinanceMetrics).toHaveBeenCalledTimes(1);
+    expect(m.getFinanceMetrics).toHaveBeenCalledWith('week');
+    expect(state.period).toBe('week');
+    expect(state.performance.status).toBe('ok');
+    expect(state.performance.value?.metrics.map((x) => x.key)).toEqual([
+      'topupCount',
+      'topupAmount:KRW',
+      'transferCount',
+      'transferAmount:KRW',
+      'captureCount',
+      'captureAmount:KRW',
+    ]);
+  });
+
+  it('defaults to the month', async () => {
+    seedHappy();
+    const state = await getFinanceOverviewState(true);
+    expect(m.getFinanceMetrics).toHaveBeenCalledWith('month');
+    expect(state.period).toBe('month');
+  });
+
+  it('the strip runs even with no default account (it is not an account read)', async () => {
+    seedHappy();
+    m.getFinanceDefaultAccountId.mockResolvedValue(null);
+    const state = await getFinanceOverviewState(true);
+    expect(state.defaultAccountMissing).toBe(true);
+    expect(state.performance.status).toBe('ok');
+  });
+
+  it('403 on the strip → strip forbidden ONLY — not the whole-overview forbidden; tiles and snapshot still render', async () => {
+    for (const code of ['PERMISSION_DENIED', 'TENANT_FORBIDDEN']) {
+      seedHappy();
+      m.getFinanceMetrics.mockRejectedValue(new ApiError(403, code, 'no'));
+      const state = await getFinanceOverviewState(true);
+      expect(state.performance, code).toEqual({ status: 'forbidden', value: null });
+      expect(state.forbidden).toBe(false);
+      expect(state.ledger?.inBalance).toBe(true);
+      expect(state.accountSnapshot?.account.accountId).toBe('acct-1');
+    }
+  });
+
+  it('503 / unparseable body → strip degraded (never zeros); tiles and snapshot still render', async () => {
+    seedHappy();
+    m.getFinanceMetrics.mockRejectedValue(
+      new FinanceUnavailableError('downstream', 'SERVICE_UNAVAILABLE', 'down'),
+    );
+    let state = await getFinanceOverviewState(true);
+    expect(state.performance).toEqual({ status: 'degraded', value: null });
+    expect(state.ledger).not.toBeNull();
+    expect(state.accountSnapshot).not.toBeNull();
+
+    seedHappy();
+    m.getFinanceMetrics.mockResolvedValue({
+      ...METRICS,
+      metrics: [{ ...METRICS.metrics[1], current: 900000 }],
+    });
+    state = await getFinanceOverviewState(true);
+    expect(state.performance).toEqual({ status: 'degraded', value: null });
+    expect(state.ledgerDegraded).toBe(false);
+  });
+
+  it('a strip 401 → whole-session redirect(/login), like every other leg', async () => {
+    seedHappy();
+    m.getFinanceMetrics.mockRejectedValue(new ApiError(401, 'UNAUTHORIZED', 'exp'));
+    await expect(getFinanceOverviewState(true)).rejects.toThrow('REDIRECT:/login');
+    expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
+  });
+
+  it('whole-overview forbidden (a 403 on an account / ledger leg) keeps the requested period', async () => {
+    seedHappy();
+    m.getAccount.mockRejectedValue(new ApiError(403, 'TENANT_FORBIDDEN', 'not scoped'));
+    const state = await getFinanceOverviewState(true, 'week');
+    expect(state.forbidden).toBe(true);
+    expect(state.period).toBe('week');
   });
 });

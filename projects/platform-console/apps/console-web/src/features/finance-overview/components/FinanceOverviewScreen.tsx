@@ -8,7 +8,34 @@ import {
   financeAccountStatusTone,
   balanceMoney,
 } from '@/shared/api/finance-accounts-types';
+import { PerformanceStrip } from '@/shared/ui/PerformanceStrip';
+import type { MetricsPeriod } from '@/shared/lib/kst-period';
 import type { FinanceOverviewState } from '../api/overview-state';
+
+/**
+ * `GET /api/finance/accounts/metrics` keys (account-api.md) → screen names.
+ * The amount keys are base keys: `topupAmount:KRW` reads «충전 금액 (KRW)»
+ * (`metricLabel`), so a new currency needs no label here.
+ */
+export const FINANCE_PERFORMANCE_LABELS: Readonly<Record<string, string>> = {
+  topupCount: '충전 건수',
+  topupAmount: '충전 금액',
+  transferCount: '이체 건수',
+  transferAmount: '이체 금액',
+  captureCount: '캡처 건수',
+  captureAmount: '캡처 금액',
+};
+
+/**
+ * What the numbers cover (TASK-MONO-812, ADR-MONO-084 D5 · OD-3). Wording
+ * mirrored verbatim in console-integration-contract § 2.4.7.2 (a test pins it).
+ */
+export const FINANCE_PERFORMANCE_SCOPE_NOTE =
+  '확정된 거래만 셉니다 — 보류는 캡처된 금액만 들어가고, 해제된 보류와 실패한 거래는 0입니다. 이체는 한 번만 셉니다. 금액은 통화마다 따로이며 서로 더하거나 환산하지 않습니다. 테넌트 전체 합계이고 계좌별로 나누지 않습니다.';
+
+function periodHrefs(): Readonly<Record<MetricsPeriod, string>> {
+  return { week: '/finance?period=week', month: '/finance?period=month' };
+}
 
 /**
  * Finance domain overview screen (TASK-PC-FE-229) — the `/finance`
@@ -25,6 +52,13 @@ import type { FinanceOverviewState } from '../api/overview-state';
  *
  * A `ledgerDegraded` never blanks the account snapshot and vice versa —
  * each section renders its OWN degrade/missing/not-found placeholder.
+ *
+ * TASK-MONO-812 — the «실적» strip (ADR-MONO-084 P7) is the first block under
+ * the heading: 충전 · 이체 · 캡처 건수 and their amounts, one card per
+ * currency, with a one-line scope note. Its failure is its own (a failed or
+ * forbidden strip never blanks the tiles below, and never shows a 0). Its
+ * cards are not links: no list filters by settle time, and there is no
+ * account list to open.
  */
 
 export interface FinanceOverviewScreenProps {
@@ -276,6 +310,22 @@ export function FinanceOverviewScreen({
         원장 집계와 운영자 본인의 기본계좌 스냅샷을 한 번에 확인합니다. 계좌
         목록 집계는 제공하지 않습니다(finance v1 에 계좌 list/search GET
         없음) — 계좌 조회는 아래 계좌 화면에서 accountId 로 직접 하세요.
+      </p>
+
+      {/* «실적» strip (ADR-MONO-084 P7, TASK-MONO-812) — first block. */}
+      <PerformanceStrip
+        cell={state.performance}
+        selected={state.period}
+        periodHrefs={periodHrefs()}
+        labels={FINANCE_PERFORMANCE_LABELS}
+        chartKey="topupCount"
+        testid="finance-performance"
+      />
+      <p
+        className="-mt-3 mb-6 text-xs text-muted-foreground"
+        data-testid="finance-performance-scope"
+      >
+        {FINANCE_PERFORMANCE_SCOPE_NOTE}
       </p>
 
       {legacyAccountId ? (

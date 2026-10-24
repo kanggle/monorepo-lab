@@ -3,9 +3,11 @@ import { getCatalog } from '@/features/catalog';
 import { ApiError } from '@/shared/api/errors';
 import { redirect } from 'next/navigation';
 import {
+  DEFAULT_OVERVIEW_PERIOD,
   FinanceOverviewScreen,
   getFinanceOverviewState,
 } from '@/features/finance-overview';
+import { METRICS_PERIODS, type MetricsPeriod } from '@/shared/lib/kst-period';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,11 +44,14 @@ export const dynamic = 'force-dynamic';
  * EITHER the registry OR a leg → that section degrades only (the
  * `(console)` shell + the other Finance tiles + IAM / wms / scm sections
  * stay).
+ *
+ * TASK-MONO-812 — `?period=week|month` drives the «실적» strip; an absent or
+ * unknown value falls back to `DEFAULT_OVERVIEW_PERIOD` (never a 400 page).
  */
 export default async function FinanceOverviewPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ accountId?: string }>;
+  searchParams?: Promise<{ accountId?: string; period?: string }>;
 }) {
   // Legacy bookmark honesty (Edge Cases): a pre-TASK-PC-FE-229 bookmark of
   // `/finance?accountId=X` (the former account-lookup destination) now
@@ -95,7 +100,10 @@ export default async function FinanceOverviewPage({
     );
   }
 
-  const state = await getFinanceOverviewState(eligible);
+  const period = (METRICS_PERIODS as readonly string[]).includes(sp.period ?? '')
+    ? (sp.period as MetricsPeriod)
+    : DEFAULT_OVERVIEW_PERIOD;
+  const state = await getFinanceOverviewState(eligible, period);
 
   if (state.notEligible) {
     return (

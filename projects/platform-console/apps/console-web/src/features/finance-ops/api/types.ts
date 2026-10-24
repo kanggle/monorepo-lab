@@ -145,8 +145,15 @@ export function txnStatusTone(status: string): StatusTone {
 }
 
 /** Producer txn type enum. Free string for tolerance — unknown/future
- *  values render with a generic label. */
+ *  values render with a generic label.
+ *
+ *  TASK-MONO-812: `TOPUP` / `WITHDRAW` added — they are producer values
+ *  (account-service `TransactionType`) that this list lacked, so a real
+ *  top-up row rendered «TOPUP (unknown)». `CREDIT` / `DEBIT` are NOT producer
+ *  values; they stay only so nothing that already shows them changes here. */
 export const KNOWN_TXN_TYPES = [
+  'TOPUP',
+  'WITHDRAW',
   'HOLD',
   'CAPTURE',
   'RELEASE',
