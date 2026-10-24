@@ -3170,6 +3170,7 @@ calls the existing GETs verbatim.
   - `ok` → `data` is the card's composed payload (domain-specific shape, declared per row in the producer endpoint above).
   - `degraded` → `reason` ∈ `{ "DOWNSTREAM_ERROR", "TIMEOUT", "CIRCUIT_OPEN" }` (`CIRCUIT_OPEN` stays in the vocabulary but is never produced — § 2.4.9 Resilience); `data` absent. Card renders "data unavailable, retry pending" placeholder.
   - `forbidden` → `reason` ∈ `{ "PERMISSION_DENIED", "TENANT_FORBIDDEN", "MISSING_PREREQUISITE" }`; `data` absent. Card renders "not available to your role / tenant" placeholder. `MISSING_PREREQUISITE` stays in the vocabulary but this route **no longer produces it** (TASK-PC-FE-364 — it used to mean «finance `operatorDefaultAccountId` absent», and the finance card no longer needs one); consumers must not break on its absence or its presence.
+- `cards[i].headline` (optional, TASK-PC-FE-368): the card's headline performance metric and its own outcome — `ok` / `degraded` / `forbidden`, independent of `status`. See «Card headline metric» below.
 ##### `ok` card `data` shapes per leg (TASK-PC-FE-295)
 
 `data` on an `ok` card is **the producer's response body, verbatim** — the
@@ -3259,6 +3260,53 @@ unfiltered list with nothing reporting an error.
 > card reads no balance at all.
 
 - **All-down envelope**: every leg can return non-`ok` simultaneously — the route still emits `200` with all 6 cards in `degraded`/`forbidden` states. The route NEVER emits `503` / blanks the response (D5.A discipline; D5.B rejection re-affirmed).
+
+##### Card headline metric (TASK-PC-FE-368 — ADR-MONO-084 D7)
+
+Each card also carries ONE headline performance metric of its domain: **this week's
+value and the change against the previous same-length window**. It is **additive**:
+no existing field, status, reason or card order changes — a `headline` field is
+appended to each card. Producer contracts are byte-unchanged; each read is the
+domain's own `…/metrics` (ADR-MONO-084 D2, [`performance-metrics-contract.md`](../../../../platform/contracts/performance-metrics-contract.md)),
+the same address and credential that domain's own «실적» strip uses.
+
+| Card | Headline metric (response `key`) | Unit | Metrics read (`period=week`) | Credential |
+|---|---|---|---|---|
+| iam | `loginFailure` (로그인 실패) | count | `GET ${IAM_ADMIN_API_BASE}/api/admin/metrics?period=week&tenantId={activeTenant}` | operator token + `X-Tenant-Id` (as card 1) |
+| wms | `qtyShipped` (출고 수량) | count | `GET ${WMS_ADMIN_BASE_URL}/dashboard/metrics?period=week` | domain-facing token |
+| scm | every `poAmount:<CUR>` (발주 금액) | money | `GET ${SCM_GATEWAY_BASE_URL}/api/v1/procurement/po/metrics?period=week` (bare body, or `{ data, meta }` unwrapped) | domain-facing token |
+| finance | every `transferAmount:<CUR>` (이체 금액) | money | `GET ${FINANCE_BASE_URL}/api/finance/accounts/metrics?period=week` — the **account** service base, not the ledger base card 4 uses | domain-facing token |
+| erp | `approved` (승인 — final approvals) | count | `GET ${ERP_BASE_URL}/api/erp/approval/metrics?period=week` | domain-facing token |
+| ecommerce | `revenue` (매출) | money | `GET ${ECOMMERCE_ADMIN_BASE_URL}/orders/metrics?period=week` | domain-facing token |
+
+Wire (appended last on every card, whatever its `status`):
+
+```json
+"headline": { "status": "ok", "period": "week",
+              "metrics": [ { "key": "loginFailure", "unit": "count", "currency": null, "current": "7", "previous": "4" } ] }
+"headline": { "status": "degraded" }
+"headline": { "status": "forbidden" }
+```
+
+- `metrics` holds ONLY the selected metric(s): one entry, or **one per currency** for money (scm, finance) — currencies are never added together. Values are the producer's **integer strings** (F5), never coerced; `unit` MUST match the table (a drifted unit is `degraded`, not a number to show). The daily `series` is not carried.
+- Fan has no card and no metric (ADR-MONO-084 D6).
+- `headline` is **optional on the wire** (a payload from before this field, or a sample/test envelope, still parses); the console renders nothing for an absent one.
+- Fixtures: [`fixtures/operator-overview-leg-bodies.json`](fixtures/operator-overview-leg-bodies.json) `headlineMetrics` (one metrics response per domain). `legs` is byte-unchanged.
+
+**Composition (ADR-MONO-081).** The six metrics reads are a **separate `compose()` pass** run **in parallel** with the six card legs (`operator-overview-headline.ts`; latency = the slower pass, not the sum), each with its **own** `LEG_TIMEOUT_MS`. 🔴 They are NOT a second call inside a card's leg: «one call per card» (above, `TASK-PC-FE-296`) stands, because a second call inside a leg would share that leg's one timeout and could cost the card its only number. Total outbound calls per request: **12** (6 card + 6 metrics). The metrics `compose()` logs `console_composition_leg` with the same `route = "operator-overview"` and the request id suffixed `:headline`.
+
+**Per-cell failure (the headline is its own cell):**
+
+| Metrics read | `headline` | The card |
+|---|---|---|
+| `200` + a valid response carrying the expected key(s) | `ok` | unchanged |
+| `403` | `forbidden` (rendered «실적을 볼 권한이 없습니다.») | unchanged |
+| `401` | — | **whole-session `401`** (cross-leg rule, § 2.4.4 D3), same as a card leg |
+| timeout · network · `5xx` · any other status · a body that is not JSON · not a valid metrics response · expected key absent · wrong unit | `degraded` (rendered «실적을 불러올 수 없습니다.») | unchanged |
+
+A failed or forbidden headline is **never rendered or serialised as `0`** — a `0` would read as «nothing happened». The reverse also holds: a card leg that is `degraded` / `forbidden` keeps a healthy `headline`. A failure of the headline pass as a whole degrades all six headlines and nothing else. Anonymous (sample) visitors get `headline` from the sample fixtures' `…/metrics?period=week` answers (ADR-MONO-074); no outbound call is made.
+
+Direction of change is not colour-coded (a rise is good for revenue, bad for failed logins).
 
 ##### Error envelope (composition-level errors, NOT per-leg)
 

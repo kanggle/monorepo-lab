@@ -7,7 +7,8 @@ import {
 import { logger, newRequestId } from '@/shared/lib/logger';
 import { sampleGate } from '@/shared/api/sample-gate';
 import { resolveBackendUrl } from '@/shared/config/demo-backend';
-import { compose, operatorOverviewLegs } from './console-composition';
+import { compose, operatorOverviewLegs, type FetchLeg } from './console-composition';
+import { composeHeadlines, withHeadlines } from './operator-overview-headline';
 import type { CompositionAnswer } from './composition-answer';
 
 /**
@@ -29,6 +30,11 @@ import type { CompositionAnswer } from './composition-answer';
  *   reconciliation queue, which needs no default account, so this function no
  *   longer reads `getFinanceDefaultAccountId()` (the `/finance` overview still
  *   does).
+ *
+ * TASK-PC-FE-368 — each card also carries a `headline` (that domain's headline
+ * performance metric, `?period=week`), from a SEPARATE parallel pass
+ * (`operator-overview-headline.ts`): its failure sets that card's `headline` to
+ * `degraded` / `forbidden` and changes nothing else; its 401 is the session's.
  *
  * Answers:
  *   - sample visitor → the sample envelope (200), or 502 BAD_GATEWAY if the
@@ -72,24 +78,22 @@ export async function composeOperatorOverview(): Promise<CompositionAnswer> {
     return { status: 401, body: { code: 'TOKEN_INVALID', message: 'session not authenticated' } };
   }
 
-  const legs = await operatorOverviewLegs({
-    tenant,
-    operatorToken,
-    domainFacingToken,
-    requestId,
-  });
-  const result = await compose(legs, {
-    route: 'operator-overview',
-    requestId,
-    // The demo host is resolved here, at the call site (check-fetch-resolution).
-    fetchLeg: async (url, init) => fetch(await resolveBackendUrl(url), init),
-  });
+  const credentials = { tenant, operatorToken, domainFacingToken, requestId };
+  // The demo host is resolved here, at the call site (check-fetch-resolution).
+  const fetchLeg: FetchLeg = async (url, init) => fetch(await resolveBackendUrl(url), init);
+  const legs = await operatorOverviewLegs(credentials);
+  // TASK-PC-FE-368 — the six card legs and the six headline-metric legs run in
+  // parallel (latency = max, not sum); the headline pass never throws.
+  const [result, headline] = await Promise.all([
+    compose(legs, { route: 'operator-overview', requestId, fetchLeg }),
+    composeHeadlines(credentials, fetchLeg),
+  ]);
 
-  if (result.unauthorized) {
+  if (result.unauthorized || headline.unauthorized) {
     // Cross-leg 401 rule (§ 2.4.4 D3): one data leg's 401 is the session's.
     return { status: 401, body: { code: 'TOKEN_INVALID', message: 'session expired' } };
   }
-  return { status: 200, body: result.envelope };
+  return { status: 200, body: withHeadlines(result.envelope, headline.headlines) };
 }
 
 /** The sample surface answers with the same envelope the composition would. */

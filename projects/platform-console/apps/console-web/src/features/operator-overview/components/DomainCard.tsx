@@ -6,6 +6,7 @@ import {
 } from '../api/operator-overview-types';
 import { OkSummary } from './DomainCardSummaries';
 import { DegradedState, ForbiddenState } from './DomainCardStates';
+import { DomainCardHeadline } from './DomainCardHeadline';
 
 /**
  * Per-domain card (TASK-PC-FE-011). Server component. Renders one of
@@ -97,6 +98,9 @@ export function DomainCard({ card, overviewForRetry }: DomainCardProps) {
         )}
 
         {card.status === 'forbidden' && <ForbiddenState card={card} />}
+
+        {/* TASK-PC-FE-368 — the headline is its own cell: shown on every status. */}
+        <DomainCardHeadline domain={card.domain} headline={card.headline} />
       </div>
     </section>
   );

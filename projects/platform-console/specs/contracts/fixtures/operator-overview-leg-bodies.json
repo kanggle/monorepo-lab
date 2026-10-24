@@ -194,6 +194,353 @@
       }
     }
   },
+  "headlineMetrics": {
+    "$comment": [
+      "TASK-PC-FE-368 (ADR-MONO-084 D7): each domain's `…/metrics?period=week` response, the input of the card headline metric (§ 2.4.9.1 «Card headline metric»).",
+      "Shape = platform/contracts/performance-metrics-contract.md. Read by tests/unit/dashboard-composition-routes.test.ts and tests/unit/features/operator-overview/headline-metric.test.tsx.",
+      "Separate from `legs` (whose bytes are unchanged): a headline read is NOT a second call inside a card leg."
+    ],
+    "iam": {
+      "producer": "GET /api/admin/metrics?period=week&tenantId={activeTenant}",
+      "sourceOfShape": "iam-platform admin-service admin-api.md § GET /api/admin/metrics (operator token + X-Tenant-Id; scoped by the tenantId query param)",
+      "surfaced": "loginFailure (count)",
+      "body": {
+        "period": "week",
+        "timezone": "Asia/Seoul",
+        "current": {
+          "from": "2026-10-19T00:00:00+09:00",
+          "to": "2026-10-24T14:05:00+09:00"
+        },
+        "previous": {
+          "from": "2026-10-12T00:00:00+09:00",
+          "to": "2026-10-17T14:05:00+09:00"
+        },
+        "metrics": [
+          {
+            "key": "loginSuccess",
+            "unit": "count",
+            "currency": null,
+            "current": "120",
+            "previous": "110"
+          },
+          {
+            "key": "loginFailure",
+            "unit": "count",
+            "currency": null,
+            "current": "7",
+            "previous": "4"
+          },
+          {
+            "key": "accountLocked",
+            "unit": "count",
+            "currency": null,
+            "current": "1",
+            "previous": "0"
+          },
+          {
+            "key": "newAccount",
+            "unit": "count",
+            "currency": null,
+            "current": "3",
+            "previous": "5"
+          }
+        ],
+        "series": [
+          {
+            "date": "2026-10-23",
+            "values": {
+              "loginSuccess": "20",
+              "loginFailure": "2",
+              "accountLocked": "0",
+              "newAccount": "1"
+            }
+          }
+        ]
+      }
+    },
+    "wms": {
+      "producer": "GET /api/v1/admin/dashboard/metrics?period=week",
+      "sourceOfShape": "wms-platform admin-service admin-service-api.md § GET /dashboard/metrics",
+      "surfaced": "qtyShipped (count)",
+      "body": {
+        "period": "week",
+        "timezone": "Asia/Seoul",
+        "current": {
+          "from": "2026-10-19T00:00:00+09:00",
+          "to": "2026-10-24T14:05:00+09:00"
+        },
+        "previous": {
+          "from": "2026-10-12T00:00:00+09:00",
+          "to": "2026-10-17T14:05:00+09:00"
+        },
+        "metrics": [
+          {
+            "key": "qtyReceived",
+            "unit": "count",
+            "currency": null,
+            "current": "900",
+            "previous": "800"
+          },
+          {
+            "key": "qtyShipped",
+            "unit": "count",
+            "currency": null,
+            "current": "640",
+            "previous": "700"
+          },
+          {
+            "key": "shipmentCount",
+            "unit": "count",
+            "currency": null,
+            "current": "31",
+            "previous": "35"
+          }
+        ],
+        "series": [
+          {
+            "date": "2026-10-23",
+            "values": {
+              "qtyReceived": "100",
+              "qtyShipped": "90",
+              "shipmentCount": "5"
+            }
+          }
+        ]
+      }
+    },
+    "scm": {
+      "producer": "GET /api/v1/procurement/po/metrics?period=week",
+      "sourceOfShape": "scm-platform procurement-service procurement-api.md § GET /po/metrics (bare body; the console also accepts { data, meta })",
+      "surfaced": "every poAmount:<CUR> (money, one per currency)",
+      "body": {
+        "period": "week",
+        "timezone": "Asia/Seoul",
+        "current": {
+          "from": "2026-10-19T00:00:00+09:00",
+          "to": "2026-10-24T14:05:00+09:00"
+        },
+        "previous": {
+          "from": "2026-10-12T00:00:00+09:00",
+          "to": "2026-10-17T14:05:00+09:00"
+        },
+        "metrics": [
+          {
+            "key": "poCount",
+            "unit": "count",
+            "currency": null,
+            "current": "9",
+            "previous": "6"
+          },
+          {
+            "key": "poAmount:KRW",
+            "unit": "money",
+            "currency": "KRW",
+            "current": "2450000",
+            "previous": "1800000"
+          },
+          {
+            "key": "poAmount:USD",
+            "unit": "money",
+            "currency": "USD",
+            "current": "1200",
+            "previous": "0"
+          },
+          {
+            "key": "receivedCount",
+            "unit": "count",
+            "currency": null,
+            "current": "4",
+            "previous": "4"
+          }
+        ],
+        "series": [
+          {
+            "date": "2026-10-23",
+            "values": {
+              "poCount": "2",
+              "poAmount:KRW": "500000",
+              "poAmount:USD": "0",
+              "receivedCount": "1"
+            }
+          }
+        ]
+      }
+    },
+    "finance": {
+      "producer": "GET /api/finance/accounts/metrics?period=week",
+      "sourceOfShape": "finance-platform account-service account-api.md § GET /api/finance/accounts/metrics (account service base, NOT the ledger base)",
+      "surfaced": "every transferAmount:<CUR> (money, one per currency)",
+      "body": {
+        "period": "week",
+        "timezone": "Asia/Seoul",
+        "current": {
+          "from": "2026-10-19T00:00:00+09:00",
+          "to": "2026-10-24T14:05:00+09:00"
+        },
+        "previous": {
+          "from": "2026-10-12T00:00:00+09:00",
+          "to": "2026-10-17T14:05:00+09:00"
+        },
+        "metrics": [
+          {
+            "key": "topupCount",
+            "unit": "count",
+            "currency": null,
+            "current": "5",
+            "previous": "4"
+          },
+          {
+            "key": "topupAmount:KRW",
+            "unit": "money",
+            "currency": "KRW",
+            "current": "500000",
+            "previous": "400000"
+          },
+          {
+            "key": "transferCount",
+            "unit": "count",
+            "currency": null,
+            "current": "12",
+            "previous": "15"
+          },
+          {
+            "key": "transferAmount:KRW",
+            "unit": "money",
+            "currency": "KRW",
+            "current": "1250000",
+            "previous": "1500000"
+          },
+          {
+            "key": "captureCount",
+            "unit": "count",
+            "currency": null,
+            "current": "2",
+            "previous": "2"
+          },
+          {
+            "key": "captureAmount:KRW",
+            "unit": "money",
+            "currency": "KRW",
+            "current": "80000",
+            "previous": "80000"
+          }
+        ],
+        "series": [
+          {
+            "date": "2026-10-23",
+            "values": {
+              "topupCount": "1",
+              "topupAmount:KRW": "100000",
+              "transferCount": "3",
+              "transferAmount:KRW": "300000",
+              "captureCount": "0",
+              "captureAmount:KRW": "0"
+            }
+          }
+        ]
+      }
+    },
+    "erp": {
+      "producer": "GET /api/erp/approval/metrics?period=week",
+      "sourceOfShape": "erp-platform approval-service approval-api.md § GET /api/erp/approval/metrics",
+      "surfaced": "approved (count — final approvals)",
+      "body": {
+        "period": "week",
+        "timezone": "Asia/Seoul",
+        "current": {
+          "from": "2026-10-19T00:00:00+09:00",
+          "to": "2026-10-24T14:05:00+09:00"
+        },
+        "previous": {
+          "from": "2026-10-12T00:00:00+09:00",
+          "to": "2026-10-17T14:05:00+09:00"
+        },
+        "metrics": [
+          {
+            "key": "submitted",
+            "unit": "count",
+            "currency": null,
+            "current": "14",
+            "previous": "10"
+          },
+          {
+            "key": "approved",
+            "unit": "count",
+            "currency": null,
+            "current": "8",
+            "previous": "8"
+          },
+          {
+            "key": "rejected",
+            "unit": "count",
+            "currency": null,
+            "current": "1",
+            "previous": "2"
+          }
+        ],
+        "series": [
+          {
+            "date": "2026-10-23",
+            "values": {
+              "submitted": "3",
+              "approved": "2",
+              "rejected": "0"
+            }
+          }
+        ]
+      }
+    },
+    "ecommerce": {
+      "producer": "GET http://ecommerce.local/api/admin/orders/metrics?period=week",
+      "sourceOfShape": "ecommerce order-service order-api.md § GET /api/admin/orders/metrics",
+      "surfaced": "revenue (money)",
+      "body": {
+        "period": "week",
+        "timezone": "Asia/Seoul",
+        "current": {
+          "from": "2026-10-19T00:00:00+09:00",
+          "to": "2026-10-24T14:05:00+09:00"
+        },
+        "previous": {
+          "from": "2026-10-12T00:00:00+09:00",
+          "to": "2026-10-17T14:05:00+09:00"
+        },
+        "metrics": [
+          {
+            "key": "revenue",
+            "unit": "money",
+            "currency": "KRW",
+            "current": "3210000",
+            "previous": "2900000"
+          },
+          {
+            "key": "units",
+            "unit": "count",
+            "currency": null,
+            "current": "41",
+            "previous": "37"
+          },
+          {
+            "key": "orders",
+            "unit": "count",
+            "currency": null,
+            "current": "33",
+            "previous": "30"
+          }
+        ],
+        "series": [
+          {
+            "date": "2026-10-23",
+            "values": {
+              "revenue": "700000",
+              "units": "9",
+              "orders": "7"
+            }
+          }
+        ]
+      }
+    }
+  },
   "variants": {
     "erpNotLinked": {
       "producer": "GET /api/erp/approval/inbox?page=0&size=1 (caller's account linked to no employee)",
