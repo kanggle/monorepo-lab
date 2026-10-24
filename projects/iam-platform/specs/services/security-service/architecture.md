@@ -174,7 +174,7 @@ query → domain (via SecurityQueryService, read-only JPA 경로)
 - **인증** (TASK-BE-319a, ADR-005 단계 4a): `/internal/**` 는 IAM `client_credentials` JWT(`Authorization: Bearer`) **단일** 인증 — `InternalAuthFilter` 가 JWKS 서명 + issuer 로 검증(정적 `X-Internal-Token` 제거됨). `test`/`standalone` profile 은 우회.
 - **금지**: 상태 변경 메서드, 외부 노출 경로, 배치 대량 export
 - 응답에서 PII 마스킹 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4) — IP 일부만 노출, 이메일 마스킹
-- 조회 액션 자체가 감사됨 — meta-audit ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A5)
+- 조회 액션 자체가 감사됨 — meta-audit ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A5). **호출자(admin-service `admin_actions`)가 기록한다**; 이 서비스는 감사 행을 쓰지 않는다(TASK-BE-654 — [security-query-api.md § Meta-Audit](../../contracts/http/security-query-api.md))
 
 ## Integration Rules
 

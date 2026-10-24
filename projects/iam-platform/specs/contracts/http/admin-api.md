@@ -536,6 +536,12 @@ base path: `/api/admin`
 
 **Side Effects** (TASK-BE-262): `403 TENANT_SCOPE_DENIED` 응답 시 `admin_actions` 테이블에 `outcome=DENIED`, `tenant_id=operator's`, `target_tenant_id=operator's`, `downstream_detail`에 시도한 대상 테넌트 기록 — best-effort 쓰기. 실패해도 403 자체는 정상 반환되며 `admin.audit.cross_tenant_deny_failure` 메트릭이 증가한다.
 
+**Side Effects — meta-audit (A5, TASK-BE-654)**: 게이트를 통과한 조회마다 `admin_actions` 행 하나가 쓰인다(`action_code=AUDIT_QUERY` · `target_type=audit` · `target_id` = `accountId` 또는 `*`). 이 행이 security-service 조회(`login_history` · `suspicious`)의 **유일한** 감사다. security-service 는 자기 행을 쓰지 않는다([security-query-api.md § Meta-Audit](security-query-api.md)).
+- `downstream_detail` = `sources=<실제로 읽은 소스, 쉼표> requestedSource=<요청 source 또는 -> from=<…> to=<…> actionCode=<…>`. 행 내용(IP · 이벤트)은 담지 않는다.
+- `permission_used` = 보안 소스를 읽었으면(또는 읽다 실패했으면) `audit.read+security.event.read`, 아니면 `audit.read`([rbac.md § Conditional Cross-Permission](../../services/admin-service/rbac.md)).
+- 🔴 하위 조회가 실패해도(예외 · 타임아웃) **`outcome=FAILURE` 행**이 남는다. `downstream_detail` 끝에 `failed=<소스> error=<예외 클래스>` 가 붙고, 원래 오류는 그대로 응답된다. 그 행 쓰기마저 실패하면 원래 오류가 우선한다(감사 실패는 suppressed 로 붙는다).
+- 성공 행은 하위 조회가 모두 끝난 뒤 쓴다. 이 행 쓰기의 실패는 fail-closed(500)다(`AdminActionAuditWriter`).
+
 **Note**: 이 조회 자체가 **meta-audit**로 기록됨 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A5). PII는 마스킹됨 (IP 일부, 이메일 미포함).
 
 ---
