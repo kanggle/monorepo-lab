@@ -52,8 +52,34 @@ When a consumer-pool account logs in to a site (or is locked), the security reco
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — the list above, file:line.
-- [ ] **AC-1** — owner decision recorded (field shape · what `*`-tenant views count).
+- [x] **AC-0** — the list above, file:line.
+  - → **닫힘 2026-10-24 UTC** (origin/main `60d4d96bd`). 측정은 Explore(opus)가 했다. 핵심 둘은 기안자가 원문으로 확인했다(`CredentialAuthenticationProvider.java:382` 에서 `clientTenant` 를 이미 계산함 · `UpdateLastLoginUseCase.java:79` 가 `findById(tenantId, accountId)` 로 찾음).
+  - **발행자:** Kafka 로 내보내는 곳은 `OutboxAuthEventPublisher` 하나다(:78 · :96 · :174).
+    - 폼 로그인에서 자격을 찾으면 `credential.getTenantId()` 다(`CredentialAuthenticationProvider.java:401-403`). 풀 계정이면 `consumer-pool` 이다.
+    - 자격을 못 찾으면 `clientTenant ?: fan-platform` 이다(:389).
+    - 소셜 로그인은 `account.tenantId()` 다(`OAuthLoginUseCase.java:107-112`).
+    - `account.locked` 는 `account.getTenantId()` 다(`AccountEventFactory.java:77`). 자동 잠금도 이 경로를 타고, 그 요청 본문에 사이트가 없다(security `AccountServiceClient.java:144-151`).
+  - **사이트를 알 수 있나:** 폼 로그인은 알 수 있다(`clientTenant`, 풀 자격은 소비자 사이트 client 에서만 고른다 — :279-302).
+    - 소셜 로그인은 client 가 없으면 `fan-platform` 으로 메워져(`SavedRequestTenantResolver.java:161-173`) 팬 client 와 구별되지 않는다.
+    - 사이트가 없는 풀 로그인이 셋 있다: 초대 수락(:212-219) · client 없음 교차 조회(:239-251) · 콘솔 client 교차 조회(`iam`, :230-236).
+  - **tenant_id 를 읽는 것:** Velocity · DeviceChange · GeoAnomaly · ImpossibleTravel 규칙 · PII 마스킹(`PiiMaskingLogJpaRepository.java:47-48`, `account.deleted` 의 테넌트로 거른다) · account-service last-login(`UpdateLastLoginUseCase.java:79`).
+    - tenantId 를 재정의하면 넷 다 쪼개지고, 🔴 마스킹 누락 · 🔴 last-login no-op 이 된다.
+    - iam 밖 구독자는 0 이다.
+  - **사이트 잠금**(멤버십 LOCKED)은 이벤트를 내지 않는다(`SiteMembershipLockUseCase.java:26-31`, `multi-tenancy.md:568`).
+  - **신규 계정은 이미 사이트별로 센다**(`AccountMetricsQueryService.java:76-79`, 멤버십 `consented_at`).
+  - 기존 결함, 기록만: `SecurityQueryService.java:41,72` 가 tenant 를 `fan-platform` 으로 하드코딩한다.
+  - 스펙: `auth-events.md:50 · :158 · :170` 은 이제 서로 맞는다(계정 테넌트, 사이트는 후속). `admin-api.md:583-585` 는 «풀 제외 = 알려진 공백» 이다.
+- [x] **AC-1** — owner decision recorded (field shape · what `*`-tenant views count).
+  - → **소유자 결정 2026-10-24 UTC (선택창):**
+    - **필드 추가 `siteTenantId`.** 시작 client 의 사이트이고, 풀 자격일 때만 채운다. 사이트가 없으면 null 이다. `tenantId` 는 바꾸지 않는다.
+    - `login_history` 에 컬럼과 인덱스를 추가한다.
+    - 지표에서 사이트 X 는 `tenant_id = X` 또는 `site_tenant_id = X` 다.
+    - 탐지 규칙 · 마스킹 · last-login 은 무변경이다. 옛 행은 백필하지 않고, 계약에 시작 날짜를 적는다.
+  - **`accountLocked` — 지금대로, 계약에 명시.** 계정 전체 잠금은 사이트 소속이 아니므로 `consumer-pool` 에 남는다. 사이트 뷰의 `accountLocked` 는 풀 계정을 세지 않는다. 이 티켓은 로그인 두 키(`loginSuccess` · `loginFailure`)만 다룬다.
+  - 결정에서 따라 나오는 것 (따로 묻지 않음):
+    - `*` 뷰는 필터가 없어 행을 한 번씩 센다(중복 없음).
+    - `consumer-pool` 뷰는 `tenant_id='consumer-pool'` 그대로다(풀 로그인 전부).
+    - 그래서 풀 로그인 한 건은 `consumer-pool` 뷰와 그 사이트 뷰에 함께 나타난다. 계약에 그렇게 적는다.
 - [ ] **AC-2** — a pool account's login to site X is counted in X's `loginSuccess`. A non-pool account's count is unchanged (control group). Another site's login is not counted (isolation).
 - [ ] **AC-3** — the IAM metrics contract (`admin-api.md` § GET /api/admin/metrics) drops the «pool excluded» line and states the date from which pool logins count by site.
 
