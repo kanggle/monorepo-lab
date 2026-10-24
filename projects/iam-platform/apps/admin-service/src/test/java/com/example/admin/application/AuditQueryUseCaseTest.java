@@ -87,7 +87,9 @@ class AuditQueryUseCaseTest {
         assertThat(result.totalElements()).isEqualTo(3);
         assertThat(result.content()).extracting(AuditQueryResult.Entry::source)
                 .containsExactlyInAnyOrder("admin", "login_history", "suspicious");
-        verify(auditor).record(any());
+        // TASK-BE-654: a security-source read is recorded under the composite permission key.
+        verify(auditor).recordWithPermission(any(), eq("audit.read+security.event.read"));
+        verify(auditor, never()).record(any());
     }
 
     @Test
@@ -145,6 +147,73 @@ class AuditQueryUseCaseTest {
                 ArgumentCaptor.forClass(AdminActionAuditor.AuditRecord.class);
         verify(auditor).record(captor.capture());
         assertThat(captor.getValue().actionCode()).isEqualTo(ActionCode.AUDIT_QUERY);
+    }
+
+    // ── TASK-BE-654: 메타-감사 행이 무엇을 읽었는지 남긴다 · 실패해도 남는다 ─────────────
+
+    @Test
+    @DisplayName("BE-654: admin 소스만 → record(기본 권한) · detail 에 sources=admin · 기간 · actionCode")
+    void metaAudit_adminOnly_recordsWhatWasRead() {
+        Instant from = Instant.parse("2026-10-01T00:00:00Z");
+        Instant to = Instant.parse("2026-10-24T00:00:00Z");
+        useCase.query(new QueryAuditCommand("acc-1", "ACCOUNT_LOCK", from, to, "admin", 0, 20, null, "reason",
+                new OperatorContext("op-1", "jti-1"), null));
+
+        ArgumentCaptor<AdminActionAuditor.AuditRecord> row = ArgumentCaptor.forClass(AdminActionAuditor.AuditRecord.class);
+        verify(auditor).record(row.capture());
+        verify(auditor, never()).recordWithPermission(any(), any());
+        assertThat(row.getValue().outcome()).isEqualTo(Outcome.SUCCESS);
+        assertThat(row.getValue().targetId()).isEqualTo("acc-1");
+        assertThat(row.getValue().downstreamDetail())
+                .isEqualTo("sources=admin requestedSource=admin from=2026-10-01T00:00:00Z"
+                        + " to=2026-10-24T00:00:00Z actionCode=ACCOUNT_LOCK");
+    }
+
+    @Test
+    @DisplayName("BE-654: 보안 소스를 읽으면 detail 에 그 소스 · permission_used = audit.read+security.event.read")
+    void metaAudit_securitySources_recordedWithCompositePermission() {
+        when(securityServiceClient.queryLoginHistory(eq("acc-1"), any(), any())).thenReturn(List.of());
+        when(securityServiceClient.querySuspiciousEvents(eq("acc-1"), any(), any())).thenReturn(List.of());
+
+        useCase.query(cmd("op-1", "acc-1", null, 0, 20, null));
+
+        ArgumentCaptor<AdminActionAuditor.AuditRecord> row = ArgumentCaptor.forClass(AdminActionAuditor.AuditRecord.class);
+        verify(auditor).recordWithPermission(row.capture(), eq("audit.read+security.event.read"));
+        assertThat(row.getValue().downstreamDetail()).startsWith("sources=admin,login_history,suspicious requestedSource=-");
+    }
+
+    @Test
+    @DisplayName("🔴 BE-654: security-service 조회가 실패해도 FAILURE 행이 남고 원래 예외가 나간다")
+    void metaAudit_downstreamFailure_leavesFailureRow() {
+        when(securityServiceClient.queryLoginHistory(eq("acc-1"), any(), any()))
+                .thenThrow(new IllegalStateException("security-service timeout"));
+
+        assertThatThrownBy(() -> useCase.query(cmd("op-1", "acc-1", "login_history", 0, 20, null)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("security-service timeout");
+
+        ArgumentCaptor<AdminActionAuditor.AuditRecord> row = ArgumentCaptor.forClass(AdminActionAuditor.AuditRecord.class);
+        // the failed source may have been read before failing → still the composite permission key
+        verify(auditor).recordWithPermission(row.capture(), eq("audit.read+security.event.read"));
+        assertThat(row.getValue().outcome()).isEqualTo(Outcome.FAILURE);
+        assertThat(row.getValue().targetId()).isEqualTo("acc-1");
+        assertThat(row.getValue().downstreamDetail())
+                .contains("requestedSource=login_history")
+                .endsWith("failed=login_history error=IllegalStateException");
+    }
+
+    @Test
+    @DisplayName("BE-654: 실패 행 쓰기마저 실패하면 원래 예외가 나가고 감사 실패는 suppressed 로 붙는다")
+    void metaAudit_failureRowWriteFails_originalExceptionWins() {
+        when(securityServiceClient.queryLoginHistory(eq("acc-1"), any(), any()))
+                .thenThrow(new IllegalStateException("security-service timeout"));
+        org.mockito.Mockito.doThrow(new IllegalStateException("audit store down"))
+                .when(auditor).recordWithPermission(any(), any());
+
+        assertThatThrownBy(() -> useCase.query(cmd("op-1", "acc-1", "login_history", 0, 20, null)))
+                .hasMessage("security-service timeout")
+                .satisfies(t -> assertThat(t.getSuppressed()).extracting(Throwable::getMessage)
+                        .containsExactly("audit store down"));
     }
 
     // ── finder 분기 (gate 결과에 따른 admin_actions 조회 경로) ────────────────────

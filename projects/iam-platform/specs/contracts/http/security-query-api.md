@@ -157,9 +157,17 @@ IAM 개요 실적 줄(admin-api.md [§ GET /api/admin/metrics](admin-api.md#get-
 
 ## Meta-Audit
 
-이 엔드포인트의 모든 호출은 **조회 자체가 감사 기록됨** ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A5). 호출자(admin-service의 operator_id), 조회 대상(accountId), 시간이 security-service 내부에 `admin_query_audit` 로그로 기록.
+이 엔드포인트의 조회는 **호출자가 감사한다** ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A5 · TASK-BE-654 소유자 결정 2026-10-24 UTC «호출자 감사 + admin 보강»). security-service 는 감사 행을 쓰지 않는다. 요청에 운영자 신원이 실려 오지 않기 때문이다(서비스 토큰만 온다).
 
-🔵 **`GET /internal/security/metrics/daily` 는 이 규칙의 대상이 아니다** (TASK-MONO-811). A5 의 meta-audit 는 «누가 **누구의** 감사 기록을 봤나» 를 남기는 것인데, 이 엔드포인트에는 조회 대상(`accountId`)이 없고 응답은 날짜별 건수뿐이라 어떤 사람의 기록도 드러나지 않는다. 운영자 측 기록은 admin-service 가 진다 — 거절은 `METRICS_QUERY` DENIED 행, 성공은 read-path 규약(BE-486)대로 행 없음(admin-api.md § GET /api/admin/metrics «Side Effects»). 🔴 기록: 2026-10-24 UTC 코드 읽기 기준 security-service 에 `admin_query_audit` 를 쓰는 코드는 **없다**(위 두 행 조회 엔드포인트 포함) — 위 문단은 구현되지 않은 의도다. 이 절이 그 공백을 고치지 않는다.
+- **감사하는 곳**: 유일한 운영 호출자 admin-service 가 `GET /api/admin/audit` 마다 `admin_actions` 에 `action_code=AUDIT_QUERY` 행 하나를 쓴다([admin-api.md § GET /api/admin/audit «Side Effects»](admin-api.md)).
+  - 그 행은 운영자, 조회 대상(`target_id` = accountId), 시간을 담는다.
+  - `downstream_detail` 에는 실제로 읽은 소스(`sources=admin,login_history,suspicious`), 요청 source, 기간, actionCode 가 들어간다.
+  - 보안 소스를 읽었으면 `permission_used = audit.read+security.event.read` 다.
+  - 🔴 이 엔드포인트 호출이 **실패하거나 타임아웃이어도** `outcome=FAILURE` 행이 남는다. security-service 가 행을 이미 읽었을 수 있기 때문이다.
+- 🔴 **감사되지 않는 경로 (알려진 한계)**: `/internal/**` 인증은 서명 · issuer · `internal.invoke` scope 만 본다(`InternalAuthFilter`). 그래서 그 scope 를 가진 다른 client 가 직접 부르면 어떤 감사 행도 남지 않는다. 2026-10-24 UTC 코드 기준으로 그런 호출부는 0 이다.
+- (이전 문구 — 구현된 적 없음) «security-service 내부 `admin_query_audit` 로그» 는 TASK-BE-654 로 폐기됐다.
+
+🔵 **`GET /internal/security/metrics/daily` 는 이 규칙의 대상이 아니다** (TASK-MONO-811). A5 의 meta-audit 는 «누가 **누구의** 감사 기록을 봤나» 를 남기는 것인데, 이 엔드포인트에는 조회 대상(`accountId`)이 없고 응답은 날짜별 건수뿐이라 어떤 사람의 기록도 드러나지 않는다. 운영자 측 기록은 admin-service 가 진다 — 거절은 `METRICS_QUERY` DENIED 행, 성공은 read-path 규약(BE-486)대로 행 없음(admin-api.md § GET /api/admin/metrics «Side Effects»). (두 행 조회 엔드포인트의 감사 공백은 TASK-BE-654 가 위 «호출자 감사» 로 닫았다.)
 
 ---
 

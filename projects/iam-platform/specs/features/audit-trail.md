@@ -71,8 +71,8 @@
 ## Meta-Audit (A5)
 
 감사 로그 **조회 자체**가 감사된다:
-- admin-service의 `GET /api/admin/audit` → `admin_actions` 에 `actionCode=AUDIT_QUERY` 기록
-- security-service의 query 엔드포인트 → 내부 `admin_query_audit` 로그
+- admin-service의 `GET /api/admin/audit` → `admin_actions` 에 `actionCode=AUDIT_QUERY` 기록. 읽은 소스 · 기간을 `downstream_detail` 에 남기고, 하위 조회가 실패해도 `outcome=FAILURE` 로 남긴다.
+- security-service의 query 엔드포인트(`/internal/security/login-history` · `/suspicious-events`) → **자기 행을 쓰지 않는다.** 위 admin-service 행이 그 읽기의 감사다(TASK-BE-654 · [security-query-api.md § Meta-Audit](../contracts/http/security-query-api.md)).
 
 ## Fail-Closed (A10)
 

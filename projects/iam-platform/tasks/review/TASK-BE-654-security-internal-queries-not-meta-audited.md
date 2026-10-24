@@ -8,7 +8,7 @@ TASK-BE-654
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -81,7 +81,22 @@ The contract and the code agree on who audits a read of login history and suspic
     - 운영자 id 헤더는 새로 만들지 않는다.
     - `internal.invoke` 의 다른 client 직접 호출은 감사되지 않는다는 점을 계약에 적는다.
   - 순서: `TASK-BE-655` 가 먼저 머지된다(같은 파일).
-- [ ] **AC-2** — contract and code agree. If (b) or (c): a test shows that one read writes one audit row, and that a denied read writes none (or a DENIED row, per decision).
+- [x] **AC-2** — contract and code agree. If (b) or (c): a test shows that one read writes one audit row, and that a denied read writes none (or a DENIED row, per decision).
+  - → 결정 (a′)(호출자 감사 + admin 보강)라 security-service 코드는 무변경이다. 계약과 코드를 맞춘 것은 다음과 같다.
+  - **코드** `AuditQueryUseCase`:
+    - 읽은 소스를 순서대로 모아 `downstream_detail = sources=… requestedSource=… from=… to=… actionCode=…` 로 남긴다. 행 내용은 남기지 않고, 계정은 이미 `target_id` 다.
+    - 하위 조회를 try 로 감쌌다. 실패하면 `outcome=FAILURE` 행(`… failed=<소스> error=<클래스>`)을 남기고 원래 예외를 다시 던진다. 그 행 쓰기마저 실패하면 원래 예외가 이기고, 감사 실패는 suppressed 로 붙는다.
+    - 보안 소스를 읽었거나 읽다 실패했으면 `recordWithPermission(…, "audit.read+security.event.read")` 이다(`rbac.md:541`). 아니면 기존 `record`(=`audit.read`)다.
+    - 🔴 «하위 호출 뒤에 쓴다» 공백(AC-0 ②)이 닫혔다.
+  - **계약 · 스펙:**
+    - `security-query-api.md` § Meta-Audit: «호출자가 감사한다». `admin_query_audit` 는 폐기했고, 감사되지 않는 `internal.invoke` 직접 호출을 알려진 한계로 적었다.
+    - `admin-api.md` § audit «Side Effects — meta-audit».
+    - `audit-trail.md` § A5 · `security-service/architecture.md:177`.
+  - **시험** `AuditQueryUseCaseTest`: 새로 넷(admin 만 → detail 전체 문자열 + 기본 권한 · 보안 소스 → 합성 권한 · 하위 실패 → FAILURE 행 + 원래 예외 · 실패 행 쓰기 실패 → suppressed). 기존 «세 소스» 시험의 단언 하나를 `recordWithPermission` 으로 바꿨다.
+    - 합성 권한은 상수가 아니라 rbac.md 의 문자열 그대로로 단언한다.
+  - **무는가:** `src/main` 만 되돌리면 그 다섯만 빨강이다(14 중 5, rc=1). admin-service 단위 시험 전체는 1427 · 실패 0 · 건너뜀 58(Docker 없는 IT)이다.
+  - 이벤트 계약은 불변이다(`admin.action.performed` 는 `downstream_detail` 을 싣지 않는다 — 발행자 · 계약 grep 0).
+  - 배포 = 다음 굽기(admin-service).
 
 # Related Specs
 
