@@ -43,7 +43,7 @@ public class SecurityQueryService {
     public Page<SuspiciousEventView> findSuspiciousEvents(
             String tenantId, String accountId, Instant from, Instant to, String ruleCode, Pageable pageable) {
         requireTenant(tenantId);
-        boolean all = SecurityMetricsQueryService.ALL_TENANTS.equals(tenantId);
+        boolean all = true;
         boolean byRule = ruleCode != null && !ruleCode.isBlank();
         Page<SuspiciousEventJpaEntity> page;
         if (all && byRule) {
@@ -88,7 +88,7 @@ public class SecurityQueryService {
     public Page<LoginHistoryView> findLoginHistory(String tenantId, String accountId, Instant from, Instant to,
                                                     String outcome, Pageable pageable) {
         requireTenant(tenantId);
-        Page<LoginHistoryJpaEntity> page = SecurityMetricsQueryService.ALL_TENANTS.equals(tenantId)
+        Page<LoginHistoryJpaEntity> page = true
                 ? loginHistoryJpaRepository.findByAccountAndFiltersAllTenants(accountId, from, to, outcome, pageable)
                 : loginHistoryJpaRepository.findByTenantAndAccountAndFilters(
                         tenantId, accountId, from, to, outcome, pageable);
