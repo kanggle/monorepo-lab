@@ -76,6 +76,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
+(empty)
+
 (아래는 과거 로드맵/스윕의 완결 기록)
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
@@ -113,12 +115,13 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-BE-656-security-query-tenant-hardcoded-fan-platform.md` — **security-service 로그인 이력 · 의심 이벤트 조회가 `fan-platform` 고정 테넌트로 걸러진다 — 다른 테넌트 계정의 감사 화면이 비어 보인다** (IN-PROGRESS, 2026-10-25 UTC): 소유자 결정 — 풀 계정은 «그 사이트 것만»(로그인 = `tenant_id=X ∨ site_tenant_id=X`, 의심 이벤트 = `tenant_id=X`) · admin-service 의심 이벤트 DTO 불일치(`signalType`/`occurredAt` vs 계약 `ruleCode`/`detectedAt`)도 이 티켓에서. 분석=Opus 5.5 / 구현=Opus 5.5.
+(empty)
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
 ## review
 
+- `TASK-BE-656-security-query-tenant-hardcoded-fan-platform.md` — **security-service 로그인 이력 · 의심 이벤트 조회가 `fan-platform` 고정 테넌트로 걸러진다 — 다른 테넌트 계정의 감사 화면이 비어 보인다** (REVIEW 2026-10-25 UTC · PR #4537 · 미머지): 소유자 결정 — 풀 계정은 «그 사이트 것만»(로그인 = `tenant_id=X ∨ site_tenant_id=X`, 의심 이벤트 = `tenant_id=X`) · admin-service 의심 이벤트 DTO 불일치(`signalType`/`occurredAt` vs 계약 `ruleCode`/`detectedAt`)도 이 티켓에서. 분석=Opus 5.5 / 구현=Opus 5.5. 변이로 잰 수정 전 빨강: 로컬 L1~L5 + CI IT 변이 A/B/C(draft #4538~4540, 닫음) — 각 변이가 자기 행동을 이름으로 단 시험만 빨강으로 만듦. #4537 `Integration (iam A)` SUCCESS · security integrationTest 42 · 0 fail · 0 skip. AC-0~3 닫힘(AC-0 라이브 빈 결과는 ⚪ → 변이 A 로 대체).
 - `TASK-BE-641-end-session-endpoint-answers-401.md` — **IdP 의 `end_session_endpoint`(`/connect/logout`) 오류 경로가 401 «Missing or invalid internal credentials»** (REVIEW 2026-10-21 UTC · PR #4440 · 미머지). 소유자 결정 D1=(a): logout `errorResponseHandler` 가 400 `{error, error_description}` 을 직접 쓴다(Order 2 · `/error` 그대로). 실제 Tomcat 시험 CI 빨강 2/5(401) → 초록 5/5. 🔴 AC-1 의 소유자 브라우저 사례 · AC-3(굽기 · 라이브) 열림. 후속 = `TASK-BE-642`(authorize 오류의 같은 401). 분석=Opus 5.5 / 구현=Opus 5.5. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ✅(로그아웃 → 콘솔 `/login` 착지 · 잘못된 hint → 400 `invalid_token`) · AC-1 소유자 hint 사례 ⚪ — 티켓 § 라이브 확인.
 
 ## done
