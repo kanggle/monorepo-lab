@@ -8,7 +8,7 @@ Demo seed: the two shipped ecommerce orders are shipped by hand in ecommerce whi
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -82,3 +82,20 @@ After a fresh seed, the ecommerce order that sits at `SHIPPED` and the one that 
 1. The push is copied instead of shared, and the two copies drift — AC-1.
 2. The ecommerce seed ships by hand **and** wms ships → ecommerce shipping already `SHIPPED` when the event arrives; the seed must not hand-ship first.
 3. The new path silently falls back every time (e.g. a token or tenant mismatch on the wms gateway) and the bake log still reads green — AC-3 checks the path taken, not only the final status.
+
+---
+
+# Implementation — 2026-10-25 UTC
+
+- `infra/demo/seed/lib-wms-outbound.sh` (new) — `wms_ship_outbound <gw> <orderNo> [lotId] [cartonNo] [waitSeconds]`: find by `?orderNo=` (bounded wait) → already `SHIPPED` = no-op → picking request (reservation reply) → confirm → packing unit → seal → shipment. `skuId` comes from the picking request; `lotId` is `null` when not given; one-line orders only (stops with a warning otherwise). The file name is not `seed-*.sh`, so `seed.sh` never runs it as a domain.
+- `infra/demo/seed/seed-wms.sh` — `push_outbound_to_shipped` now calls it with `$ORDER_NO` · `$LOT_ID` · `BOX-DEMO-1` (same token, same calls, same order as before; the moved comment block keeps the «volume history, not a code defect» text).
+- `infra/demo/seed/seed-ecommerce.sh` — before the hand-shipping, `ship_via_wms` for slots 4 · 5: skip if the shipping is no longer `PREPARING` (re-run); skip with a warning if `wms-gateway-service` is not running; otherwise push through wms with the `ecommerce` operator token (the event-created wms row's tenant is the envelope's `ecommerce` — `FulfillmentRequestedConsumer` → `ReceiveOrderService`), then wait up to 90 s for the shipping to leave `PREPARING` (consumer token, buyer-only endpoint). On any failure: today's hand path + a warning naming the mismatch (401/403/404 add «tenant or role»). `ship_progress` no longer re-sends a stage the shipping has already passed (an event-shipped `SHIPPED` would otherwise risk the demo tracking number overwriting the wms `shipmentNo`).
+- `infra/demo/seed/README.md` — one paragraph under «도메인 규칙을 우회하지 마라».
+
+# Verification
+
+- AC-2 — `bash -n` rc=0 on all three scripts. `infra/demo/verify-demo-wrapper.sh` (static, local): cell `(y)` «시드 배선 유지 (도메인 시드 6개 · 전부 dbexec 경유 …)» ok, 84 cells ok and 0 failed before the run hit my 900 s limit at cell `(z25)` (rc=124 — not a verdict; the CI `verify-demo-wrapper --live` job is the full run, see the PR).
+- Not measurable here: AC-1 · AC-3 · AC-4 need a stack — next bake (the seed runs at boot from the AMI's clone) / window. What to read in the boot log: «주문 4: wms 출하 확정 → 이벤트로 배송 SHIPPED» and «주문 5: …», wms «생성 출하 <orderId> → SHIPPED», and **no** «wms 경로로 출고하지 못했습니다». Then the slot-4 shipping's tracking number should be the wms `shipmentNo`, not `DEMO-1234567890`.
+- 🔴 Unverified assumption that AC-3 will decide: the `ecommerce` assume token carries the wms outbound write roles (`OUTBOUND_WRITE`). The ecommerce tenant subscribes wms (`seed-ecommerce.sh` operator-block comment), but I did not read the derived role set for it. If it does not, the fallback fires and the log says «테넌트·역할을 의심하라».
+
+Open: AC-1 · AC-3 · AC-4 (bake / window).

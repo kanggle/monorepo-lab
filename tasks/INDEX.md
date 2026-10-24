@@ -206,7 +206,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-818-demo-seed-ships-ecommerce-orders-through-wms.md` — **데모 시드: 출고된 ecommerce 주문 둘이 ecommerce 에서만 손으로 배송되고 wms 출고는 `PICKING` 에 남는다** (IN-PROGRESS, 2026-10-25 UTC): 33·34차 창 발견. 소유자 결정 «wms 가 출고를 밀고 이벤트로 따라오게». `deductWmsInventory` 만으로는 안 된다(`ManualShipConfirmConsumer` 는 `PICKING` 에서 no-op). 공용 pick→pack→ship 함수 + ecommerce 슬롯 4·5 가 wms 로 출고 → 이벤트로 `SHIPPED`, wms 가 없으면 지금 경로로 폴백. 🔴 굽기 전 머지. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
@@ -219,7 +218,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-_(없음)_
+- `TASK-MONO-818-demo-seed-ships-ecommerce-orders-through-wms.md` — **데모 시드: 출고된 ecommerce 주문 둘이 ecommerce 에서만 손으로 배송되고 wms 출고는 `PICKING` 에 남는다** (REVIEW 2026-10-25 UTC · AC-1·3·4 = 굽기 · 창): 33·34차 창 발견. 소유자 결정 «wms 가 출고를 밀고 이벤트로 따라오게». `deductWmsInventory` 만으로는 안 된다(`ManualShipConfirmConsumer` 는 `PICKING` 에서 no-op). 공용 pick→pack→ship 함수 + ecommerce 슬롯 4·5 가 wms 로 출고 → 이벤트로 `SHIPPED`, wms 가 없으면 지금 경로로 폴백. 🔴 굽기 전 머지. 분석=Opus 5.5 / 구현 권장=Opus.
 
 ## done
 - ✅ `TASK-MONO-815-wms-throughput-card-kst-window-with-bake.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4534(`3cea93ad0`, 실패 0) · WMS 처리량 카드를 한국 시간 창 · «한국 시간 기준» 문구로 · 소유자 화면 `/wms` 카드 «최근 14일 · 한국 시간 기준 (2026-10-12 ~ 2026-10-25)», 마지막 날 = KST 오늘.
