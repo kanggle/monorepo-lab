@@ -209,7 +209,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-811-iam-overview-performance-metrics.md` — **P6 IAM** (IN-PROGRESS, 2026-10-24 UTC): 로그인 성공 · 실패 · 잠금 · 신규 계정, 원천이 security-service 와 account/admin 에 흩어짐 · 🔴 집계만 내려주고 개인 정보 0. 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
@@ -220,6 +219,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-811-iam-overview-performance-metrics.md` — **`ADR-MONO-084` P6 IAM 실적 지표** (REVIEW, 2026-10-24 UTC · AC-0~4 닫힘 · AC-5 = 배포 상태). admin-service `GET /api/admin/metrics`(`audit.read` · 감사 조회와 같은 테넌트 게이트)가 security · account 내부 집계를 모은다. 키: 로그인 성공 · 실패 · 계정 잠금 · 신규 계정. 🔴 소유자 결정: 풀 소비자의 로그인 · 잠금은 `consumer-pool` 로 기록돼 사이트에서 빠진다 → 후속 `TASK-BE-653`. `auth-events.md:158` 스펙 충돌을 코드에 맞춰 정정했다. 🔴 기존 공백(미수정): security 내부 조회의 A5 감사가 코드에 없다. ⚪ MySQL IT 셋은 로컬 미실행 → CI. 분석=Opus 5.5 / 구현=Opus 5.5(백엔드 · 콘솔 에이전트 + diff 대조).
 
 - `TASK-MONO-813-dead-letter-topic-suffix-split-dlq-vs-dlt.md` — **데드레터 토픽 이름을 `<topic>.DLT` 하나로** (REVIEW, 2026-10-24 UTC · `ADR-MONO-085 ACCEPTED — A` · AC-0~2 닫힘 · AC-3 = 다음 굽기 뒤). 규칙 3파일 + 스킬 2개, 보내는 쪽 13곳(`.dlq`→`.DLT`, 그중 12곳은 원본 파티션 번호 대신 `-1`), 생성 스크립트 5개, 읽는 쪽(iam 게이지 · 계약 · 테스트 · 재처리 런북)을 한 PR에서 옮겼다. 가드 `check-dead-letter-suffix.sh`(R1~R6 + 모집단 하한)는 수정 전 커밋에서 rc=1, 수정 후 rc=0. 유지: `outbox.dlq.size`(메트릭) · `<group>.dlq`(컨슈머 그룹). ⚪ Docker 기반 DLQ IT 는 로컬 미실행 → CI 가 판정한다. 🔴 AC-3(데모 브로커에서 미리 만든 `.DLT` 에 레코드가 떨어지는지)은 굽기 뒤 — 닫을 때 남아 있으면 `TASK-MONO-672` 로 넘긴다. 분석=Opus 5.5 / 구현=Opus 5.5.
 
