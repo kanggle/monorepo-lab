@@ -37,6 +37,8 @@ public class AdminActionPermissionRegistry {
         map.put(ActionCode.AUDIT_QUERY, "AUDIT_QUERY");
         // TASK-BE-357 — account search/list (DENIED cross-tenant row target type)
         map.put(ActionCode.ACCOUNT_SEARCH, "ACCOUNT");
+        // TASK-MONO-811 — overview performance metrics (DENIED row target type; the read has no subject)
+        map.put(ActionCode.METRICS_QUERY, "METRICS_QUERY");
         // TASK-BE-029-2 — self-directed 2FA enroll/verify
         map.put(ActionCode.OPERATOR_2FA_ENROLL, "OPERATOR");
         map.put(ActionCode.OPERATOR_2FA_VERIFY, "OPERATOR");
@@ -166,6 +168,8 @@ public class AdminActionPermissionRegistry {
             case AUDIT_QUERY -> Permission.AUDIT_READ;
             // TASK-BE-357 — account search/list reads (DENIED cross-tenant row permission_used)
             case ACCOUNT_SEARCH -> Permission.ACCOUNT_READ;
+            // TASK-MONO-811 — the metrics read gates on audit.read (same grade as GET /api/admin/audit)
+            case METRICS_QUERY -> Permission.AUDIT_READ;
             // 029-2: synthetic permission strings for the unauthenticated
             // 2FA sub-tree (no grantable permission; treat as sentinel for audit).
             case OPERATOR_2FA_ENROLL -> AdminActionAuditor.PERMISSION_2FA_ENROLL;

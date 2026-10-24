@@ -289,6 +289,8 @@ public class RequiresPermissionAspect {
             if ("resetSecondFactor".equals(name)) return ActionCode.ACCOUNT_2FA_RESET;
         }
         if ("AuditController".equals(simple)) return ActionCode.AUDIT_QUERY;
+        // TASK-MONO-811 — GET /api/admin/metrics; the DENIED row carries target_type=METRICS_QUERY.
+        if ("AdminMetricsController".equals(simple)) return ActionCode.METRICS_QUERY;
         // TASK-BE-083 — operator management controller; each endpoint maps to a
         // dedicated action code so DENIED rows carry the correct target semantics.
         if ("OperatorAdminController".equals(simple)) {

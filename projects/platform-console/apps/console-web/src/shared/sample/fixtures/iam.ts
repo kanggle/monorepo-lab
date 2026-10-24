@@ -1,5 +1,13 @@
 import { SAMPLE_LABEL_SUFFIX, SAMPLE_TENANT_ID } from '../codes';
 import { fixtureNotFound } from '../router';
+import {
+  SAMPLE_METRICS_WINDOWS,
+  instantInside,
+  kstDate,
+  samplePeriod,
+  type SamplePeriod,
+  type SampleWindow,
+} from './metrics-windows';
 
 /**
  * Same shape as `fixtures/index.ts`'s `FixtureHandler` — written out here
@@ -786,6 +794,80 @@ function partnershipsFixture(path: string): unknown {
 }
 
 // ===========================================================================
+// metrics — GET /api/admin/metrics?period=&tenantId= (the 개요 «실적» strip,
+// ADR-MONO-084 P6, TASK-MONO-811)
+// ===========================================================================
+//
+// Derived from the SAME seed rows the 계정 and 감사 screens show — never a
+// separate table of invented totals — so a visitor who opens the audit list
+// from the strip's month finds the very events it counted:
+//   - 로그인 성공 / 실패 (`loginSuccess` / `loginFailure`) — `login_history`
+//     audit rows with outcome SUCCESS / FAILURE, by `occurredAt`.
+//   - 계정 잠금 (`accountLocked`) — `ACCOUNT_LOCK` admin audit rows, by
+//     `occurredAt`. (The seed's two LOCKED accounts carry no lock time, so the
+//     lock events are the only honest source.)
+//   - 신규 계정 (`newAccount`) — accounts by `createdAt`. Every seed account
+//     was created before the sample windows, so this is honestly "0".
+// The sample world has one tenant and no consumer pool, so the producer's
+// consumer-pool exclusion has nothing to drop here. `tenantId` is not
+// filtered (like every other IAM fixture — the visitor sees the sample tenant).
+
+const METRICS_PATH = '/api/admin/metrics';
+
+const IAM_METRIC_KEYS = ['loginSuccess', 'loginFailure', 'accountLocked', 'newAccount'] as const;
+type IamMetricKey = (typeof IAM_METRIC_KEYS)[number];
+
+/** Each metric's attributed instants, from the seed rows. */
+const IAM_METRIC_INSTANTS: Readonly<Record<IamMetricKey, readonly string[]>> = {
+  loginSuccess: IAM_AUDIT_LOGIN_ROWS.filter((r) => r.outcome === 'SUCCESS').map((r) => r.occurredAt),
+  loginFailure: IAM_AUDIT_LOGIN_ROWS.filter((r) => r.outcome === 'FAILURE').map((r) => r.occurredAt),
+  accountLocked: IAM_AUDIT_ADMIN_ROWS.filter((r) => r.actionCode === 'ACCOUNT_LOCK').map(
+    (r) => r.occurredAt,
+  ),
+  newAccount: IAM_ACCOUNTS.map((a) => a.createdAt),
+};
+
+function countIn(key: IamMetricKey, win: SampleWindow, date?: string): string {
+  return String(
+    IAM_METRIC_INSTANTS[key].filter(
+      (at) => instantInside(at, win) && (date === undefined || kstDate(at) === date),
+    ).length,
+  );
+}
+
+function computeIamMetrics(period: SamplePeriod) {
+  const w = SAMPLE_METRICS_WINDOWS[period];
+  return {
+    period,
+    timezone: 'Asia/Seoul',
+    current: w.current,
+    previous: w.previous,
+    // Integer STRINGS, like the producer (F5); all counts.
+    metrics: IAM_METRIC_KEYS.map((key) => ({
+      key,
+      unit: 'count',
+      currency: null,
+      current: countIn(key, w.current),
+      previous: countIn(key, w.previous),
+    })),
+    // Every date of the current window, zero-filled.
+    series: w.dates.map((date) => ({
+      date,
+      values: Object.fromEntries(IAM_METRIC_KEYS.map((key) => [key, countIn(key, w.current, date)])),
+    })),
+  };
+}
+
+function metricsFixture(path: string): unknown {
+  const { pathname, query } = splitPath(path);
+  if (pathname !== METRICS_PATH) return undefined;
+  const p = samplePeriod(query);
+  // No / unknown period: the producer answers 400; the console always sends
+  // one, so the sample leaves it unanswered (-> the router's 503 «not ready»).
+  return p ? computeIamMetrics(p) : undefined;
+}
+
+// ===========================================================================
 // exports
 // ===========================================================================
 
@@ -799,6 +881,7 @@ export const IAM_FIXTURE_HANDLERS: Readonly<Record<string, IamFixtureHandler>> =
   'iam:org_nodes': orgNodesFixture,
   'iam:groups': groupsFixture,
   'iam:partnerships': partnershipsFixture,
+  'iam:iam_metrics': metricsFixture,
 };
 
 /**
@@ -840,4 +923,5 @@ export const IAM_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
     grants: Object.values(IAM_GROUP_GRANTS).flat(),
   },
   'iam:partnerships': { items: IAM_PARTNERSHIPS },
+  'iam:iam_metrics': { week: computeIamMetrics('week'), month: computeIamMetrics('month') },
 };

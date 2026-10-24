@@ -199,4 +199,19 @@ public interface AccountJpaRepository extends JpaRepository<AccountJpaEntity, St
               AND (p.maskedAt IS NULL OR p.accountId IS NULL)
             """)
     List<AccountJpaEntity> findAnonymizationCandidates(@Param("threshold") Instant threshold);
+
+    /**
+     * TASK-MONO-811 — {@code created_at} of one tenant's account rows with {@code created_at ∈ [from, to)}
+     * (half-open), every status included. Only the timestamp is selected (no id, email or status).
+     * Served by {@code idx_accounts_tenant_created} (V0034).
+     */
+    @Query("SELECT a.createdAt FROM AccountJpaEntity a "
+            + "WHERE a.tenantId = :tenantId AND a.createdAt >= :from AND a.createdAt < :to")
+    List<Instant> findCreatedAtInWindow(@Param("tenantId") String tenantId,
+                                        @Param("from") Instant from,
+                                        @Param("to") Instant to);
+
+    /** TASK-MONO-811 — {@link #findCreatedAtInWindow} across every tenant ({@code '*'}). V0034 index. */
+    @Query("SELECT a.createdAt FROM AccountJpaEntity a WHERE a.createdAt >= :from AND a.createdAt < :to")
+    List<Instant> findCreatedAtInWindowAllTenants(@Param("from") Instant from, @Param("to") Instant to);
 }

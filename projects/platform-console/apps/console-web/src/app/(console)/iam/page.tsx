@@ -1,4 +1,9 @@
-import { getIamOverviewState, IamOverviewScreen } from '@/features/iam-overview';
+import {
+  DEFAULT_OVERVIEW_PERIOD,
+  getIamOverviewState,
+  IamOverviewScreen,
+} from '@/features/iam-overview';
+import { METRICS_PERIODS, type MetricsPeriod } from '@/shared/lib/kst-period';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,9 +15,20 @@ export const dynamic = 'force-dynamic';
  * per-cell degrade/forbidden with a whole-session re-login on any leg's 401
  * (handled inside `getIamOverviewState`). `force-dynamic` — the snapshot is a
  * live per-request read (contrast the static `/iam/guide`).
+ *
+ * TASK-MONO-811 — `?period=week|month` drives the «실적» strip; an absent or
+ * unknown value falls back to `DEFAULT_OVERVIEW_PERIOD` (never a 400 page).
  */
-export default async function IamOverviewPage() {
-  const state = await getIamOverviewState();
+export default async function IamOverviewPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ period?: string }>;
+}) {
+  const requested = ((await searchParams) ?? {}).period;
+  const period = (METRICS_PERIODS as readonly string[]).includes(requested ?? '')
+    ? (requested as MetricsPeriod)
+    : DEFAULT_OVERVIEW_PERIOD;
+  const state = await getIamOverviewState(period);
   return (
     <section aria-labelledby="iam-overview-heading">
       <h1 id="iam-overview-heading" className="mb-6 text-2xl font-semibold">

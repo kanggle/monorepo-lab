@@ -69,6 +69,8 @@ export const SURFACE_COVERAGE: readonly SurfaceCoverage[] = [
   { core: 'iam', surface: 'tenants', status: 'ready', owner: IAM },
   { core: 'iam', surface: 'org_nodes', status: 'ready', owner: IAM },
   { core: 'iam', surface: 'groups', status: 'ready', owner: IAM },
+  // TASK-MONO-811 (ADR-MONO-084 P6) — the IAM 개요 «실적» strip read.
+  { core: 'iam', surface: 'iam_metrics', status: 'ready', owner: 'TASK-MONO-811' },
   // TASK-MONO-771 S5 — the tenant entry-policy control. 🔵 `pending` on purpose: no
   // sample fixture yet, so a sample visitor's call answers 503 SAMPLE_NOT_READY, which
   // the control maps to its own degraded note (the tenant detail page stays `ready`).
@@ -158,6 +160,7 @@ export const SURFACE_SAMPLE_PATH: Readonly<Record<string, string>> = {
   'iam:tenants': '/api/admin/tenants?page=0&size=20',
   'iam:org_nodes': '/api/admin/org-nodes',
   'iam:groups': '/api/admin/groups?page=0&size=20',
+  'iam:iam_metrics': '/api/admin/metrics?period=month&tenantId=sample',
   // TASK-PC-FE-284
   'ecommerce:ecommerce': '/api/admin/products?page=0&size=20',
   'ecommerce:ecommerce_image': '/api/admin/products/prod-sample-0001/images',

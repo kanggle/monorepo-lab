@@ -28,6 +28,7 @@ const m = vi.hoisted(() => ({
   listOperators: vi.fn(),
   searchAccounts: vi.fn(),
   queryAudit: vi.fn(),
+  getIamMetrics: vi.fn(),
 }));
 vi.mock('@/shared/lib/session', () => ({ getActiveTenant: m.getActiveTenant }));
 vi.mock('@/shared/api/iam-operators-read', () => ({
@@ -37,6 +38,9 @@ vi.mock('@/shared/api/iam-accounts-read', () => ({
   searchAccounts: m.searchAccounts,
 }));
 vi.mock('@/shared/api/iam-audit-read', () => ({ queryAudit: m.queryAudit }));
+vi.mock('@/features/iam-overview/api/iam-metrics-api', () => ({
+  getIamMetrics: m.getIamMetrics,
+}));
 
 import { getIamOverviewState } from '@/features/iam-overview/api/overview-state';
 
@@ -70,7 +74,28 @@ function seedHappy() {
     Promise.resolve(p.status === 'LOCKED' ? page(4) : page(123)),
   );
   m.queryAudit.mockResolvedValue(page(57, [adminRow('a1'), adminRow('a2')]));
+  m.getIamMetrics.mockResolvedValue(METRICS);
 }
+
+/** `GET /api/admin/metrics` (TASK-MONO-811) — the bare shared shape. */
+const METRICS = {
+  period: 'month',
+  timezone: 'Asia/Seoul',
+  current: { from: '2026-10-01T00:00:00+09:00', to: '2026-10-24T14:05:00+09:00' },
+  previous: { from: '2026-09-01T00:00:00+09:00', to: '2026-09-24T14:05:00+09:00' },
+  metrics: [
+    { key: 'loginSuccess', unit: 'count', currency: null, current: '412', previous: '398' },
+    { key: 'loginFailure', unit: 'count', currency: null, current: '37', previous: '41' },
+    { key: 'accountLocked', unit: 'count', currency: null, current: '3', previous: '5' },
+    { key: 'newAccount', unit: 'count', currency: null, current: '18', previous: '12' },
+  ],
+  series: [
+    {
+      date: '2026-10-01',
+      values: { loginSuccess: '20', loginFailure: '1', accountLocked: '0', newAccount: '1' },
+    },
+  ],
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -190,6 +215,74 @@ describe('getIamOverviewState (TASK-PC-FE-180)', () => {
   it('401 in any leg → whole-session redirect(/login) (not a per-cell degrade)', async () => {
     seedHappy();
     m.queryAudit.mockRejectedValue(new ApiError(401, 'TOKEN_INVALID', 'exp'));
+    await expect(getIamOverviewState()).rejects.toThrow('REDIRECT:/login');
+    expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
+  });
+});
+
+describe('getIamOverviewState — «실적» strip (TASK-MONO-811)', () => {
+  it('asks for the metrics with the period and the ACTIVE tenant (the tenantId the producer scopes by)', async () => {
+    seedHappy();
+    const state = await getIamOverviewState('week');
+    expect(m.getIamMetrics).toHaveBeenCalledTimes(1);
+    expect(m.getIamMetrics).toHaveBeenCalledWith('week', 'wms');
+    expect(state.period).toBe('week');
+    expect(state.performance.status).toBe('ok');
+    expect(state.performance.value?.metrics.map((x) => x.key)).toEqual([
+      'loginSuccess',
+      'loginFailure',
+      'accountLocked',
+      'newAccount',
+    ]);
+  });
+
+  it('defaults to the month', async () => {
+    seedHappy();
+    const state = await getIamOverviewState();
+    expect(m.getIamMetrics).toHaveBeenCalledWith('month', 'wms');
+    expect(state.period).toBe('month');
+  });
+
+  it('no active tenant → the metrics are not called either', async () => {
+    m.getActiveTenant.mockResolvedValue(null);
+    const state = await getIamOverviewState('week');
+    expect(m.getIamMetrics).not.toHaveBeenCalled();
+    expect(state.noActiveTenant).toBe(true);
+    expect(state.period).toBe('week');
+    expect(state.performance.status).not.toBe('ok');
+  });
+
+  it('403 (PERMISSION_DENIED / TENANT_SCOPE_DENIED) → strip forbidden, every card still ok', async () => {
+    for (const code of ['PERMISSION_DENIED', 'TENANT_SCOPE_DENIED']) {
+      seedHappy();
+      m.getIamMetrics.mockRejectedValue(new ApiError(403, code, 'no'));
+      const state = await getIamOverviewState();
+      expect(state.performance, code).toEqual({ status: 'forbidden', value: null });
+      expect(state.operators.status).toBe('ok');
+      expect(state.accounts.total).toBe(123);
+      expect(state.audit.total).toBe(57);
+    }
+  });
+
+  it('503 / unparseable body → strip degraded (never zeros), every card still ok', async () => {
+    seedHappy();
+    m.getIamMetrics.mockRejectedValue(
+      new AuditUnavailableError('downstream', 'DOWNSTREAM_ERROR', 'down'),
+    );
+    let state = await getIamOverviewState();
+    expect(state.performance).toEqual({ status: 'degraded', value: null });
+    expect(state.operators.total).toBe(10);
+
+    seedHappy();
+    m.getIamMetrics.mockResolvedValue({ ...METRICS, metrics: [{ ...METRICS.metrics[0], current: 412 }] });
+    state = await getIamOverviewState();
+    expect(state.performance).toEqual({ status: 'degraded', value: null });
+    expect(state.audit.status).toBe('ok');
+  });
+
+  it('a strip 401 → whole-session redirect(/login), like every other leg', async () => {
+    seedHappy();
+    m.getIamMetrics.mockRejectedValue(new ApiError(401, 'TOKEN_INVALID', 'exp'));
     await expect(getIamOverviewState()).rejects.toThrow('REDIRECT:/login');
     expect(redirectMock).toHaveBeenCalledWith('/login?error=session_expired');
   });

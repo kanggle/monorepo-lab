@@ -31,7 +31,7 @@ security-service 는 **이상 로그인 탐지·자동 잠금**을 책임지는 
 | `occurred_at` | DATETIME(6) | NOT NULL | internal | UTC |
 
 **불변성**: append-only. UPDATE/DELETE 는 GDPR 마스킹 (TASK-BE-258) 만 허용 — 그 외 트리거로 차단 (V0002).
-**인덱스**: `idx_login_history_tenant_account_time` `(tenant_id, account_id, occurred_at DESC)`.
+**인덱스**: `idx_login_history_tenant_account_time` `(tenant_id, account_id, occurred_at DESC)`. **TASK-MONO-811** (`V0012`): `idx_login_history_tenant_outcome_occurred` `(tenant_id, outcome, occurred_at)` — 실적 집계(security-query-api.md § GET /internal/security/metrics/daily).
 **보존**: 기본 1년 (운영 정책에 따라 조정).
 
 ### `suspicious_events`
@@ -66,6 +66,7 @@ security-service 는 **이상 로그인 탐지·자동 잠금**을 책임지는 
 | `locked_at` | DATETIME(6) | NOT NULL | internal | UTC |
 
 **불변성**: append-only.
+**인덱스** (TASK-MONO-811, `V0012`): `idx_account_lock_history_tenant_occurred` `(tenant_id, occurred_at)` · `idx_account_lock_history_occurred` `(occurred_at)` — 실적 집계(`accountLocked`). 🔵 실제 시각 컬럼 이름은 `occurred_at`(V0007) — 위 표의 `locked_at` 은 V0007 이전 설계 이름이다.
 **PII**: 본 테이블은 PII 컬럼이 없으나, GDPR 마스킹 시 `tableNames` 목록에 포함 — "체크 완료" audit 명시 목적의 no-op UPDATE.
 
 ### `processed_events`

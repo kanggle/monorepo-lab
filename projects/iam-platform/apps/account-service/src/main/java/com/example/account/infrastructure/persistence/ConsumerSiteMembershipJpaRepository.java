@@ -16,6 +16,17 @@ public interface ConsumerSiteMembershipJpaRepository
     Optional<ConsumerSiteMembershipJpaEntity> findBySiteTenantIdAndAccountId(String siteTenantId, String accountId);
 
     /**
+     * TASK-MONO-811 — {@code consented_at} of one site's membership rows with
+     * {@code consented_at ∈ [from, to)} (half-open), every status included (ACTIVE · LEFT · LOCKED).
+     * Only the timestamp is selected. Served by {@code idx_consumer_site_memberships_site_consented} (V0034).
+     */
+    @Query("SELECT m.consentedAt FROM ConsumerSiteMembershipJpaEntity m "
+            + "WHERE m.siteTenantId = :siteTenantId AND m.consentedAt >= :from AND m.consentedAt < :to")
+    List<Instant> findConsentedAtInWindow(@Param("siteTenantId") String siteTenantId,
+                                          @Param("from") Instant from,
+                                          @Param("to") Instant to);
+
+    /**
      * TASK-BE-615 — {@code consumer_site_roles} of one account on ONE site (no entity maps that
      * table; it has no writer yet — {@code TASK-BE-618} / {@code TASK-MONO-745}). Native so the read
      * does not need a mapping that nothing else uses.
