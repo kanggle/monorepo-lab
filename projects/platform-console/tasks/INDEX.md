@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-_(없음)_
+- `TASK-PC-FE-371-delegation-rows-show-employee-ids-not-names.md` — **ERP 위임 화면(«내가 위임한» · «나에게 위임된» · 위임 현황 표)이 직원 이름 대신 내부 id 를 그린다** (READY, 2026-10-25 UTC): 34차 창 발견 · `PC-FE-355` Out of Scope. 위임의 사람 칸은 직원 id(approval v2.4)이고, 결재 화면의 `ApprovalEmployeeRef` 로 그대로 풀린다 — 콘솔만, 굽기 무관. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 
