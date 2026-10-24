@@ -92,7 +92,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-370-finance-transaction-type-filter-sends-unknown-types.md` — **Finance 거래 유형 필터가 백엔드에 없는 `CREDIT`/`DEBIT` 을 보내 422 `AMOUNT_INVALID`** (READY, 2026-10-24 UTC): 옵션 목록(`TransactionsTable.tsx:115` ← `KNOWN_TXN_TYPES`)에 표시용 값이 섞였다. 백엔드는 `TransactionType.valueOf`(`AccountApplicationService.java:396`)에서 실패한다. 표시용 목록과 필터용 목록(생산자 enum)을 나누고, 옵션이 enum 을 벗어나면 빨강이 되는 시험을 둔다. 출처 `TASK-MONO-812`. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
+
 
 
 **`ADR-MONO-074` 실행 시리즈 (ACCEPTED 2026-09-15 — A · R1ⓐ · R2ⓐ · R3ⓐ)** — 익명 방문자가 `/demo` 대신 **실제 콘솔 화면**을 합성 샘플로 본다. 🔵 **도메인 샘플 시리즈 완료 (2026-09-17 UTC)**: 282 · 283~288 전부 done(샘플 원장 표면 33 · 화면 58 전부 `ready` + 가이드 6 `static`, `pending` 0). 🔵 **`TASK-MONO-686`(`/demo` 은퇴)도 done(2026-09-17 UTC, #3895) — `ADR-MONO-074` 로드맵 8/8 완료.** 루트 티켓이라 기록은 `tasks/done/` · `tasks/INDEX.md` 에 있다. 아래 `TASK-PC-FE-295` 는 시리즈 리뷰에서 나온 **로그인 운영자 경로** 결함이라 시리즈 밖이다.
@@ -123,6 +124,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## review
 
+- `TASK-PC-FE-370-finance-transaction-type-filter-sends-unknown-types.md` — **Finance 거래 유형 필터가 백엔드 enum 만 보낸다** (REVIEW, 2026-10-24 UTC · AC-0~2 닫힘). 필터 옵션이 표시용 목록(`CREDIT`/`DEBIT` 포함)이라 422 `AMOUNT_INVALID` 가 났다 → 필터용 목록 `TXN_TYPE_FILTER_OPTIONS` = 생산자 enum 7개. 시험은 `TransactionType.java` 를 직접 읽어 대조한다(옛 목록이면 빨강). 표시는 불변. Vercel 배포 = 머지 즉시. 분석=Opus 5.5 / 구현=Opus 5.5.
 - `TASK-PC-FE-368-home-overview-domain-headline-metric.md` — **ADR-MONO-084 P8 — 홈 도메인 카드에 대표 실적 지표** (REVIEW, 2026-10-24 UTC · AC-0~3 닫힘 · AC-4 = 머지 뒤 첫 nightly · AC-5 = 배포 상태). 콘솔 서버 합성에 지표 레그 6개를 별도 패스로 더했다(병렬 · 자기 시한 · 카드 숫자 불변). 대표 지표는 소유자 확인(«기본안 + finance=이체 금액»). 실패는 0 이 아니라 칸만 degraded / «권한 없음». 🔴 기록된 위험: 홈 합성이 도메인 지표 경로를 다시 적었고, fetcher 와의 대조 시험이 없다. 분석=Opus 5.5 / 구현=Sonnet 5.5 + diff 대조.
 - `TASK-PC-FE-364-operator-overview-business-kpis.md` — **운영자 통합 개요 카드 여섯을 업무 지표로 — 잠긴 계정 · 미출고 주문 · 제출 대기 발주 · 미해소 대사 차이 · 내 결재 대기 · 출고 대기 주문** — 카드당 호출 1개 그대로(1:1 교체) · 서버 변경 없음 · 계약 § 2.4.9.1 먼저 · 소유자 결정 2026-10-22 KST (REVIEW, 2026-10-22 UTC · 문구 · 권한 표 소유자 승인 · 콘솔 nightly · federation e2e success · AC-3 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ❌ — WMS 출고 · SCM 발주 카드 `DOWNSTREAM_ERROR` · «WMS 점검 불가» → `TASK-PC-FE-369`.
 

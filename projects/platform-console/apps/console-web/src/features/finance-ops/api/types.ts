@@ -164,6 +164,24 @@ export const KNOWN_TXN_TYPES = [
 ] as const;
 export type KnownTxnType = (typeof KNOWN_TXN_TYPES)[number];
 
+/** TASK-PC-FE-370 — the values the transactions `type` FILTER may send.
+ *
+ *  Exactly account-service `TransactionType` (`TransactionType.java`), in
+ *  its declaration order. `KNOWN_TXN_TYPES` above is the RENDER list and may
+ *  carry extra tolerant labels; it must not feed the filter: the backend runs
+ *  `TransactionType.valueOf` on the value (`AccountApplicationService.java`),
+ *  so `CREDIT` / `DEBIT` answered 422 `AMOUNT_INVALID`.
+ *  `finance-txn-type-filter.test.tsx` reads the Java enum and fails on drift. */
+export const TXN_TYPE_FILTER_OPTIONS = [
+  'TOPUP',
+  'WITHDRAW',
+  'TRANSFER',
+  'HOLD',
+  'CAPTURE',
+  'RELEASE',
+  'REVERSAL',
+] as const;
+
 export const TransactionSchema = z
   .object({
     transactionId: z.string(),
