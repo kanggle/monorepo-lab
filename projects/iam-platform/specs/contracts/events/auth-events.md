@@ -48,6 +48,7 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 | 발행 순서 | 자격 조회 → `attempted` → (계정 상태 조회 — TASK-BE-600) → (비밀번호 불일치) `failed` / (비밀번호 일치 + 비-ACTIVE) `failed` / (성공) `succeeded`. 상태 조회 **실패**는 `failed` 없이 로그인 거부(fail-closed — `attempted` 만 남는다). 디바이스 세션 등록 · `session.created` 없음 |
 | `accountId` (attempted/failed) | 자격을 **찾았으면 채운다** — 비밀번호 불일치도 포함(VelocityRule 은 `accountId` 없는 실패를 세지 않는다). 없는 이메일 · 테넌트 모호 → `null` |
 | `tenantId` | 자격을 찾았으면 **그 계정의 테넌트**(크로스-테넌트 폴백으로 찾았어도 마찬가지 — 시작 client 의 테넌트가 아니다). 못 찾았으면 시작 OIDC client 의 테넌트, 그것도 없으면 `fan-platform` |
+| `siteTenantId` (TASK-BE-653) | 찾은 자격이 **`consumer-pool` 자격**이고 시작 OIDC client 가 소비자 사이트일 때만 그 client 의 테넌트(`CredentialAuthenticationProvider` 가 이미 계산한 `clientTenant` — 대체값 없음). 그 밖에는 **생략** — 사이트 자격 · 자격 못 찾음 · 시작 client 없음(초대 수락 · 직접 방문) · 콘솔(`iam`) client. 아래 [§ siteTenantId](#sitetenantid-task-be-653) |
 | `failureReason` | `CREDENTIALS_INVALID`(없는 이메일 · 비밀번호 불일치) 또는 `LOGIN_TENANT_AMBIGUOUS`. **`RATE_LIMITED` 는 이 경로에서 나오지 않는다** — rate-limit 을 적용하지 않기 때문(소유자 결정, BE-599 AC-0 ⓑ 미채택: 공유 데모 계정이 N회 실패 뒤 막히면 안 된다). **TASK-BE-600 부터 `ACCOUNT_LOCKED` · `ACCOUNT_DORMANT` · `ACCOUNT_DELETED` 가 나온다** — 비밀번호가 **맞고** 계정 상태가 그것일 때만(`accountId` 채움). 비밀번호가 틀리면 상태와 무관하게 `CREDENTIALS_INVALID`(VelocityRule 에 가는 비밀번호 실패는 그대로다). 계약 밖 상태 값이면 `failed` 를 내지 않는다(enum 에 없는 값을 만들지 않는다). HTTP 응답은 이 값들과 무관하게 모두 같은 `/login?error` 다(소유자 결정, BE-600 AC-1 ⓐ) |
 | `failCount` | 항상 `0` — auth-service 측 실패 카운터가 없다(같은 이유). security-service VelocityRule 은 이 필드를 읽지 않고 자체 카운터로 센다 |
 | `sessionJti` (succeeded) | `null` — 비밀번호 검증 시점에는 refresh token 이 아직 없다(SAS 가 이후 `/oauth2/token` 에서 발급) |
@@ -59,7 +60,7 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 ### 소셜 로그인 경로 (TASK-BE-602)
 
 **TASK-BE-602 부터 소셜 로그인도 발행한다** — `GET /login/oauth/{provider}/callback` → `OAuthLoginUseCase.resolveBrowserLogin`
-→ `LoginEventRecorder`(폼과 **같은** 레코더). 스키마 변경 없음 — 새 enum 값은 `loginMethod` 의 `OAUTH_NAVER` 하나(아래 `auth.login.succeeded` 절).
+→ `LoginEventRecorder`(폼과 **같은** 레코더). 스키마 변경 없음 — 새 enum 값은 `loginMethod` 의 `OAUTH_NAVER` 하나(아래 `auth.login.succeeded` 절). (TASK-BE-653 이 세 이벤트에 선택 필드 `siteTenantId` 를 더했다 — 아래 § siteTenantId.)
 
 | 항목 | 소셜 경로의 값 |
 |---|---|
@@ -68,6 +69,7 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 | `accountId` | 해소된 계정(신원 행 또는 `socialSignup` 응답) — 항상 채운다 |
 | `emailHash` | 공급자가 준 이메일의 해시(`SHA256[:10]`, 폼과 같은 함수). 이 단계에서는 이메일이 **항상 있다**(이메일 없는 콜백은 그 전에 거부되고 이벤트가 없다) ⇒ 필수 필드 규칙 그대로, 선택화하지 않는다 |
 | `tenantId` | `status-with-tenant` 응답의 `tenantId` = **계정 행의 테넌트**. 시작 client 의 테넌트가 **아니다**(발급 토큰의 `tenant_id` 와 다를 수 있다 — BE-507 이전 계정) |
+| `siteTenantId` (TASK-BE-653) | `status-with-tenant` 의 `tenantId` 가 `consumer-pool` 이고 시작 client 가 **실제로 있을 때만**(소비자 사이트 — 콘솔 · 풀 아님) 그 client 의 테넌트. 콜백이 계정 해소에 쓰는 테넌트는 client 가 없으면 `fan-platform` 으로 메워지므로(`SavedRequestTenantResolver.resolve`) 그 값을 쓰지 않고, 같은 저장 요청을 대체값 없이 읽은 `initiatingClientTenant` 를 쓴다 — client 가 없으면 생략 |
 | `failureReason` | `ACCOUNT_LOCKED` · `ACCOUNT_DORMANT` · `ACCOUNT_DELETED` 만(기존 enum 값). 소셜에는 비밀번호가 없어 `CREDENTIALS_INVALID` 가 나오지 않는다 |
 | `failCount` · `sessionJti` · `deviceId` · `isNewDevice` | 폼과 같다(`0` · `null` · `null` · `null`) |
 | `loginMethod` (succeeded) | `OAUTH_<PROVIDER>` — `OAUTH_GOOGLE` · `OAUTH_KAKAO` · `OAUTH_MICROSOFT` · `OAUTH_NAVER` |
@@ -77,6 +79,19 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 `emailHash` · `loginMethod` 는 읽지 않는다(`AuthEventMapper`). account-service `LoginSucceededConsumer` 는 `accountId` · `tenantId` 로
 `findById(tenantId, accountId)` 해 `last_login_succeeded_at` 을 갱신한다 — 계정의 실제 테넌트를 싣기 때문에 스토어 소셜 계정의
 마지막 로그인 시각도 갱신된다(시작 client 의 테넌트를 실으면 BE-507 이전 계정은 조용히 no-op 이었을 것).
+
+---
+
+## siteTenantId (TASK-BE-653)
+
+`auth.login.attempted` · `auth.login.failed` · `auth.login.succeeded` 의 **선택(optional) · 추가(additive)** 필드. 소비자 풀 계정(ADR-MONO-078)이 **어느 사이트에 로그인했는가**.
+
+- **값**: 로그인을 시작한 OIDC client 의 사이트 테넌트(예: `ecommerce`, `fan-platform`).
+- **채우는 조건 — 둘 다 참일 때만**: ① 해소된 계정 · 자격의 테넌트(= 이 이벤트의 `tenantId`)가 `consumer-pool` 이다. ② 시작 client 가 **실제로 있고** 그 테넌트가 풀 계정이 매핑될 수 있는 사이트다 — 콘솔(`iam`)도 `consumer-pool` 자신도 아니다(auth-service `TenantContext.siteTenantOfPoolLogin`).
+- **그 밖에는 생략**(키 자체가 없다 — TASK-BE-653 이전과 바이트 단위로 같은 payload): 풀 계정이 아닌 모든 로그인 · 자격을 못 찾은 시도 · 시작 client 없는 풀 로그인(운영자 초대 수락으로 이어지는 로그인, `/login` 직접 방문) · 콘솔 client 의 풀 로그인. 🔴 `iam` 과 `fan-platform` **대체값**(client 가 없을 때 메우는 값)은 절대 이 필드에 실리지 않는다 — 실제 `fan-platform` client 로 들어온 풀 로그인만 `fan-platform` 이다.
+- 🔴 **`tenantId` 는 바뀌지 않는다** — 계정 자신의 테넌트(풀 계정이면 `consumer-pool`). security-service 탐지 규칙(Velocity · DeviceChange · GeoAnomaly · ImpossibleTravel)과 PII 마스킹, account-service 의 last-login 갱신은 계속 `tenantId` 로 키를 잡는다. 이 필드를 키로 쓰지 않는다.
+- **소비자**: security-service 가 `login_history.site_tenant_id` 로 저장하고(`V0013`), IAM 실적 집계의 로그인 두 키만 이 컬럼을 읽는다(admin-api.md § GET /api/admin/metrics). 필드가 없거나 `null` · 공백이면 `null` 로 저장 — **TASK-BE-653 이전 이벤트도 그대로 소비된다**(백필 없음).
+- `account.locked` 에는 이 필드가 없다 — 계정 전체 잠금은 사이트 소속이 아니다(소유자 결정, TASK-BE-653 AC-1).
 
 ---
 
@@ -94,6 +109,7 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
   "accountId": "string | null (미존재 이메일이면 null)",
   "emailHash": "string (SHA256[:10])",
   "tenantId": "string (required, 테넌트 컨텍스트. 미확정 이메일이면 known 테넌트 컨텍스트 또는 'fan-platform' 기본값 사용)",
+  "siteTenantId": "string (optional, additive — TASK-BE-653. 소비자 풀 계정이 로그인한 사이트. 아래 § siteTenantId)",
   "ipMasked": "192.168.*.*",
   "userAgentFamily": "Chrome 120",
   "deviceFingerprint": "string (hashed)",
@@ -104,6 +120,7 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 
 **필드 노트** (TASK-BE-248):
 - `tenantId`: 항상 required. consumer는 누락 시 DLQ로 라우팅한다.
+- `siteTenantId` (TASK-BE-653): optional — [§ siteTenantId](#sitetenantid-task-be-653). 없으면 키가 생략된다.
 
 **Consumers**: security-service
 
@@ -123,6 +140,7 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
   "accountId": "string | null",
   "emailHash": "string",
   "tenantId": "string (required, TASK-BE-248)",
+  "siteTenantId": "string (optional, additive — TASK-BE-653. 소비자 풀 계정이 로그인한 사이트. 아래 § siteTenantId)",
   "failureReason": "CREDENTIALS_INVALID | ACCOUNT_LOCKED | ACCOUNT_DORMANT | ACCOUNT_DELETED | RATE_LIMITED | LOGIN_TENANT_AMBIGUOUS",
   "failCount": 3,
   "ipMasked": "192.168.*.*",
@@ -135,6 +153,7 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 
 **필드 노트** (TASK-BE-248):
 - `tenantId`: 항상 required. consumer는 누락 시 DLQ로 라우팅한다. VelocityRule은 `(tenantId, accountId)` 단위로 카운터를 분리한다.
+- `siteTenantId` (TASK-BE-653): optional — [§ siteTenantId](#sitetenantid-task-be-653). VelocityRule 은 이 필드를 읽지 않는다(풀 계정의 실패는 사이트와 무관하게 `(consumer-pool, accountId)` 하나로 센다).
 - `failureReason`: 이 enum의 `CREDENTIALS_INVALID` 값은 **HTTP 응답 code와 별개 계약**이다. 자격 증명 실패의 HTTP code는 `INVALID_CREDENTIALS`로 통일되었으나(TASK-MONO-246, platform-common canonical), 본 `failureReason` enum은 security-service가 소비하는 독립 Kafka 계약이므로 `CREDENTIALS_INVALID`를 유지한다. **두 문자열을 통일하지 말 것** — 동일하게 보여도 다른 네임스페이스다(HTTP 응답 vs 이벤트 enum).
 
 - (TASK-BE-599) 폼 로그인 경로에서 `failureReason` 은 `CREDENTIALS_INVALID` · `LOGIN_TENANT_AMBIGUOUS` 뿐이고 `failCount` 는 항상 `0` 이다(rate-limit 미적용 — 위 «발행 경로» 절). **(TASK-BE-600 갱신)** 여기에 `ACCOUNT_LOCKED` · `ACCOUNT_DORMANT` · `ACCOUNT_DELETED` 가 더해졌다(비밀번호 일치 + 비-ACTIVE). 새 enum 값은 없다 — 셋 다 이미 이 enum 에 있던 값이다. security-service `AuthEventMapper.resolveFailureOutcome` 은 `RATE_LIMITED` 외 모든 값을 `FAILURE` 로 읽는다.
@@ -156,6 +175,7 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 {
   "accountId": "string",
   "tenantId": "string (필수. 로그인한 계정 자신의 테넌트 — 소비자 풀 계정이면 'consumer-pool'. 아래 필드 노트)",
+  "siteTenantId": "string (optional, additive — TASK-BE-653. 소비자 풀 계정이 로그인한 사이트. 아래 § siteTenantId)",
   "ipMasked": "192.168.*.*",
   "userAgentFamily": "Chrome 120",
   "deviceFingerprint": "string",
@@ -167,7 +187,7 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 }
 ```
 
-**필드 노트** (`tenantId` — TASK-MONO-811 정정): 값은 **로그인한 계정 행의 테넌트**다 — 위 «발행 경로» 표(폼: 자격의 테넌트 · `CredentialAuthenticationProvider` 가 `credential.getTenantId()` 를 싣는다 / 소셜: `status-with-tenant` 의 `tenantId`)와 같다. 발급 토큰의 `tenant_id`(시작 client 의 사이트)가 **아니다** — 이전 문구 «발급된 토큰의 tenant_id» 는 코드와 맞지 않았다. 그래서 소비자 풀 계정(ADR-MONO-078)이 어느 사이트에 로그인하든 이 값은 `consumer-pool` 이고, security-service `login_history` 도 그 값으로 기록한다(admin-api.md § GET /api/admin/metrics 의 «풀 계정 제외» 공백). 사이트 테넌트를 이벤트에 싣는 일은 **후속 티켓**이다 — 스키마 변경은 이 정정에 없다.
+**필드 노트** (`tenantId` — TASK-MONO-811 정정): 값은 **로그인한 계정 행의 테넌트**다 — 위 «발행 경로» 표(폼: 자격의 테넌트 · `CredentialAuthenticationProvider` 가 `credential.getTenantId()` 를 싣는다 / 소셜: `status-with-tenant` 의 `tenantId`)와 같다. 발급 토큰의 `tenant_id`(시작 client 의 사이트)가 **아니다** — 이전 문구 «발급된 토큰의 tenant_id» 는 코드와 맞지 않았다. 그래서 소비자 풀 계정(ADR-MONO-078)이 어느 사이트에 로그인하든 이 값은 `consumer-pool` 이고, security-service `login_history.tenant_id` 도 그 값으로 기록한다. **로그인한 사이트는 TASK-BE-653 부터 별도의 선택 필드 `siteTenantId` 가 싣는다**([§ siteTenantId](#sitetenantid-task-be-653)) — `tenantId` 를 재정의하지 않았다(탐지 규칙 · PII 마스킹 · last-login 이 이 값으로 키를 잡기 때문). admin-api.md § GET /api/admin/metrics 의 로그인 두 키는 이 필드로 사이트에 센다(TASK-BE-653 배포 이후 기록분, 백필 없음).
 
 **필드 노트** (TASK-BE-025):
 - `deviceId`: 이 로그인에 사용된 `device_sessions.device_id`. auth-service가 발급하는 opaque UUID. 필드 생략/`null`은 레거시 이벤트로 간주.

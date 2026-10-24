@@ -36,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -114,6 +115,9 @@ class CredentialAuthenticationProviderPoolTest {
         verify(credentialRepository, never()).findByTenantIdAndEmail(anyString(), anyString());
         // The status is looked up where the account lives — the pool.
         verify(accountServicePort).getAccountStatus(POOL_ACCOUNT, "consumer-pool");
+        // TASK-BE-653: tenantId stays the account's (consumer-pool); siteTenantId says which site.
+        verify(loginEventRecorder).recordAttempted(eq(POOL_ACCOUNT), any(), eq("consumer-pool"), eq("ecommerce"), any());
+        verify(loginEventRecorder).recordSucceeded(eq(POOL_ACCOUNT), eq("consumer-pool"), eq("ecommerce"), any());
     }
 
     @Test
@@ -130,6 +134,9 @@ class CredentialAuthenticationProviderPoolTest {
 
         assertThat(details(result)).containsEntry("tenant_id", "ecommerce");
         verify(accountServicePort, never()).getConsumerSiteMembership(anyString(), anyString());
+        // TASK-BE-653 control: a site credential's events carry no siteTenantId (field omitted).
+        verify(loginEventRecorder).recordAttempted(eq("acc-site"), any(), eq("ecommerce"), isNull(), any());
+        verify(loginEventRecorder).recordSucceeded(eq("acc-site"), eq("ecommerce"), isNull(), any());
     }
 
     @Test
@@ -176,7 +183,10 @@ class CredentialAuthenticationProviderPoolTest {
         assertThatThrownBy(() -> provider.authenticate(new UsernamePasswordAuthenticationToken(EMAIL, "wrong")))
                 .isExactlyInstanceOf(BadCredentialsException.class).hasMessage("Invalid credentials");
         verify(credentialRepository, never()).findByTenantIdAndEmail(anyString(), anyString());
-        verify(loginEventRecorder).recordFailed(eq(POOL_ACCOUNT), any(), eq("consumer-pool"),
+        // TASK-BE-653: the failure is attributed to the site too — a real fan-platform client (a consumer
+        // site), not the no-client fallback.
+        verify(loginEventRecorder).recordAttempted(eq(POOL_ACCOUNT), any(), eq("consumer-pool"), eq("fan-platform"), any());
+        verify(loginEventRecorder).recordFailed(eq(POOL_ACCOUNT), any(), eq("consumer-pool"), eq("fan-platform"),
                 eq("CREDENTIALS_INVALID"), any());
     }
 
@@ -198,6 +208,9 @@ class CredentialAuthenticationProviderPoolTest {
         assertThat(details(result)).containsEntry("tenant_id", "consumer-pool");
         verify(credentialRepository, never()).findPoolCredentialByEmail(anyString());
         verify(accountServicePort, never()).getConsumerSiteMembership(anyString(), anyString());
+        // TASK-BE-653: the console is not a site — a pool login through it carries no siteTenantId.
+        verify(loginEventRecorder).recordAttempted(eq(POOL_ACCOUNT), any(), eq("consumer-pool"), isNull(), any());
+        verify(loginEventRecorder).recordSucceeded(eq(POOL_ACCOUNT), eq("consumer-pool"), isNull(), any());
     }
 
     @Test
@@ -210,6 +223,39 @@ class CredentialAuthenticationProviderPoolTest {
 
         assertThatThrownBy(() -> provider.authenticate(new UsernamePasswordAuthenticationToken(EMAIL, PASSWORD)))
                 .isExactlyInstanceOf(BadCredentialsException.class);
-        verify(loginEventRecorder).recordFailed(any(), any(), eq("iam"), eq("LOGIN_TENANT_AMBIGUOUS"), any());
+        verify(loginEventRecorder).recordFailed(any(), any(), eq("iam"), isNull(), eq("LOGIN_TENANT_AMBIGUOUS"), any());
+    }
+
+    // ── TASK-BE-653 — siteTenantId on a pool login with no initiating site ─────────────────────
+
+    @Test
+    @DisplayName("TASK-BE-653: 시작 client 없음 · 이메일이 풀 한 행뿐 → 교차 조회로 풀 자격 · siteTenantId=null (fan-platform 대체값을 사이트로 쓰지 않는다)")
+    void noClient_poolCredential_noSiteTenant() {
+        bindRequest(null);
+        when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(credential(POOL_ACCOUNT, "consumer-pool")));
+        passwordOk();
+        when(tenantTypePort.resolve("consumer-pool")).thenReturn("B2C_CONSUMER");
+
+        provider.authenticate(new UsernamePasswordAuthenticationToken(EMAIL, PASSWORD));
+
+        verify(loginEventRecorder).recordAttempted(eq(POOL_ACCOUNT), any(), eq("consumer-pool"), isNull(), any());
+        verify(loginEventRecorder).recordSucceeded(eq(POOL_ACCOUNT), eq("consumer-pool"), isNull(), any());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-653: 운영자 초대 수락으로 이어지는 로그인(시작 client 없음) · 풀 자격 → siteTenantId=null")
+    void invitationAcceptance_poolCredential_noSiteTenant() {
+        bindRequest(null);
+        when(savedRequestTenantResolver.continuesToOperatorInvitationAcceptance(any(), any())).thenReturn(true);
+        when(credentialRepository.findPoolCredentialByEmail(EMAIL))
+                .thenReturn(Optional.of(credential(POOL_ACCOUNT, "consumer-pool")));
+        when(passwordHasher.verify("wrong", HASH)).thenReturn(false);
+
+        assertThatThrownBy(() -> provider.authenticate(new UsernamePasswordAuthenticationToken(EMAIL, "wrong")))
+                .isExactlyInstanceOf(BadCredentialsException.class);
+
+        verify(loginEventRecorder).recordAttempted(eq(POOL_ACCOUNT), any(), eq("consumer-pool"), isNull(), any());
+        verify(loginEventRecorder).recordFailed(eq(POOL_ACCOUNT), any(), eq("consumer-pool"), isNull(),
+                eq("CREDENTIALS_INVALID"), any());
     }
 }

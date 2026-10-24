@@ -5,6 +5,11 @@ import java.time.Instant;
 public class LoginHistoryEntry {
 
     private final String tenantId;
+    /**
+     * TASK-BE-653 — the site a consumer-pool account logged in to (the event's optional
+     * {@code siteTenantId}); {@code null} for every other row. {@link #tenantId} is unchanged by it.
+     */
+    private final String siteTenantId;
     private final String eventId;
     private final String accountId;
     private final LoginOutcome outcome;
@@ -16,6 +21,15 @@ public class LoginHistoryEntry {
 
     public LoginHistoryEntry(String tenantId, String eventId, String accountId, LoginOutcome outcome,
                              String ipMasked, String userAgentFamily,
+                             String deviceFingerprint, String geoCountry,
+                             Instant occurredAt) {
+        this(tenantId, null, eventId, accountId, outcome, ipMasked, userAgentFamily, deviceFingerprint,
+                geoCountry, occurredAt);
+    }
+
+    /** TASK-BE-653 — with the optional {@code siteTenantId} (blank → {@code null}). */
+    public LoginHistoryEntry(String tenantId, String siteTenantId, String eventId, String accountId,
+                             LoginOutcome outcome, String ipMasked, String userAgentFamily,
                              String deviceFingerprint, String geoCountry,
                              Instant occurredAt) {
         if (tenantId == null || tenantId.isBlank()) {
@@ -35,6 +49,7 @@ public class LoginHistoryEntry {
             throw new IllegalArgumentException("occurredAt must not be null");
         }
         this.tenantId = tenantId;
+        this.siteTenantId = siteTenantId == null || siteTenantId.isBlank() ? null : siteTenantId;
         this.eventId = eventId;
         this.accountId = accountId;
         this.outcome = outcome;
@@ -47,6 +62,10 @@ public class LoginHistoryEntry {
 
     public String getTenantId() {
         return tenantId;
+    }
+
+    public String getSiteTenantId() {
+        return siteTenantId;
     }
 
     public String getEventId() {

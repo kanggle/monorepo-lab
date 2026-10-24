@@ -184,7 +184,7 @@ schema-level 또는 DB-level 격리로 전환되는 시점은:
 - **account-service**: `accounts`, `profiles`, `account_status_history`, `outbox_events`에 `tenant_id` NOT NULL. unique index `(tenant_id, email)`로 변경(테넌트 간 동일 이메일 허용). 🔵 소비자 사이트의 새 계정은 예약 테넌트 `consumer-pool` 에 하나로 산다 — [§ 소비자 계정 풀](#소비자-계정-풀--소비자-사이트끼리-계정-하나-adr-mono-078-a-task-mono-742)(ADR-MONO-078)
 - **auth-service**: `credentials`, `refresh_tokens`, `social_identities`에 `tenant_id` NOT NULL. unique index `(tenant_id, provider, provider_user_id)` (소셜 식별자도 테넌트별 분리)
 - **admin-service**: `admin_operators`, `admin_operator_roles`, `admin_actions`에 `tenant_id`(또는 `target_tenant_id`) NOT NULL. SUPER_ADMIN은 cross-tenant 운영을 위해 `tenant_id = '*'` 같은 와일드카드 또는 별도 platform-scope role을 가짐(상세는 admin-service 스펙 후속)
-- **security-service**: 보안 이벤트(`auth.login.attempted`, `auth.login.failed`, `account.status.changed` 등) 모두 `tenant_id` 페이로드 필수. 테넌트별 비정상 탐지 임계치 운용 가능
+- **security-service**: 보안 이벤트(`auth.login.attempted`, `auth.login.failed`, `account.status.changed` 등) 모두 `tenant_id` 페이로드 필수. 테넌트별 비정상 탐지 임계치 운용 가능. 🔵 소비자 풀 계정의 로그인 이벤트는 `tenantId = consumer-pool`(계정의 테넌트 — 탐지 규칙 · PII 마스킹의 키) 그대로에 **선택 필드 `siteTenantId`** = 로그인한 사이트를 더 싣는다(`TASK-BE-653`, [auth-events.md](../contracts/events/auth-events.md)) — `login_history.site_tenant_id` 로 저장되어 사이트별 실적 집계에만 쓰인다. 계정 잠금(`account.locked`)에는 사이트가 없다(계정 전체 잠금은 사이트 소속이 아니다)
 - **gateway-service**: 라우팅·rate limit 키에 `tenant_id` 포함. `rate:login:{tenant_id}:{ip}` 형태
 
 ---

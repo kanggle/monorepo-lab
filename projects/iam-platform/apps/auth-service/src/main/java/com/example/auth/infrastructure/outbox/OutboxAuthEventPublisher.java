@@ -71,11 +71,29 @@ public class OutboxAuthEventPublisher implements AuthEventPublisher {
     @Transactional
     public void publishLoginAttempted(String accountId, String emailHash, String tenantId,
                                       SessionContext ctx) {
+        publishLoginAttempted(accountId, emailHash, tenantId, null, ctx);
+    }
+
+    /**
+     * TASK-BE-653 — {@code siteTenantId} sits right after {@code tenantId} and is present only when
+     * non-null, so every login that is not a consumer-pool login to a site keeps the exact pre-653 payload.
+     */
+    private static void putSiteTenantId(Map<String, Object> payload, String siteTenantId) {
+        if (siteTenantId != null && !siteTenantId.isBlank()) {
+            payload.put("siteTenantId", siteTenantId);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void publishLoginAttempted(String accountId, String emailHash, String tenantId,
+                                      String siteTenantId, SessionContext ctx) {
         requireTenantId(tenantId);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("accountId", accountId);
         payload.put("emailHash", emailHash);
         payload.put("tenantId", tenantId);
+        putSiteTenantId(payload, siteTenantId);
         payload.put("ipMasked", ctx.ipMasked());
         payload.put("userAgentFamily", ctx.userAgentFamily());
         payload.put("deviceFingerprint", ctx.deviceFingerprint());
@@ -89,11 +107,20 @@ public class OutboxAuthEventPublisher implements AuthEventPublisher {
     @Transactional
     public void publishLoginFailed(String accountId, String emailHash, String tenantId,
                                    String failureReason, int failCount, SessionContext ctx) {
+        publishLoginFailed(accountId, emailHash, tenantId, null, failureReason, failCount, ctx);
+    }
+
+    @Override
+    @Transactional
+    public void publishLoginFailed(String accountId, String emailHash, String tenantId,
+                                   String siteTenantId, String failureReason, int failCount,
+                                   SessionContext ctx) {
         requireTenantId(tenantId);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("accountId", accountId);
         payload.put("emailHash", emailHash);
         payload.put("tenantId", tenantId);
+        putSiteTenantId(payload, siteTenantId);
         payload.put("failureReason", failureReason);
         payload.put("failCount", failCount);
         payload.put("ipMasked", ctx.ipMasked());
@@ -166,13 +193,38 @@ public class OutboxAuthEventPublisher implements AuthEventPublisher {
         write("auth.login.succeeded", accountId, payload);
     }
 
+    @Override
+    @Transactional
+    public void publishLoginSucceeded(String accountId, String sessionJti, String tenantId,
+                                      String siteTenantId, SessionContext ctx, String deviceId,
+                                      Boolean isNewDevice, String loginMethod) {
+        requireTenantId(tenantId);
+        Map<String, Object> payload =
+                buildLoginSucceededBase(accountId, sessionJti, tenantId, siteTenantId, ctx);
+        Object timestamp = payload.remove("timestamp");
+        payload.put("deviceId", deviceId);
+        payload.put("isNewDevice", isNewDevice);
+        if (loginMethod != null) {
+            payload.put("loginMethod", loginMethod);
+        }
+        payload.put("timestamp", timestamp);
+        write("auth.login.succeeded", accountId, payload);
+    }
+
     private Map<String, Object> buildLoginSucceededBase(String accountId, String sessionJti,
                                                         String tenantId, SessionContext ctx) {
+        return buildLoginSucceededBase(accountId, sessionJti, tenantId, null, ctx);
+    }
+
+    private Map<String, Object> buildLoginSucceededBase(String accountId, String sessionJti,
+                                                        String tenantId, String siteTenantId,
+                                                        SessionContext ctx) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("accountId", accountId);
         if (tenantId != null) {
             payload.put("tenantId", tenantId);
         }
+        putSiteTenantId(payload, siteTenantId);
         payload.put("ipMasked", ctx.ipMasked());
         payload.put("userAgentFamily", ctx.userAgentFamily());
         payload.put("deviceFingerprint", ctx.deviceFingerprint());

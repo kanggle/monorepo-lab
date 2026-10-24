@@ -171,10 +171,15 @@ public class SocialLoginBrowserController {
         // request) BEFORE consuming the saved request for the redirect URL.
         SavedRequestTenantResolver.Resolution resolution =
                 savedRequestTenantResolver.resolve(request, response);
+        // TASK-BE-653: the same saved request, read WITHOUT the fan-platform fallback — resolve() answers
+        // fan-platform both for a fan client and for no client, and only a real client is a pool login's site.
+        String initiatingClientTenant = savedRequestTenantResolver
+                .initiatingClientTenant(request, response).orElse(null);
 
         BrowserLoginResolution login;
         try {
-            login = oAuthLoginUseCase.resolveBrowserLogin(command, resolution.tenantId());
+            login = oAuthLoginUseCase.resolveBrowserLogin(
+                    command, resolution.tenantId(), initiatingClientTenant);
         } catch (OAuthEmailRequiredException e) {
             return loginError("email_required");
         } catch (AccountLockedException | AccountStatusException e) {

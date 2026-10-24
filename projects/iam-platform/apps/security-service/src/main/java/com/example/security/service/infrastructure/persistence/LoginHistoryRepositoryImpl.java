@@ -18,6 +18,7 @@ public class LoginHistoryRepositoryImpl implements LoginHistoryRepository {
     public void save(LoginHistoryEntry entry) {
         LoginHistoryJpaEntity entity = LoginHistoryJpaEntity.from(
                 entry.getTenantId(),
+                entry.getSiteTenantId(),
                 entry.getEventId(),
                 entry.getAccountId(),
                 entry.getOutcome().name(),
@@ -41,6 +42,7 @@ public class LoginHistoryRepositoryImpl implements LoginHistoryRepository {
                 tenantId, accountId, LoginOutcome.SUCCESS.name()
         ).map(entity -> new LoginHistoryEntry(
                 entity.getTenantId(),
+                entity.getSiteTenantId(),
                 entity.getEventId(),
                 entity.getAccountId(),
                 LoginOutcome.valueOf(entity.getOutcome()),

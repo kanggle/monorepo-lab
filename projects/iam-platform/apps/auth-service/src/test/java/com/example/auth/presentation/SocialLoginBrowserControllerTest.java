@@ -33,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -140,7 +141,9 @@ class SocialLoginBrowserControllerTest {
                 .thenReturn(new SavedRequestTenantResolver.Resolution(
                         "ecommerce", "B2C_CONSUMER",
                         "http://iam.local/oauth2/authorize?client_id=ecommerce-web-store-client"));
-        when(oAuthLoginUseCase.resolveBrowserLogin(any(OAuthCallbackCommand.class), eq("ecommerce")))
+        when(savedRequestTenantResolver.initiatingClientTenant(any(), any()))
+                .thenReturn(java.util.Optional.of("ecommerce"));
+        when(oAuthLoginUseCase.resolveBrowserLogin(any(OAuthCallbackCommand.class), eq("ecommerce"), any()))
                 .thenReturn(new BrowserLoginResolution("acc-1", "user@example.com", true));
 
         MockHttpServletRequest request = callbackRequest();
@@ -172,7 +175,8 @@ class SocialLoginBrowserControllerTest {
 
         // command passed to the use case carries the browser callback URI + session ctx
         ArgumentCaptor<OAuthCallbackCommand> cmd = ArgumentCaptor.forClass(OAuthCallbackCommand.class);
-        verify(oAuthLoginUseCase).resolveBrowserLogin(cmd.capture(), eq("ecommerce"));
+        // TASK-BE-653: the initiating client's tenant (no fallback) reaches the use case too.
+        verify(oAuthLoginUseCase).resolveBrowserLogin(cmd.capture(), eq("ecommerce"), eq("ecommerce"));
         assertThat(cmd.getValue().provider()).isEqualTo("google");
         assertThat(cmd.getValue().code()).isEqualTo("code-1");
         assertThat(cmd.getValue().state()).isEqualTo("state-1");
@@ -188,7 +192,7 @@ class SocialLoginBrowserControllerTest {
                 .thenReturn(new SavedRequestTenantResolver.Resolution(
                         "fan-platform", "B2C_CONSUMER",
                         "http://iam.local/oauth2/authorize?client_id=demo-spa-client"));
-        when(oAuthLoginUseCase.resolveBrowserLogin(any(OAuthCallbackCommand.class), eq("fan-platform")))
+        when(oAuthLoginUseCase.resolveBrowserLogin(any(OAuthCallbackCommand.class), eq("fan-platform"), any()))
                 .thenReturn(new BrowserLoginResolution("acc-pool", "fan@example.com", true, true));
 
         controller().socialLoginCallback("google", "code-1", "state-1",
@@ -205,6 +209,23 @@ class SocialLoginBrowserControllerTest {
     }
 
     @Test
+    @DisplayName("TASK-BE-653: no initiating client → resolve() falls back to fan-platform, but the use case "
+            + "gets initiatingClientTenant=null (so a pool login is not attributed to fan-platform)")
+    void callback_noInitiatingClient_passesNullInitiatingTenant() {
+        when(savedRequestTenantResolver.resolve(any(), any()))
+                .thenReturn(new SavedRequestTenantResolver.Resolution("fan-platform", "B2C_CONSUMER", null));
+        when(savedRequestTenantResolver.initiatingClientTenant(any(), any()))
+                .thenReturn(java.util.Optional.empty());
+        when(oAuthLoginUseCase.resolveBrowserLogin(any(OAuthCallbackCommand.class), eq("fan-platform"), isNull()))
+                .thenReturn(new BrowserLoginResolution("acc-pool", "fan@example.com", false, true));
+
+        controller().socialLoginCallback("google", "code-1", "state-1",
+                callbackRequest(), new MockHttpServletResponse());
+
+        verify(oAuthLoginUseCase).resolveBrowserLogin(any(OAuthCallbackCommand.class), eq("fan-platform"), isNull());
+    }
+
+    @Test
     @DisplayName("callback success: rotates the session ID before establishing the SAS "
             + "session (session-fixation defense — item A)")
     void callback_success_rotatesSessionId() {
@@ -212,7 +233,7 @@ class SocialLoginBrowserControllerTest {
                 .thenReturn(new SavedRequestTenantResolver.Resolution(
                         "ecommerce", "B2C_CONSUMER",
                         "http://iam.local/oauth2/authorize?client_id=ecommerce-web-store-client"));
-        when(oAuthLoginUseCase.resolveBrowserLogin(any(OAuthCallbackCommand.class), eq("ecommerce")))
+        when(oAuthLoginUseCase.resolveBrowserLogin(any(OAuthCallbackCommand.class), eq("ecommerce"), any()))
                 .thenReturn(new BrowserLoginResolution("acc-1", "user@example.com", true));
 
         MockHttpServletRequest request = callbackRequest();
@@ -238,7 +259,7 @@ class SocialLoginBrowserControllerTest {
         when(savedRequestTenantResolver.resolve(any(), any()))
                 .thenReturn(new SavedRequestTenantResolver.Resolution(
                         "fan-platform", "B2C_CONSUMER", null));
-        when(oAuthLoginUseCase.resolveBrowserLogin(any(OAuthCallbackCommand.class), eq("fan-platform")))
+        when(oAuthLoginUseCase.resolveBrowserLogin(any(OAuthCallbackCommand.class), eq("fan-platform"), any()))
                 .thenReturn(new BrowserLoginResolution("acc-2", "u2@example.com", false));
 
         String view = controller().socialLoginCallback("google", "c", "s",
@@ -302,7 +323,7 @@ class SocialLoginBrowserControllerTest {
         when(savedRequestTenantResolver.resolve(any(), any()))
                 .thenReturn(new SavedRequestTenantResolver.Resolution(
                         "ecommerce", "B2C_CONSUMER", "http://iam.local/oauth2/authorize"));
-        when(oAuthLoginUseCase.resolveBrowserLogin(any(OAuthCallbackCommand.class), anyString()))
+        when(oAuthLoginUseCase.resolveBrowserLogin(any(OAuthCallbackCommand.class), anyString(), any()))
                 .thenThrow(thrown);
 
         String view = controller().socialLoginCallback("google", "c", "s",

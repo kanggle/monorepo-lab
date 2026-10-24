@@ -70,4 +70,21 @@ class LoginHistoryEntryTest {
         );
         assertThat(entry.getAccountId()).isNull();
     }
+
+    @Test
+    @DisplayName("TASK-BE-653: siteTenantId is carried; the pre-653 constructor leaves it null; blank → null")
+    void siteTenantId() {
+        Instant at = Instant.parse("2026-10-24T10:00:00Z");
+        LoginHistoryEntry pool = new LoginHistoryEntry("consumer-pool", "ecommerce", "evt-p", "acc-p",
+                LoginOutcome.SUCCESS, "10.0.*.*", null, null, null, at);
+        LoginHistoryEntry legacy = new LoginHistoryEntry("consumer-pool", "evt-l", "acc-p",
+                LoginOutcome.SUCCESS, "10.0.*.*", null, null, null, at);
+        LoginHistoryEntry blank = new LoginHistoryEntry("consumer-pool", " ", "evt-b", "acc-p",
+                LoginOutcome.SUCCESS, "10.0.*.*", null, null, null, at);
+
+        assertThat(pool.getSiteTenantId()).isEqualTo("ecommerce");
+        assertThat(pool.getTenantId()).isEqualTo("consumer-pool");
+        assertThat(legacy.getSiteTenantId()).isNull();
+        assertThat(blank.getSiteTenantId()).isNull();
+    }
 }

@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-653-login-events-carry-site-tenant-for-pool-accounts.md` — **소비자 풀 계정의 로그인 · 잠금이 사이트가 아니라 `consumer-pool` 로 기록된다** (READY, 2026-10-24 UTC): `TASK-MONO-811` AC-0 에서 나왔다(소유자 «지금 기록대로 + 후속 티켓»). 원인은 `CredentialAuthenticationProvider.java:401` 이 `credential.getTenantId()` 를 싣는 것이다. 그래서 사이트 테넌트의 IAM 실적 · 테넌트별 보안 규칙이 자기 소비자를 못 본다. 데모 소비자는 전원 풀 계정이다(`TASK-MONO-744`). 🟢 **AC-0 · AC-1 닫힘(2026-10-24 UTC): 필드 추가 `siteTenantId`**(풀 자격 · 시작 client 사이트 · 없으면 null) · `login_history` 컬럼 · 사이트 X = `tenant_id=X ∨ site_tenant_id=X` · 규칙 · 마스킹 · last-login 무변경 · `accountLocked` 는 지금대로(계약 명시). 분석=Opus 5.5 / 구현 권장=Opus.
+_(없음)_
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
@@ -120,6 +120,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
 ## review
+
+- `TASK-BE-653-login-events-carry-site-tenant-for-pool-accounts.md` — **소비자 풀 계정의 로그인이 그 사이트의 IAM 실적에 잡힌다 — 이벤트에 선택 필드 `siteTenantId`** (REVIEW, 2026-10-24 UTC · AC-0~3 닫힘 · 소유자 결정 «필드 추가» · `accountLocked` 는 지금대로). `tenantId` 는 불변이다. 풀 자격일 때만 시작 client 의 소비자 사이트를 싣고, 없으면 키를 생략한다(폼 · 소셜 모두 대체값 없음). security-service `V0013` `login_history.site_tenant_id` + 인덱스, 지표 = `tenant_id=X ∨ site_tenant_id=X`. 탐지 규칙 · PII 마스킹 · last-login 은 무변경이다. 백필은 없고 배포 시점부터 센다. 변이 빨강: auth 7 · security 1. ⚪ metrics IT 는 CI 판정. 배포 = 다음 굽기(auth · security V0013). 분석=Opus 5.5 / 구현=Opus 5.5(backend-engineer + diff 대조).
 
 - `TASK-BE-654-security-internal-queries-not-meta-audited.md` — **보안 이벤트 조회의 메타 감사(A5)는 호출자 admin-service 가 진다 — 계약과 코드를 맞췄다** (REVIEW, 2026-10-24 UTC · AC-0~2 닫힘 · 소유자 결정 «호출자 감사 + admin 보강»). 계약의 security-service `admin_query_audit` 는 구현된 적이 없어 폐기했다. `AUDIT_QUERY` 행에 읽은 소스 · 기간 · actionCode(`downstream_detail`)를 남기고, 하위 조회가 실패해도 `FAILURE` 행을 남기며, 보안 소스면 `permission_used = audit.read+security.event.read` 다. 감사되지 않는 `internal.invoke` 직접 호출은 알려진 한계로 적었다. 수정 전 코드에서 새로 넣거나 바꾼 시험 5건만 빨강. 배포 = 다음 굽기. 분석=Opus 5.5 / 구현=Opus 5.5.
 

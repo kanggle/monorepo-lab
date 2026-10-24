@@ -121,7 +121,7 @@ class OAuthLoginUseCaseConsumerPoolTest {
                 .thenReturn(new SocialSignupResult("acc-pool", "ACTIVE", true, POOL));
         accountServiceAnswers("acc-pool", POOL);
 
-        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, FAN);
+        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, FAN, FAN);
 
         assertThat(result.accountId()).isEqualTo("acc-pool");
         assertThat(result.isNewAccount()).isTrue();
@@ -131,8 +131,10 @@ class OAuthLoginUseCaseConsumerPoolTest {
         assertThat(row.getAccountId()).isEqualTo("acc-pool");
         // Signed up through the fan client: the pool had no identity, so the fan tenant was asked next.
         verify(socialIdentityRepository).findPoolIdentity("GOOGLE", UID);
-        // Login events carry the account's own tenant, as for a form-login pool principal.
-        verify(loginEventRecorder).recordSucceeded("acc-pool", POOL, CTX, "OAUTH_GOOGLE");
+        // Login events carry the account's own tenant, as for a form-login pool principal — and
+        // (TASK-BE-653) the site it logged in to, the initiating fan client.
+        verify(loginEventRecorder).recordAttempted("acc-pool", LoginHashes.emailHash(EMAIL), POOL, FAN, CTX);
+        verify(loginEventRecorder).recordSucceeded("acc-pool", POOL, FAN, CTX, "OAUTH_GOOGLE");
     }
 
     @Test
@@ -146,7 +148,7 @@ class OAuthLoginUseCaseConsumerPoolTest {
                 .thenReturn(Optional.of(poolRow));
         accountServiceAnswers("acc-pool", POOL);
 
-        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, STORE);
+        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, STORE, STORE);
 
         assertThat(result.accountId()).isEqualTo("acc-pool");
         assertThat(result.isNewAccount()).isFalse();
@@ -154,6 +156,26 @@ class OAuthLoginUseCaseConsumerPoolTest {
         verify(accountServicePort, never()).socialSignup(any(), any(), any(), any(), any());
         verify(socialIdentityRepository, never()).findByTenantIdAndProviderAndProviderUserId(eq(STORE), any(), any());
         assertThat(savedIdentity().getTenantId()).as("the pool row is upserted, no store row").isEqualTo(POOL);
+        // TASK-BE-653: the same pool account's login is attributed to the store this time.
+        verify(loginEventRecorder).recordSucceeded("acc-pool", POOL, STORE, CTX, "OAUTH_GOOGLE");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-653: 시작 client 없음(콜백이 fan-platform 대체값을 받음) · 풀 신원 → 풀 계정이지만 siteTenantId=null")
+    void poolIdentity_noInitiatingClient_noSiteTenant() {
+        SocialIdentity poolRow = SocialIdentity.create("acc-pool", POOL, "GOOGLE", UID, EMAIL);
+        when(socialIdentityRepository.findPoolIdentity("GOOGLE", UID)).thenReturn(Optional.of(poolRow));
+        when(accountServicePort.getConsumerSiteMembership(FAN, "acc-pool")).thenReturn(site(FAN, true, "ACTIVE"));
+        when(socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(POOL, "GOOGLE", UID))
+                .thenReturn(Optional.of(poolRow));
+        accountServiceAnswers("acc-pool", POOL);
+
+        // tenantId = the resolver's fan-platform fallback; initiatingClientTenant = null (no client).
+        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, FAN, null);
+
+        assertThat(result.poolAccount()).isTrue();
+        verify(loginEventRecorder).recordAttempted("acc-pool", LoginHashes.emailHash(EMAIL), POOL, null, CTX);
+        verify(loginEventRecorder).recordSucceeded("acc-pool", POOL, null, CTX, "OAUTH_GOOGLE");
     }
 
     // ── AC-2 ──────────────────────────────────────────────────────────────────────────────────
@@ -167,7 +189,7 @@ class OAuthLoginUseCaseConsumerPoolTest {
                 new SocialSignupEmailRegisteredException("Email already registered as a consumer-pool account");
         when(accountServicePort.socialSignup(EMAIL, "GOOGLE", UID, "Fan", FAN)).thenThrow(refused);
 
-        assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, FAN)).isSameAs(refused);
+        assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, FAN, FAN)).isSameAs(refused);
 
         verify(socialIdentityRepository, never()).save(any());
         verify(accountServicePort, never()).getAccountStatusAndTenant(anyString());
@@ -182,11 +204,13 @@ class OAuthLoginUseCaseConsumerPoolTest {
                 .thenReturn(Optional.of(SocialIdentity.create("acc-site", FAN, "GOOGLE", UID, EMAIL)));
         accountServiceAnswers("acc-site", FAN);
 
-        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, FAN);
+        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, FAN, FAN);
 
         assertThat(result.accountId()).isEqualTo("acc-site");
         assertThat(result.poolAccount()).isFalse();
         assertThat(savedIdentity().getTenantId()).isEqualTo(FAN);
+        // TASK-BE-653 control: a site account's events carry no siteTenantId.
+        verify(loginEventRecorder).recordSucceeded("acc-site", FAN, null, CTX, "OAUTH_GOOGLE");
         verify(socialIdentityRepository).findPoolIdentity("GOOGLE", UID);
         verify(accountServicePort, never()).socialSignup(any(), any(), any(), any(), any());
         verify(accountServicePort, never()).getConsumerSiteMembership(any(), any());
@@ -201,7 +225,7 @@ class OAuthLoginUseCaseConsumerPoolTest {
                 .thenReturn(new SocialSignupResult("acc-site", "ACTIVE", false, FAN));
         accountServiceAnswers("acc-site", FAN);
 
-        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, FAN);
+        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, FAN, FAN);
 
         assertThat(result.poolAccount()).isFalse();
         assertThat(savedIdentity().getTenantId()).isEqualTo(FAN);
@@ -219,7 +243,7 @@ class OAuthLoginUseCaseConsumerPoolTest {
                 .thenReturn(Optional.of(SocialIdentity.create("acc-wms", "wms", "GOOGLE", UID, EMAIL)));
         accountServiceAnswers("acc-wms", "wms");
 
-        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, "wms");
+        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, "wms", "wms");
 
         assertThat(result.accountId()).isEqualTo("acc-wms");
         assertThat(result.poolAccount()).isFalse();
@@ -235,10 +259,12 @@ class OAuthLoginUseCaseConsumerPoolTest {
                 .thenReturn(new SocialSignupResult("acc-x", "ACTIVE", true, POOL));
         accountServiceAnswers("acc-x", POOL);
 
-        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, "iam");
+        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, "iam", "iam");
 
         assertThat(result.poolAccount()).isFalse();
         verify(socialIdentityRepository, never()).findPoolIdentity(any(), any());
+        // TASK-BE-653: the console is not a site — no siteTenantId even for a pool-tenant account.
+        verify(loginEventRecorder).recordSucceeded("acc-x", POOL, null, CTX, "OAUTH_GOOGLE");
     }
 
     @Test
@@ -249,7 +275,7 @@ class OAuthLoginUseCaseConsumerPoolTest {
         when(accountServicePort.getConsumerSiteMembership(STORE, "acc-pool"))
                 .thenThrow(new IllegalStateException("connection reset"));
 
-        assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, STORE))
+        assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, STORE, STORE))
                 .isInstanceOf(AccountServiceUnavailableException.class);
 
         verify(socialIdentityRepository, never()).save(any());

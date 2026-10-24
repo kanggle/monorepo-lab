@@ -92,10 +92,16 @@ public class OAuthLoginUseCase {
      *                browser callback URI, and request session context)
      * @param tenantId the initiating OIDC client's tenant (derived by the caller). The social-identity
      *                row is attributed to it — except for a consumer-POOL account (TASK-BE-617), whose
-     *                row lives in {@code consumer-pool}
+     *                row lives in {@code consumer-pool}. With no initiating client the caller passes the
+     *                {@code fan-platform} fallback here, so this value cannot say whether a client existed
+     * @param initiatingClientTenant TASK-BE-653 — the initiating client's tenant WITHOUT any fallback
+     *                ({@code null} when no client initiated the flow). Read only to fill the login events'
+     *                {@code siteTenantId} for a consumer-pool account
+     *                ({@link TenantContext#siteTenantOfPoolLogin}); it decides nothing about the login
      * @return the resolved account id, email, new-account flag and whether it is a pool account (no tokens)
      */
-    public BrowserLoginResolution resolveBrowserLogin(OAuthCallbackCommand command, String tenantId) {
+    public BrowserLoginResolution resolveBrowserLogin(OAuthCallbackCommand command, String tenantId,
+                                                      String initiatingClientTenant) {
         // TASK-BE-507: the same client-derived tenant that attributes the social-identity row
         // (below) and the token now also reaches socialSignup — so the ACCOUNT row agrees with
         // them. Before BE-507 it stopped here and the account was born fan-platform.
@@ -107,11 +113,15 @@ public class OAuthLoginUseCase {
         Optional<LoginTelemetry> telemetry = resolved.account()
                 .map(account -> new LoginTelemetry(
                         resolved.accountId(), account.tenantId(),
+                        // TASK-BE-653: the site a POOL account logged in to — keyed on the account's own
+                        // tenant (consumer-pool) and the real initiating client, never the fallback.
+                        TenantContext.siteTenantOfPoolLogin(account.tenantId(), initiatingClientTenant),
                         LoginHashes.emailHash(resolved.userInfo().email()),
                         command.sessionContext(),
                         resolved.provider().loginMethod()));
         telemetry.ifPresent(t -> recordTelemetry("attempted", () ->
-                loginEventRecorder.recordAttempted(t.accountId(), t.emailHash(), t.tenantId(), t.ctx())));
+                loginEventRecorder.recordAttempted(t.accountId(), t.emailHash(), t.tenantId(),
+                        t.siteTenantId(), t.ctx())));
 
         // Session-establishing transactional tail — social_identity upsert + status
         // check ONLY. No JWT / device session / refresh token.
@@ -129,13 +139,14 @@ public class OAuthLoginUseCase {
             if (reason != null) {
                 telemetry.ifPresent(t -> recordTelemetry("failed", () ->
                         loginEventRecorder.recordFailed(t.accountId(), t.emailHash(), t.tenantId(),
-                                reason, t.ctx())));
+                                t.siteTenantId(), reason, t.ctx())));
             }
             throw rejection;
         }
 
         telemetry.ifPresent(t -> recordTelemetry("succeeded", () ->
-                loginEventRecorder.recordSucceeded(t.accountId(), t.tenantId(), t.ctx(), t.loginMethod())));
+                loginEventRecorder.recordSucceeded(t.accountId(), t.tenantId(), t.siteTenantId(),
+                        t.ctx(), t.loginMethod())));
 
         return new BrowserLoginResolution(
                 resolved.accountId(), resolved.userInfo().email(), resolved.isNewAccount(),
@@ -160,6 +171,7 @@ public class OAuthLoginUseCase {
     private record LoginTelemetry(
             String accountId,
             String tenantId,
+            String siteTenantId,
             String emailHash,
             SessionContext ctx,
             String loginMethod

@@ -8,7 +8,7 @@ Login and lock events of a consumer-pool account are recorded under `consumer-po
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -80,8 +80,35 @@ When a consumer-pool account logs in to a site (or is locked), the security reco
     - `*` 뷰는 필터가 없어 행을 한 번씩 센다(중복 없음).
     - `consumer-pool` 뷰는 `tenant_id='consumer-pool'` 그대로다(풀 로그인 전부).
     - 그래서 풀 로그인 한 건은 `consumer-pool` 뷰와 그 사이트 뷰에 함께 나타난다. 계약에 그렇게 적는다.
-- [ ] **AC-2** — a pool account's login to site X is counted in X's `loginSuccess`. A non-pool account's count is unchanged (control group). Another site's login is not counted (isolation).
-- [ ] **AC-3** — the IAM metrics contract (`admin-api.md` § GET /api/admin/metrics) drops the «pool excluded» line and states the date from which pool logins count by site.
+- [x] **AC-2** — a pool account's login to site X is counted in X's `loginSuccess`. A non-pool account's count is unchanged (control group). Another site's login is not counted (isolation).
+  - → 구현 2026-10-24 UTC. 구현은 backend-engineer(opus)가 했고, diff 는 기안자가 결정과 직접 대조했다.
+  - **발행 (auth-service):**
+    - `TenantContext.siteTenantOfPoolLogin(accountTenant, initiatingClientTenant)` 이 값을 정한다. 계정 테넌트가 `consumer-pool` 이고 시작 client 의 테넌트가 소비자 사이트(`poolPrincipalMapsTo` — `iam` · 풀 자신 제외)일 때만 그 사이트다. 그 밖은 null 이다.
+    - 폼: `clientTenant` 는 `initiatingClientTenant(...).orElse(null)` 이라 대체값이 없다(`CredentialAuthenticationProvider.java:358-366`). 자격을 못 찾은 경로는 null 이다.
+    - 소셜: `SavedRequestTenantResolver.initiatingClientTenant` 를 `SocialLoginBrowserController` → `OAuthLoginUseCase.resolveBrowserLogin` 세 번째 인자로 넘긴다(`fan-platform` 대체값을 쓰지 않음).
+    - `tenantId` 는 무변경이다.
+    - 이벤트 셋(`attempted` · `failed` · `succeeded`)에 선택 필드 `siteTenantId` 를 넣는다. null 이면 키를 생략하므로 비풀 payload 는 653 이전과 같다.
+  - **저장 · 지표 (security-service):**
+    - `V0013__login_history_site_tenant.sql`: `site_tenant_id VARCHAR(32) NULL` · `idx_login_history_site_outcome_occurred (site_tenant_id, outcome, occurred_at)`.
+    - `AuthEventMapper` 가 필드를 읽는다(없음 · 공백 → null). 탐지 규칙 입력은 불변이다.
+    - `findOutcomesInWindow` = `(tenant_id = X OR site_tenant_id = X)`. 한 술어라 행은 한 번만 센다.
+    - `*` · `accountLocked` · `newAccounts` 는 무변경이다.
+  - **시험:**
+    - auth: `TenantContextSiteTenantTest`(11셀) · `CredentialAuthenticationProviderPoolTest` · `OAuthLoginUseCaseConsumerPoolTest` · `OutboxAuthEventPublisherTest`(생략 · 순서) 외.
+    - security: `AuthEventMapperTest` +4.
+    - `SecurityMetricsQueryIntegrationTest` +5: 풀 로그인 → 사이트 X 의 성공 · 실패 · 비풀 대조군 · 사이트 Y 격리 · `consumer-pool` 뷰 불변 · `*` 한 번 · V0013 왕복.
+  - **무는가:** 수정 전 코드로 되돌리면 컴파일 실패라 판정이 아니다. 그래서 변이로 쟀다(`siteTenantOfPoolLogin` → 늘 null · 매퍼가 필드 무시): auth 7 빨강 / 1325 · security 1 빨강 / 271. 되돌린 diff 는 바이트 일치를 확인했다.
+  - 기안자 재실행(`--rerun`): auth 1325 · 실패 0 · 건너뜀 33 / security 271 · 실패 0 · 건너뜀 13.
+  - ⚪ **metrics IT(`@Tag("integration")`)는 Docker 가 없어 로컬에서 0회 돌았다** → CI `Integration (iam A/B)` 레인의 그 클래스 실행으로 판정한다(머지 전 확인).
+- [x] **AC-3** — the IAM metrics contract (`admin-api.md` § GET /api/admin/metrics) drops the «pool excluded» line and states the date from which pool logins count by site.
+  - → `admin-api.md` § GET /api/admin/metrics:
+    - 로그인 두 키의 «풀 제외 · 알려진 공백» 을 지웠다.
+    - «소비자 풀 계정의 로그인» 단락을 새로 썼다: 사이트 X = `tenant_id = X ∨ site_tenant_id = X` · `consumer-pool` 뷰와 사이트 뷰에 함께 나타난다 · `*` 는 한 번 · 사이트 없는 풀 로그인 세 경우.
+    - 시작 = **TASK-BE-653 배포 시점부터**(V0013 + 발행 시작 이후 기록분, 구현 2026-10-24 UTC), 백필 없음.
+    - `accountLocked` 의 풀 제외는 «결정» 으로 명시했다.
+  - 그 밖의 문서: `auth-events.md` § siteTenantId · 세 이벤트 payload · `tenantId` 노트(«사이트는 후속» 교체) · `security-query-api.md` · `multi-tenancy.md` · security-service `data-model.md`.
+  - 배포 = 다음 굽기(auth-service · security-service V0013).
+  - 🔵 실제 배포일을 알게 되면 admin-api.md 의 그 문장 하나만 고치면 된다.
 
 # Related Specs
 

@@ -212,9 +212,9 @@ class CredentialAuthenticationProviderTest {
         provider.authenticate(attempt(PASSWORD));
 
         ArgumentCaptor<SessionContext> ctx = ArgumentCaptor.forClass(SessionContext.class);
-        verify(loginEventRecorder).recordAttempted(eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), any());
-        verify(loginEventRecorder).recordSucceeded(eq("acc-1"), eq("acme-corp"), ctx.capture());
-        verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), any());
+        verify(loginEventRecorder).recordAttempted(eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), isNull(), any());
+        verify(loginEventRecorder).recordSucceeded(eq("acc-1"), eq("acme-corp"), isNull(), ctx.capture());
+        verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), any(), any());
         // Derived exactly like every other auth-service entry point (SessionContexts).
         assertThat(ctx.getValue().ipMasked()).isEqualTo("203.0.*.*");
         assertThat(ctx.getValue().userAgentFamily()).isEqualTo("Chrome");
@@ -232,10 +232,10 @@ class CredentialAuthenticationProviderTest {
                 .isInstanceOf(BadCredentialsException.class)
                 .hasMessage("Invalid credentials");
 
-        verify(loginEventRecorder).recordAttempted(eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), any());
+        verify(loginEventRecorder).recordAttempted(eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), isNull(), any());
         verify(loginEventRecorder).recordFailed(
-                eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), eq("CREDENTIALS_INVALID"), any());
-        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any());
+                eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), isNull(), eq("CREDENTIALS_INVALID"), any());
+        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any(), any());
     }
 
     @Test
@@ -250,9 +250,9 @@ class CredentialAuthenticationProviderTest {
         assertThatThrownBy(() -> provider.authenticate(attempt("wrong")))
                 .isInstanceOf(BadCredentialsException.class);
 
-        verify(loginEventRecorder).recordAttempted(eq("acc-1"), eq(EMAIL_HASH), eq("fan-platform"), any());
+        verify(loginEventRecorder).recordAttempted(eq("acc-1"), eq(EMAIL_HASH), eq("fan-platform"), isNull(), any());
         verify(loginEventRecorder).recordFailed(
-                eq("acc-1"), eq(EMAIL_HASH), eq("fan-platform"), eq("CREDENTIALS_INVALID"), any());
+                eq("acc-1"), eq(EMAIL_HASH), eq("fan-platform"), isNull(), eq("CREDENTIALS_INVALID"), any());
     }
 
     @Test
@@ -266,7 +266,7 @@ class CredentialAuthenticationProviderTest {
 
         Authentication result = provider.authenticate(attempt(PASSWORD));
 
-        verify(loginEventRecorder).recordSucceeded(eq("acc-1"), eq("fan-platform"), any());
+        verify(loginEventRecorder).recordSucceeded(eq("acc-1"), eq("fan-platform"), isNull(), any());
         // The login-time tenant the SAS session carries — and that the refresh tenant check
         // compares the mirror row with (TASK-BE-604 AuthorizationSessionTenant).
         @SuppressWarnings("unchecked")
@@ -296,10 +296,10 @@ class CredentialAuthenticationProviderTest {
         verify(credentialRepository, never()).findAllByEmail(any());
         verifyNoInteractions(passwordHasher, accountServicePort, tenantTypePort);
         // Same telemetry as an unknown email under that client: no identity, the client's tenant.
-        verify(loginEventRecorder).recordAttempted(isNull(), eq(EMAIL_HASH), eq("ecommerce"), any());
+        verify(loginEventRecorder).recordAttempted(isNull(), eq(EMAIL_HASH), eq("ecommerce"), isNull(), any());
         verify(loginEventRecorder).recordFailed(
-                isNull(), eq(EMAIL_HASH), eq("ecommerce"), eq("CREDENTIALS_INVALID"), any());
-        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any());
+                isNull(), eq(EMAIL_HASH), eq("ecommerce"), isNull(), eq("CREDENTIALS_INVALID"), any());
+        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any(), any());
     }
 
     @Test
@@ -332,7 +332,7 @@ class CredentialAuthenticationProviderTest {
         provider.authenticate(attempt(PASSWORD));
 
         verify(credentialRepository, never()).findAllByEmail(any());
-        verify(loginEventRecorder).recordSucceeded(eq("acc-1"), eq("iam"), any());
+        verify(loginEventRecorder).recordSucceeded(eq("acc-1"), eq("iam"), isNull(), any());
     }
 
     @Test
@@ -349,7 +349,7 @@ class CredentialAuthenticationProviderTest {
 
         verifyNoInteractions(passwordHasher);
         verify(loginEventRecorder).recordFailed(
-                isNull(), eq(EMAIL_HASH), eq("iam"), eq("LOGIN_TENANT_AMBIGUOUS"), any());
+                isNull(), eq(EMAIL_HASH), eq("iam"), isNull(), eq("LOGIN_TENANT_AMBIGUOUS"), any());
     }
 
     @Test
@@ -363,7 +363,7 @@ class CredentialAuthenticationProviderTest {
         provider.authenticate(attempt(PASSWORD));
 
         verify(credentialRepository, never()).findByTenantIdAndEmail(any(), any());
-        verify(loginEventRecorder).recordSucceeded(eq("acc-1"), eq("ecommerce"), any());
+        verify(loginEventRecorder).recordSucceeded(eq("acc-1"), eq("ecommerce"), isNull(), any());
     }
 
     @Test
@@ -376,10 +376,10 @@ class CredentialAuthenticationProviderTest {
                 .isInstanceOf(BadCredentialsException.class)
                 .hasMessage("Invalid credentials");
 
-        verify(loginEventRecorder).recordAttempted(isNull(), eq(EMAIL_HASH), eq("fan-platform"), any());
+        verify(loginEventRecorder).recordAttempted(isNull(), eq(EMAIL_HASH), eq("fan-platform"), isNull(), any());
         verify(loginEventRecorder).recordFailed(
-                isNull(), eq(EMAIL_HASH), eq("fan-platform"), eq("CREDENTIALS_INVALID"), any());
-        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any());
+                isNull(), eq(EMAIL_HASH), eq("fan-platform"), isNull(), eq("CREDENTIALS_INVALID"), any());
+        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any(), any());
     }
 
     @Test
@@ -393,7 +393,7 @@ class CredentialAuthenticationProviderTest {
                 .isInstanceOf(BadCredentialsException.class);
 
         verify(loginEventRecorder).recordFailed(
-                isNull(), eq(EMAIL_HASH), eq("ecommerce"), eq("CREDENTIALS_INVALID"), any());
+                isNull(), eq(EMAIL_HASH), eq("ecommerce"), isNull(), eq("CREDENTIALS_INVALID"), any());
     }
 
     @Test
@@ -408,7 +408,7 @@ class CredentialAuthenticationProviderTest {
                 .hasMessage("Invalid credentials");
 
         verify(loginEventRecorder).recordFailed(
-                isNull(), eq(EMAIL_HASH), eq("fan-platform"), eq("LOGIN_TENANT_AMBIGUOUS"), any());
+                isNull(), eq(EMAIL_HASH), eq("fan-platform"), isNull(), eq("LOGIN_TENANT_AMBIGUOUS"), any());
     }
 
     @Test
@@ -418,7 +418,7 @@ class CredentialAuthenticationProviderTest {
         stubHappyCredentialLookup();
         when(tenantTypePort.resolve("acme-corp")).thenReturn("B2B_ENTERPRISE");
         doThrow(new IllegalStateException("outbox down"))
-                .when(loginEventRecorder).recordSucceeded(any(), any(), any());
+                .when(loginEventRecorder).recordSucceeded(any(), any(), any(), any());
 
         Authentication result = provider.authenticate(attempt(PASSWORD));
 
@@ -433,9 +433,9 @@ class CredentialAuthenticationProviderTest {
         when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(credential()));
         when(passwordHasher.verify("wrong", "$argon2id$stored-hash")).thenReturn(false);
         doThrow(new IllegalStateException("outbox down"))
-                .when(loginEventRecorder).recordAttempted(any(), any(), any(), any());
+                .when(loginEventRecorder).recordAttempted(any(), any(), any(), any(), any());
         doThrow(new IllegalStateException("outbox down"))
-                .when(loginEventRecorder).recordFailed(any(), any(), any(), any(), any());
+                .when(loginEventRecorder).recordFailed(any(), any(), any(), any(), any(), any());
 
         assertThatThrownBy(() -> provider.authenticate(attempt("wrong")))
                 .isInstanceOf(BadCredentialsException.class)
@@ -464,7 +464,7 @@ class CredentialAuthenticationProviderTest {
         provider.authenticate(attempt(PASSWORD));
 
         ArgumentCaptor<SessionContext> ctx = ArgumentCaptor.forClass(SessionContext.class);
-        verify(loginEventRecorder).recordSucceeded(any(), any(), ctx.capture());
+        verify(loginEventRecorder).recordSucceeded(any(), any(), isNull(), ctx.capture());
         // Honouring XFF is container-level: server.forward-headers-strategy=FRAMEWORK (set by
         // the demo overlay infra/demo/iam-traefik.override.yml, NOT by application.yml)
         // installs Spring's ForwardedHeaderFilter, which rewrites getRemoteAddr() to the
@@ -516,8 +516,8 @@ class CredentialAuthenticationProviderTest {
 
         // Telemetry: a failed attempt against a resolved identity, with the contract reason.
         verify(loginEventRecorder).recordFailed(
-                eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), eq(expectedReason), any());
-        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any());
+                eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), isNull(), eq(expectedReason), any());
+        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any(), any());
         // Nothing past the status gate ran.
         verifyNoInteractions(tenantTypePort);
     }
@@ -534,7 +534,7 @@ class CredentialAuthenticationProviderTest {
 
         assertThat(result.isAuthenticated()).isTrue();
         verify(accountServicePort).getAccountStatus("acc-1", "acme-corp");
-        verify(loginEventRecorder).recordSucceeded(eq("acc-1"), eq("acme-corp"), any());
+        verify(loginEventRecorder).recordSucceeded(eq("acc-1"), eq("acme-corp"), isNull(), any());
     }
 
     @Test
@@ -574,8 +574,8 @@ class CredentialAuthenticationProviderTest {
         order.verify(accountServicePort).getAccountStatus("acc-1", "acme-corp");
         order.verify(passwordHasher).verify("wrong", "$argon2id$stored-hash");
         verify(loginEventRecorder).recordFailed(
-                eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), eq("CREDENTIALS_INVALID"), any());
-        verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), eq("ACCOUNT_LOCKED"), any());
+                eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), isNull(), eq("CREDENTIALS_INVALID"), any());
+        verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), eq("ACCOUNT_LOCKED"), any());
     }
 
     @Test
@@ -589,9 +589,9 @@ class CredentialAuthenticationProviderTest {
                 .isExactlyInstanceOf(BadCredentialsException.class)
                 .hasMessage("Invalid credentials");
 
-        verify(loginEventRecorder).recordAttempted(eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), any());
-        verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), any());
-        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any());
+        verify(loginEventRecorder).recordAttempted(eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), isNull(), any());
+        verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), any(), any());
+        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any(), any());
     }
 
     @Test
@@ -621,8 +621,8 @@ class CredentialAuthenticationProviderTest {
                 .isInstanceOf(AuthenticationServiceException.class)
                 .hasCauseInstanceOf(AccountServiceUnavailableException.class);
 
-        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any());
-        verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), any());
+        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any(), any());
+        verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), any(), any());
         verifyNoInteractions(tenantTypePort);
     }
 

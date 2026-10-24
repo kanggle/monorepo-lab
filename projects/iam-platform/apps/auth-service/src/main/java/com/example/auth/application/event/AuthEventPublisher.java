@@ -28,6 +28,26 @@ public interface AuthEventPublisher {
                             String failureReason, int failCount, SessionContext ctx);
 
     /**
+     * TASK-BE-653 — {@code auth.login.attempted} carrying the optional {@code siteTenantId}: the site a
+     * consumer-pool account logged in to ({@code null} → the field is omitted, the pre-653 wire shape).
+     */
+    void publishLoginAttempted(String accountId, String emailHash, String tenantId,
+                               String siteTenantId, SessionContext ctx);
+
+    /** TASK-BE-653 — {@code auth.login.failed} carrying the optional {@code siteTenantId}. */
+    void publishLoginFailed(String accountId, String emailHash, String tenantId, String siteTenantId,
+                            String failureReason, int failCount, SessionContext ctx);
+
+    /**
+     * TASK-BE-653 — {@code auth.login.succeeded} carrying the optional {@code siteTenantId}. tenantId is
+     * required. {@code siteTenantId} and {@code loginMethod} are omitted from the payload when {@code null}
+     * (a form login has no {@code loginMethod} — {@code EMAIL_PASSWORD} by contract).
+     */
+    void publishLoginSucceeded(String accountId, String sessionJti, String tenantId, String siteTenantId,
+                               SessionContext ctx, String deviceId, Boolean isNewDevice,
+                               String loginMethod);
+
+    /**
      * Legacy 3-arg form kept for integration tests and any pre-TASK-BE-025 call site.
      */
     void publishLoginSucceeded(String accountId, String sessionJti, SessionContext ctx);

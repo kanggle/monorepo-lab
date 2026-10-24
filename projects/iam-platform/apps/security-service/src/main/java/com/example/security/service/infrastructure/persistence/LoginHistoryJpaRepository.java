@@ -40,11 +40,19 @@ public interface LoginHistoryJpaRepository extends JpaRepository<LoginHistoryJpa
     /**
      * TASK-MONO-811 — {@code (outcome, occurred_at)} of one tenant's rows with an outcome in
      * {@code outcomes} and {@code occurred_at ∈ [from, to)} (half-open). Projection only — no PII
-     * column is selected. Served by {@code idx_login_history_tenant_outcome_occurred} (V0012).
+     * column is selected.
+     *
+     * <p>TASK-BE-653 — "one tenant's rows" is {@code tenant_id = X} <b>or</b> {@code site_tenant_id = X}:
+     * a consumer-pool account's login to site X is recorded with {@code tenant_id = consumer-pool} and
+     * {@code site_tenant_id = X}, and counts for X. One predicate, so each row is read once even if a
+     * row ever matched both sides. For {@code X = consumer-pool} the second side never matches (the
+     * producer never puts the pool into {@code siteTenantId}), so that view is every pool login, as
+     * before. Served by {@code idx_login_history_tenant_outcome_occurred} (V0012) and
+     * {@code idx_login_history_site_outcome_occurred} (V0013).
      */
     @Query("SELECT new com.example.security.service.infrastructure.persistence.LoginOutcomeAt(h.outcome, h.occurredAt) "
             + "FROM LoginHistoryJpaEntity h "
-            + "WHERE h.tenantId = :tenantId AND h.outcome IN :outcomes "
+            + "WHERE (h.tenantId = :tenantId OR h.siteTenantId = :tenantId) AND h.outcome IN :outcomes "
             + "AND h.occurredAt >= :from AND h.occurredAt < :to")
     List<LoginOutcomeAt> findOutcomesInWindow(@Param("tenantId") String tenantId,
                                               @Param("outcomes") Collection<String> outcomes,

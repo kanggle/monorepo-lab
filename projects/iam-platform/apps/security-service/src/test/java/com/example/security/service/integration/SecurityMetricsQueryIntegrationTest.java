@@ -71,12 +71,20 @@ class SecurityMetricsQueryIntegrationTest {
     @Autowired AccountLockHistoryJpaRepository lockRepo;
     @Autowired SecurityMetricsQueryService service;
 
+    private static final String POOL = "consumer-pool";
+
     private static String tenant() {
         return "t-" + UUID.randomUUID().toString().substring(0, 8);
     }
 
     private void login(String tenantId, String outcome, String at) {
         loginRepo.saveAndFlush(LoginHistoryJpaEntity.from(tenantId, UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(), outcome, "1.2.*.*", "Chrome", "fp", "KR", Instant.parse(at)));
+    }
+
+    /** TASK-BE-653 — a consumer-pool account's login to {@code site}: tenant_id = consumer-pool, site_tenant_id = site. */
+    private void poolLogin(String site, String outcome, String at) {
+        loginRepo.saveAndFlush(LoginHistoryJpaEntity.from(POOL, site, UUID.randomUUID().toString(),
                 UUID.randomUUID().toString(), outcome, "1.2.*.*", "Chrome", "fp", "KR", Instant.parse(at)));
     }
 
@@ -121,7 +129,7 @@ class SecurityMetricsQueryIntegrationTest {
     }
 
     @Test
-    @DisplayName("🔴 tenant isolation: another tenant's logins and locks — and a pool account's (consumer-pool) — are not counted")
+    @DisplayName("🔴 tenant isolation: another tenant's logins and locks — and a pool account's with NO site (pre-TASK-BE-653 row, or no initiating site) — are not counted")
     void tenantIsolationAndPoolExclusion() {
         String site = tenant();
         String other = tenant();
@@ -129,7 +137,8 @@ class SecurityMetricsQueryIntegrationTest {
         login(other, "SUCCESS", "2021-03-01T01:00:00Z");
         login(other, "FAILURE", "2021-03-01T01:00:00Z");
         lock(other, "2021-03-01T01:00:00Z");
-        // a pool consumer logging into the site is recorded under consumer-pool (the account's tenant)
+        // a pool login with no site_tenant_id (written before TASK-BE-653 — no backfill — or with no
+        // initiating site) is recorded under consumer-pool only, so no site can claim it
         login("consumer-pool", "SUCCESS", "2021-03-01T01:30:00Z");
         lock("consumer-pool", "2021-03-01T01:30:00Z");
 
@@ -168,5 +177,80 @@ class SecurityMetricsQueryIntegrationTest {
         SecurityMetricsDailyView v = service.daily("*", FROM, TO);
 
         assertThat(day(v, "2021-03-02")).isEqualTo(new SecurityMetricsDailyView.Day("2021-03-02", 2, 1, 1));
+    }
+
+    // ── TASK-BE-653 — a pool account's login counts for the site it logged in to ─────────────
+
+    @Test
+    @DisplayName("🔴 TASK-BE-653 AC-2: a pool login to site X counts in X's loginSuccess / loginFailure; X's own (non-pool) login still counts once (control); a pool lock does not count for X")
+    void poolLogin_countsForItsSite() {
+        String x = tenant();
+        String y = tenant();
+        login(x, "SUCCESS", "2021-03-01T01:00:00Z");          // control: X's own account
+        poolLogin(x, "SUCCESS", "2021-03-01T02:00:00Z");
+        poolLogin(x, "FAILURE", "2021-03-01T03:00:00Z");
+        poolLogin(x, "ATTEMPTED", "2021-03-01T03:00:00Z");    // never a login key, pool or not
+        poolLogin(y, "SUCCESS", "2021-03-01T04:00:00Z");      // isolation: another site's pool login
+        lock(POOL, "2021-03-01T05:00:00Z");                   // accountLocked stays consumer-pool's (AC-1)
+
+        SecurityMetricsDailyView v = service.daily(x, FROM, TO);
+
+        assertThat(v.days()).containsExactly(new SecurityMetricsDailyView.Day("2021-03-01", 2, 1, 0));
+    }
+
+    @Test
+    @DisplayName("🔴 TASK-BE-653 isolation: site Y counts only its own pool login, not X's")
+    void poolLogin_otherSiteIsolated() {
+        String x = tenant();
+        String y = tenant();
+        poolLogin(x, "SUCCESS", "2021-03-02T01:00:00Z");
+        poolLogin(x, "FAILURE", "2021-03-02T01:00:00Z");
+        poolLogin(y, "SUCCESS", "2021-03-02T02:00:00Z");
+
+        SecurityMetricsDailyView v = service.daily(y, FROM, TO);
+
+        assertThat(v.days()).containsExactly(new SecurityMetricsDailyView.Day("2021-03-02", 1, 0, 0));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-653: the consumer-pool view still counts every pool login (with or without a site) and the pool's locks")
+    void consumerPoolView_unchanged() {
+        String x = tenant();
+        String y = tenant();
+        poolLogin(x, "SUCCESS", "2021-03-02T01:00:00Z");
+        poolLogin(y, "FAILURE", "2021-03-02T01:00:00Z");
+        login(POOL, "SUCCESS", "2021-03-02T01:00:00Z");       // pool login with no site
+        login(x, "SUCCESS", "2021-03-02T01:00:00Z");          // X's own account — not the pool's
+        lock(POOL, "2021-03-02T01:00:00Z");
+
+        SecurityMetricsDailyView v = service.daily(POOL, FROM, TO);
+
+        assertThat(day(v, "2021-03-02")).isEqualTo(new SecurityMetricsDailyView.Day("2021-03-02", 2, 1, 1));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-653: '*' counts a pool login to a site exactly once")
+    void allTenants_poolLoginCountedOnce() {
+        String x = tenant();
+        poolLogin(x, "SUCCESS", "2021-03-02T01:00:00Z");
+        login(x, "SUCCESS", "2021-03-02T01:00:00Z");
+        poolLogin(x, "FAILURE", "2021-03-02T01:00:00Z");
+
+        SecurityMetricsDailyView v = service.daily("*", FROM, TO);
+
+        assertThat(day(v, "2021-03-02")).isEqualTo(new SecurityMetricsDailyView.Day("2021-03-02", 2, 1, 0));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-653: site_tenant_id round-trips through V0013 (nullable, no default)")
+    void siteTenantColumn_roundTrips() {
+        String x = tenant();
+        poolLogin(x, "SUCCESS", "2021-03-02T01:00:00Z");
+        login(x, "SUCCESS", "2021-03-02T01:00:00Z");
+
+        assertThat(loginRepo.findAll()).filteredOn(e -> x.equals(e.getSiteTenantId())).hasSize(1)
+                .allSatisfy(e -> assertThat(e.getTenantId()).isEqualTo(POOL));
+        assertThat(loginRepo.findAll()).filteredOn(e -> x.equals(e.getTenantId()))
+                .allSatisfy(e -> assertThat(e.getSiteTenantId()).isNull());
     }
 }

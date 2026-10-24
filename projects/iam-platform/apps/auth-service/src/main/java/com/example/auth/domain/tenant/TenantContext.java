@@ -70,6 +70,26 @@ public record TenantContext(String tenantId, String tenantType) {
                 && !isConsumerPool(clientTenant.trim());
     }
 
+    /**
+     * TASK-BE-653 (auth-events.md {@code siteTenantId}) — the SITE a login of a consumer-pool account was
+     * made to, for the optional {@code siteTenantId} of {@code auth.login.attempted/failed/succeeded}.
+     *
+     * <p>Non-null only when BOTH hold: the account's own tenant is {@link #CONSUMER_POOL_TENANT_ID}, and
+     * there is an initiating client whose tenant a pool principal maps onto ({@link #poolPrincipalMapsTo} —
+     * never the console {@code iam}, never the pool itself). Every other login — a non-pool account, a pool
+     * login with no initiating client (operator-invitation acceptance, a direct visit), a pool operator through
+     * the console — answers {@code null}. {@code initiatingClientTenant} must be the REAL client's tenant, never
+     * a substitute such as the {@link #DEFAULT_TENANT_ID} fallback: that would put "no client" under a site.
+     *
+     * <p>{@code tenantId} on the events is unchanged (the account's own tenant); this is an additive field.
+     */
+    public static String siteTenantOfPoolLogin(String accountTenantId, String initiatingClientTenant) {
+        if (!isConsumerPool(accountTenantId) || !poolPrincipalMapsTo(initiatingClientTenant)) {
+            return null;
+        }
+        return initiatingClientTenant.trim();
+    }
+
     public TenantContext {
         Objects.requireNonNull(tenantId, "tenantId must not be null");
         if (tenantId.isBlank()) {
