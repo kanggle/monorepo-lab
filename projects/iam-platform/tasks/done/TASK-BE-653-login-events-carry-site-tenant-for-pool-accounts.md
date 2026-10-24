@@ -8,7 +8,7 @@ Login and lock events of a consumer-pool account are recorded under `consumer-po
 
 # Status
 
-review
+done
 
 # Owner
 
