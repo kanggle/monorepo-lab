@@ -70,6 +70,9 @@ public class AdminOrderController {
      * IllegalArgumentException → GlobalExceptionHandler). Declared {@code required = false} on
      * purpose: Spring's own missing-parameter path answers {@code VALIDATION_ERROR} here
      * ({@code handleMissingParam}), which would give one rule two codes.
+     *
+     * <p>TASK-MONO-817 — a wildcard tenant ({@code X-Tenant-Id = '*'}) is refused with 403, not answered
+     * with zeros ({@link OrderOperatorAccess#requireConcreteTenant}).
      */
     @GetMapping("/metrics")
     public ResponseEntity<PerformanceMetrics> getMetrics(
@@ -77,6 +80,7 @@ public class AdminOrderController {
             @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @RequestParam(required = false) String period) {
         OrderOperatorAccess.requireRead(userRole, tenantId);
+        OrderOperatorAccess.requireConcreteTenant(tenantId);
         return ResponseEntity.ok(orderQueryService.getMetrics(MetricsPeriod.parse(period)));
     }
 

@@ -152,6 +152,20 @@ class TransactionMetricsControllerSliceTest {
     }
 
     @Test
+    @DisplayName("🔴 TASK-MONO-817: wildcard tenant (tenant_id='*') → 403 PERMISSION_DENIED, never zeros; no query")
+    void wildcardTenant403() throws Exception {
+        ActorContext wildcard = new ActorContext("super-1", "*", Set.of("FINANCE_SUPERADMIN_READ"));
+        TestingAuthenticationToken auth = new TestingAuthenticationToken(wildcard, "creds");
+        auth.setAuthenticated(true);
+        SecurityContextHolder.getContext().setAuthentication(auth);
+
+        mockMvc.perform(get("/api/finance/accounts/metrics").param("period", "week"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PERMISSION_DENIED"));
+        verifyNoInteractions(metricsService);
+    }
+
+    @Test
     @DisplayName("🔴 AC-3 census: every field name in the body is one of the shared shape's — no account / holder / owner field")
     void fieldCensus() throws Exception {
         when(metricsService.getMetrics(any(), eq(MetricsPeriod.WEEK))).thenReturn(sample(MetricsPeriod.WEEK));

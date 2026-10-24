@@ -84,6 +84,27 @@ class AdminOrderMetricsControllerSliceTest {
     }
 
     @Test
+    @DisplayName("🔴 TASK-MONO-817: 와일드카드 테넌트(*) → 403, 0 으로 답하지 않고 서비스도 부르지 않는다 · 대조군 구체 테넌트는 200")
+    void metrics_wildcardTenant_403_concreteTenant_200() throws Exception {
+        mockMvc.perform(get("/api/admin/orders/metrics").param("period", "week")
+                        .header("X-User-Role", "").header("X-Tenant-Id", "*"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/admin/orders/metrics").param("period", "week")
+                        .header("X-User-Role", READ_ROLE).header("X-Tenant-Id", "*"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(orderQueryService);
+
+        KstPeriodBounds bounds = KstPeriodBounds.from(
+                Clock.fixed(Instant.parse("2026-10-23T05:05:00Z"), ZoneId.of("UTC")));
+        given(orderQueryService.getMetrics(MetricsPeriod.WEEK)).willReturn(PerformanceMetrics.of(
+                bounds, MetricsPeriod.WEEK, List.of(PerformanceMetrics.Metric.count("orders", 3, 1)), Map.of()));
+        mockMvc.perform(get("/api/admin/orders/metrics").param("period", "week")
+                        .header("X-User-Role", READ_ROLE).header("X-Tenant-Id", "ecommerce"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.metrics[0].current").value("3"));
+    }
+
+    @Test
     @DisplayName("period 없음 · 모르는 값 → 400 INVALID_ORDER_REQUEST, 서비스는 부르지 않는다")
     void metrics_badPeriod_400() throws Exception {
         mockMvc.perform(get("/api/admin/orders/metrics").header("X-User-Role", READ_ROLE))

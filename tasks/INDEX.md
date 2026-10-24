@@ -186,7 +186,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 **`ADR-MONO-084` 실행 시리즈 (ACCEPTED 2026-10-23 — 갈래 없음 · OD 기본값)** — 도메인 개요 맨 위에 실적 줄(이번 주 · 이번 달 · 직전 대비 · 일별). 🔴 **P1 이 먼저** — P2~P7 은 P1 의 DTO · 경계 · 콘솔 컴포넌트를 쓴다. P2~P7 은 서로 독립이지만 콘솔 공유 파일을 건드리므로 **직렬 머지**. P8 = `projects/platform-console` `TASK-PC-FE-368`.
 
 - `TASK-MONO-815-wms-throughput-card-kst-window-with-bake.md` — **WMS 처리량 카드 KST 창 · 문구** (READY, 2026-10-24 UTC): 🔴 `TASK-MONO-808` admin V6 를 싣는 **굽기와 같은 창에** 머지(콘솔은 Vercel 즉시 배포 — 먼저 나가면 화면이 데이터보다 앞서 «한국 시간» 이라 말한다). 선행 808 + 굽기. 분석=Opus 5.5 / 구현 권장=Sonnet.
-- `TASK-MONO-817-performance-metrics-wildcard-tenant-reads-as-zero.md` — **와일드카드 테넌트(`*`)로 부른 실적 지표가 전부 0 이고, 콘솔이 그것을 «0» 으로 보여 준다** (READY, 2026-10-24 UTC): `TASK-MONO-812` AC-4 에서 나왔다. ADR-084 시리즈 공통 사안이다. AC-0 = 도메인 엔드포인트 여섯이 `*` 에 각각 무엇을 답하나 + 그 경로에 닿는 운영자가 실제로 있나 → 소유자 결정(전 테넌트 합 / 400·403 / 도메인별) → 공용 계약 `performance-metrics-contract.md` 에 규칙. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
@@ -218,6 +217,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-817-performance-metrics-wildcard-tenant-reads-as-zero.md` — **실적 지표가 와일드카드 테넌트(`*`)에 «조용한 0» 으로 답하지 않는다** (REVIEW, 2026-10-24 UTC · AC-0~3 닫힘 · 소유자 결정 «조용한 0 금지»). AC-0: 0 = ecommerce · finance / 합계 = IAM(명시) / 403 = wms · erp · scm. 콘솔에서는 `*` 로 닿는 경로가 없다(잠재). 공용 계약 § «Wildcard tenant»: 명시적 합계 또는 403. ecommerce · finance 지표만 403 으로 바꿨다(다른 읽기는 불변). 수정 전 코드에서 새 시험 4건만 빨강. 콘솔 무변경. 배포 = 다음 굽기. 분석=Opus 5.5 / 구현=Opus 5.5.
 
 - `TASK-MONO-812-finance-overview-performance-metrics.md` — **`ADR-MONO-084` P7 Finance 실적 지표** (REVIEW, 2026-10-24 UTC · AC-0~5 닫힘 · AC-6 = 배포 상태). account-service `GET /api/finance/accounts/metrics`: 충전 · 이체 · 캡처의 건수와 통화별 금액을 낸다(확정된 돈만, `settledAt` 귀속). 🔴 HOLD 행은 걸리는 순간 `COMPLETED` 라 상태가 아니라 유형으로 뺀다. ledger 는 복식부기라 원천에서 제외했다. 🔵 `tenant_id=*` 토큰은 전부 0 이다(SCM 과 같은 시리즈 공통 동작, 계약에 명시). 🔴 발견 · 미수정: 콘솔 거래 유형 필터가 `CREDIT`/`DEBIT` 을 보내 백엔드 422. ⚪ MySQL IT 는 로컬 미실행 → CI. 분석=Opus 5.5 / 구현=Opus 5.5 + diff 대조.
 

@@ -251,8 +251,11 @@ No other parameter.
   FINANCE_ACCOUNT_WRITE ∨ finance.read ∨ finance.write ∨ tenant_id='*'`). A ledger-only operator →
   403 `PERMISSION_DENIED`.
 - **Tenancy** — the token's `tenant_id`, as every other read. A platform wildcard token
-  (`tenant_id='*'`) reads tenant `*`, which owns no transactions, so its values are `"0"` —
-  the same as every other account-service read for that token (it finds no account either).
+  (`tenant_id='*'`) passes the read gate above but is then refused here with **403
+  `PERMISSION_DENIED`**. Tenant `*` owns no transactions, so it would read all `"0"`, and a
+  metrics «0» reads as «nothing happened» (TASK-MONO-817 ·
+  `platform/contracts/performance-metrics-contract.md` § Wildcard tenant). Only this endpoint
+  refuses; the other account reads keep answering the wildcard as before.
 - **Source.** account-service `transactions` — one row per business transaction. The
   ledger's journal is **not** used: it is double-entry, and summing its lines would count each
   transaction twice (debit + credit).
