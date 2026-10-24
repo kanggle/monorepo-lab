@@ -231,3 +231,10 @@ backend
 ## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
 
 - **AC-3 — 34차 창 결과 (열린 채 유지).** 34차 창(2026-10-24 UTC): ⚪ 설정 쓰기는 403(`WMS_ADMIN` 이 없다)이고, 데이터로도 판정이 안 된다 — 가용 재고 최소값이 85 라 기준을 25 로 올려도 여전히 0행이다.
+
+## CORRECTION — 2026-10-25 UTC: how AC-3 will be measured (owner decision)
+
+The 34th window's setting write answered 403: `PUT /api/v1/admin/settings/...` needs `WMS_ADMIN` / `WMS_SUPERADMIN` (`SettingsService.java:61`), and no IAM-minted token can carry it — `DomainRoleCatalog` excludes it and `OperatorRoleDerivation` does not derive it (`TASK-MONO-547` records granting it as «almost certainly the wrong choice»). So the 403 is the designed behaviour, not a missing seed.
+
+Owner decision 2026-10-25 UTC («창에서 DB 행 직접 갱신»): AC-3 is measured by updating the `admin_setting` row on the demo host (`dbexec --why …`, threshold `10 → 25`), checking that the console `lowStockOnly` filter follows it, and restoring `10`. That measures what AC-3 asks — the filter follows the setting row — and **not** the write API or its permission, which AC-3 does not ask about. A SKU has to sit between 10 and 24 first (the 34th window's minimum available was 85). Procedure: `TASK-MONO-672` § 35th window — preparation, steps 1–2.
+
