@@ -2,10 +2,13 @@ package com.example.scmplatform.logistics.config;
 
 import com.example.scmplatform.logistics.adapter.inbound.messaging.NonRetryableConsumerException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +21,7 @@ import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.kafka.listener.RetryListener;
 import org.springframework.util.backoff.ExponentialBackOff;
 
 import java.util.HashMap;
@@ -42,6 +46,8 @@ import java.util.Map;
  */
 @Configuration
 public class KafkaConsumerConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(KafkaConsumerConfig.class);
 
     @Value("${spring.kafka.bootstrap-servers}")
     private String bootstrapServers;
@@ -101,6 +107,8 @@ public class KafkaConsumerConfig {
         DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, backOff);
         // Malformed envelope → straight to DLT, no retry (subscriptions contract § Retry + DLT).
         handler.addNotRetryableExceptions(NonRetryableConsumerException.class);
+        // TASK-MONO-816: leave the cause of every failed delivery and every dead-lettering in the log.
+        handler.setRetryListeners(new CauseLoggingRetryListener());
         return handler;
     }
 
@@ -114,5 +122,50 @@ public class KafkaConsumerConfig {
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
         factory.setCommonErrorHandler(kafkaErrorHandler);
         return factory;
+    }
+
+    /**
+     * TASK-MONO-816 (copy of TASK-BE-651's listener in wms inventory-service): without it a failing
+     * record leaves <em>no cause</em> in the log. With a {@link DeadLetterPublishingRecoverer} wired
+     * in, spring-kafka 3.3 logs each retry only as the container's
+     * {@code INFO "Record in retry and not yet recovered"} (no exception attached) and logs nothing
+     * at INFO or above when the dead-letter publish succeeds.
+     *
+     * <p>Logs topic-partition@offset, the attempt number and the exception (with stack trace).
+     * Never the record key or value: payloads can carry business data, and the DLT already holds the
+     * full record for whoever is entitled to read it.
+     */
+    static final class CauseLoggingRetryListener implements RetryListener {
+
+        @Override
+        public void failedDelivery(ConsumerRecord<?, ?> record, Exception ex, int deliveryAttempt) {
+            log.warn("kafka_listener_failed topic={} partition={} offset={} attempt={} cause={}",
+                    record.topic(), record.partition(), record.offset(), deliveryAttempt,
+                    rootCause(ex).toString(), ex);
+        }
+
+        @Override
+        public void recovered(ConsumerRecord<?, ?> record, Exception ex) {
+            log.error("kafka_listener_dead_lettered topic={} partition={} offset={} dlt={} cause={}",
+                    record.topic(), record.partition(), record.offset(), record.topic() + ".DLT",
+                    rootCause(ex).toString(), ex);
+        }
+
+        @Override
+        public void recoveryFailed(ConsumerRecord<?, ?> record, Exception original, Exception failure) {
+            log.error("kafka_listener_dead_letter_failed topic={} partition={} offset={} dlt={} cause={} "
+                            + "dltFailure={} — the record will be redelivered",
+                    record.topic(), record.partition(), record.offset(), record.topic() + ".DLT",
+                    rootCause(original).toString(), failure.toString(), original);
+        }
+
+        /** The listener's own exception, unwrapped from {@code ListenerExecutionFailedException}. */
+        private static Throwable rootCause(Throwable ex) {
+            Throwable t = ex;
+            while (t.getCause() != null && t.getCause() != t) {
+                t = t.getCause();
+            }
+            return t;
+        }
     }
 }

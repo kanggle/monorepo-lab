@@ -101,8 +101,11 @@ public class ScmThirdPartyInboundExpectedConsumer {
             // Fail-closed (Edge Case: 3PL node deregistered/absent) — a clear error, no orphan
             // expectation. Routed to the DLT after retry exhaustion (the node will not appear
             // on retry); an operator inspects the DLT.
-            log.error("3PL inbound-expected sink rejected (fail-closed): topic={} offset={} error={}",
-                    record.topic(), record.offset(), e.getMessage());
+            // TASK-MONO-816: the framework's default DLT handler logs no cause (the exception only
+            // travels in headers), so this catch block is where the operator reads why — class +
+            // message + stack, and the record's coordinates. Never the record value.
+            log.error("3PL inbound-expected sink rejected (fail-closed): topic={} partition={} offset={} cause={}",
+                    record.topic(), record.partition(), record.offset(), e.toString(), e);
             throw e;
         } catch (Exception e) {
             log.error("Failed to process 3PL inbound-expected: topic={} partition={} offset={} error={}",

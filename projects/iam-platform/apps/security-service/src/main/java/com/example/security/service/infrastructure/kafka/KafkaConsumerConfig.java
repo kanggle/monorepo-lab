@@ -13,6 +13,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
@@ -94,9 +95,13 @@ public class KafkaConsumerConfig {
                     // DeserializationException carries the original raw bytes in record.value()
                     // because ErrorHandlingDeserializer returned null and stashed them on headers;
                     // DeadLetterPublishingRecoverer restores them transparently.
-                    String rootCause = ex.getMessage();
+                    // TASK-MONO-816: the container wraps the listener's own exception in a
+                    // ListenerExecutionFailedException whose message names only the wrapper, so
+                    // ex.getMessage() never says why. Log the most specific cause (class + message).
+                    Throwable mostSpecific = NestedExceptionUtils.getMostSpecificCause(ex);
+                    String rootCause = mostSpecific.toString();
                     if (containsCause(ex, DeserializationException.class)) {
-                        rootCause = "DeserializationException: " + ex.getMessage();
+                        rootCause = "DeserializationException: " + mostSpecific;
                         deserializationDlqCounter.increment();
                     } else if (containsCause(ex, MissingTenantIdException.class)) {
                         tenantIdMissingDlqCounter.increment();
@@ -104,10 +109,10 @@ public class KafkaConsumerConfig {
                         otherDlqCounter.increment();
                     }
                     Object value = record.value();
-                    log.warn("Sending to DLQ: topic={}, eventKey={}, valueClass={}, error={}",
-                            record.topic(), record.key(),
+                    log.warn("Sending to DLQ: topic={}, partition={}, offset={}, eventKey={}, valueClass={}, cause={}",
+                            record.topic(), record.partition(), record.offset(), record.key(),
                             value == null ? "null" : value.getClass().getName(),
-                            rootCause);
+                            rootCause, ex);
                     // Partition -1: the producer chooses. The iam compose files create the
                     // sources with 3 partitions and their .DLT topics with 1, so copying the
                     // source partition aimed records from partitions 1 and 2 at partitions
