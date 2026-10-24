@@ -437,12 +437,33 @@ function judgeDenialInPage({ suffixes, textMarkers }) {
   }
   const pageDenied = others.length > 0 && residual === 0;
   const text = document.body ? document.body.innerText : '';
+  // TASK-MONO-648 § 사전 점검 오탐 ② — 숫자 표지(`'403'`)는 **홀로 선 숫자**만 문다. 앞이나 뒤가 영숫자 ·
+  // 쉼표 · 마침표면 더 큰 값의 일부다(SKU `…000000000403` · `4031건` · `₩1,403,000`). «(403)» · «403 Forbidden»
+  // 처럼 홀로 선 것만 거부 문구다. 글자 표지는 예전처럼 부분 문자열로 문다.
+  const hitsIn = (t) => textMarkers.filter((m) => (/^\d+$/.test(m)
+    ? new RegExp(`(?<![0-9A-Za-z.,])${m}(?![0-9A-Za-z.,])`).test(t)
+    : t.includes(m)));
+  // TASK-MONO-648 § 사전 점검 오탐 ① — 거부 **요소 밖**의 글자에서만 문구를 찾은 결과. 카드·섹션 하나의
+  // 거부 문구는 그 요소 안에 있으므로 여기 안 잡힌다. 프로브는 이것을 쓴다(장별 판정은 `textHits` 그대로).
+  let outsideText = text;
+  if (cards.length || others.length) {
+    const clone = document.body ? document.body.cloneNode(true) : null;
+    if (clone) {
+      for (const el of clone.querySelectorAll(sel)) el.remove();
+      outsideText = clone.textContent || '';
+    }
+  }
+  // 개요 카드 **전부** 가 거부인가 — 카드 컨테이너(`…-card-<domain>`, 꼬리 없음) 수와 거부 카드 수를 맞댄다.
+  const cardBoxes = [...document.querySelectorAll('[data-testid*="-card-"]')]
+    .filter((el) => /-card-[a-z0-9]+$/.test(el.getAttribute('data-testid') || '')).length;
   return {
     denied: pageDenied,
     deniedBy: pageDenied ? others : [],
     partial: pageDenied ? cards : [...cards, ...others],
     residual,
-    textHits: textMarkers.filter((m) => text.includes(m)),
+    textHits: hitsIn(text),
+    textHitsOutsideDenial: hitsIn(outsideText),
+    allCardsDenied: cards.length > 0 && cardBoxes > 0 && cards.length >= cardBoxes,
     chars: text.length,
   };
 }
@@ -490,8 +511,15 @@ async function judgeProbe(page, probePath) {
   // 🔵 프로브는 문구 적중도 **여전히 막는다.** 장별 판정과 다르게 두는 이유: 프로브 경로는
   //    문서 페이지가 아닌 고정 대시보드라 «자기 설명 문구» 오탐의 모집단이 아니고, «테넌트를 먼저
   //    선택하세요» 안내는 마커가 **없다**(`accounts/page.tsx` 등). 여기서 놓치면 앱 전체가 거짓 캡처다.
-  if (j.textHits.length) {
-    return { ok: false, reason: `${probePath} 가 «${j.textHits[0]}» 를 그리고 있습니다 — 테넌트/권한이 안 잡혔습니다` };
+  // 🔴 TASK-MONO-648 § 사전 점검 오탐 ① — 문구는 거부 **요소 밖**에서만 찾는다. 2026-10-05 22차 창에서
+  //    `/dashboards/overview` 의 구독 안 한 도메인 카드 둘(SCM·ERP)이 «…권한이 없습니다» 를 그렸고, 옛 프로브는
+  //    그 한 줄로 콘솔 앱 전체를 건너뛰었다(0장). 카드·섹션 거부는 «테넌트가 안 잡혔다» 가 아니다.
+  //    대신 카드가 **전부** 거부면 그것은 테넌트/권한 문제라 아래에서 막는다.
+  if (j.allCardsDenied) {
+    return { ok: false, reason: `${probePath} 의 도메인 카드가 전부 거부(${j.partial.join(', ')}) — 테넌트/권한이 안 잡혔습니다` };
+  }
+  if (j.textHitsOutsideDenial.length) {
+    return { ok: false, reason: `${probePath} 가 «${j.textHitsOutsideDenial[0]}» 를 그리고 있습니다 — 테넌트/권한이 안 잡혔습니다` };
   }
 
   // --- TASK-MONO-711 ① — 사전 확인이 **저하도 본다** ------------------------
@@ -846,6 +874,15 @@ async function main() {
       // 대조군 ③ 사이드바 배지 «업무 권한 없음» 은 셸의 모든 장에 있다 — 목록에 «권한 없음» 을 넣지 않은 이유
       { name: 'shot-sidebar-badge-not-a-hit', shot: true, denied: false, partial: 0, textHit: false,
         html: '<aside><nav><a href="/wms">WMS <span data-testid="nav-wms-no-biz-perm">업무 권한 없음</span></a></nav></aside><main><h1>WMS 재고</h1><table><tr><td>SKU-APPLE-001</td></tr></table></main>' },
+      // ── TASK-MONO-648 § 사전 점검 오탐 ② — 숫자 표지 `'403'` 은 **홀로 선 숫자**만 문다.
+      // 2026-10-05 22차 창: demo-corp `/scm/inventory` 의 SKU `…000000000403` 행(수량 85)이 «403 을 그린다» 로 앱 전체를 건너뛰게 했다.
+      { name: 'data-sku-ending-403-not-a-hit', denied: false, partial: 0, textHit: false,
+        html: '<main><h1>SCM 재고</h1><table><tr><td>01910000-0000-7000-8000-000000000403</td><td>85</td></tr></table></main>' },
+      { name: 'data-number-4031-not-a-hit', denied: false, partial: 0, textHit: false,
+        html: '<main><h1>정산</h1><table><tr><td>주문 4031건</td><td>₩1,403,000</td></tr></table></main>' },
+      // 대조군 — 거부 화면의 «403» 은 여전히 문다(마커 없는 화면이라 요소 판정은 못 보고 문구만 선다)
+      { name: 'denial-copy-standalone-403-hit', denied: false, partial: 0, textHit: true,
+        html: '<main><h1>오류</h1><p>요청이 거절되었습니다 (403)</p></main>' },
     ];
     let bad = 0;
     for (const c of cases) {
@@ -943,6 +980,26 @@ async function main() {
       // 🔴 TASK-MONO-648 § 표지: 장별 목록만 넓혔다 — 프로브가 «권한이 필요합니다» 한 줄에 앱 전체를 건너뛰면 안 된다
       { name: 'probe-ignores-shot-only-copy', ok: true, degraded: false,
         html: '<main><h1>운영자 통합 개요</h1><p>운영자 관리는 operator.manage 권한이 필요합니다.</p><table data-testid="overview-table"><tr><td>WMS</td><td>3</td></tr></table></main>' },
+      // ── TASK-MONO-648 § 사전 점검 오탐 ① — 개요의 **일부** 카드 거부는 앱을 건너뛸 이유가 아니다.
+      // 2026-10-05 22차 창: 구독하지 않은 도메인 카드(SCM·ERP)의 «…권한이 없습니다(TENANT_FORBIDDEN)» 가 콘솔 0장을 만들었다.
+      { name: 'probe-overview-some-cards-forbidden-passes', ok: true, degraded: false,
+        html: '<main><h1>운영자 통합 개요</h1><section data-testid="operator-overview-cards">'
+          + '<article data-testid="operator-overview-card-wms"><h2>WMS</h2><p>출고 12</p></article>'
+          + '<article data-testid="operator-overview-card-scm"><h2>SCM</h2><div data-testid="operator-overview-card-scm-forbidden">선택한 테넌트에 대한 권한이 없습니다(TENANT_FORBIDDEN)</div></article>'
+          + '<article data-testid="operator-overview-card-erp"><h2>ERP</h2><div data-testid="operator-overview-card-erp-forbidden">선택한 테넌트에 대한 권한이 없습니다(TENANT_FORBIDDEN)</div></article>'
+          + '</section></main>' },
+      // 대조군 — 카드 **전부** 거부면 테넌트/권한이 안 잡힌 것이다 = 여전히 막는다
+      { name: 'probe-overview-every-card-forbidden-blocks', ok: false, degraded: null,
+        html: '<main><h1>운영자 통합 개요</h1><section data-testid="operator-overview-cards">'
+          + '<article data-testid="operator-overview-card-wms"><h2>WMS</h2><div data-testid="operator-overview-card-wms-forbidden">선택한 테넌트에 대한 권한이 없습니다(TENANT_FORBIDDEN)</div></article>'
+          + '<article data-testid="operator-overview-card-scm"><h2>SCM</h2><div data-testid="operator-overview-card-scm-forbidden">선택한 테넌트에 대한 권한이 없습니다(TENANT_FORBIDDEN)</div></article>'
+          + '</section></main>' },
+      // 대조군 — 거부 요소 **밖**의 거부 문구(마커 없는 «테넌트를 선택» 안내)는 여전히 막는다
+      { name: 'probe-copy-outside-denial-elements-blocks', ok: false, degraded: null,
+        html: '<main><h1>운영자 통합 개요</h1><p>테넌트를 선택하세요.</p><section data-testid="operator-overview-cards"><article data-testid="operator-overview-card-wms"><h2>WMS</h2><p>출고 12</p></article></section></main>' },
+      // ② 의 프로브 쪽 — 데이터 숫자 `…403` 은 프로브도 통과
+      { name: 'probe-sku-ending-403-passes', ok: true, degraded: false,
+        html: '<main><h1>SCM 재고</h1><table><tr><td>01910000-0000-7000-8000-000000000403</td><td>85</td></tr></table></main>' },
     ];
     const probeBrowser = await chromium.launch();
     const probePage = await probeBrowser.newPage();
