@@ -55,8 +55,8 @@ public class WmsLowStockAlertConsumer {
             try {
                 envelope = objectMapper.readValue(record.value(), WmsAlertEnvelope.class);
             } catch (Exception parseEx) {
-                log.error("Failed to parse wms alert envelope topic={} partition={} offset={}: {}",
-                        record.topic(), record.partition(), record.offset(), parseEx.getMessage());
+                log.error("Failed to parse wms alert envelope topic={} partition={} offset={} cause={}",
+                        record.topic(), record.partition(), record.offset(), parseEx.toString(), parseEx);
                 ack.acknowledge();
                 throw new NonRetryableConsumerException("Malformed envelope on " + TOPIC, parseEx);
             }
@@ -127,7 +127,8 @@ public class WmsLowStockAlertConsumer {
             throw e;
         } catch (SkuSupplierUnmappedException e) {
             // Unmapped SKU: non-retryable — ack and route to DLT
-            log.error("Unmapped SKU — routing to DLT immediately: {}", e.getMessage());
+            log.error("Unmapped SKU — routing to DLT immediately: topic={} partition={} offset={} cause={}",
+                    record.topic(), record.partition(), record.offset(), e.toString(), e);
             try { ack.acknowledge(); } catch (Exception ignored) {}
             throw new NonRetryableConsumerException("Unmapped SKU: " + e.getMessage(), e);
         } catch (Exception e) {

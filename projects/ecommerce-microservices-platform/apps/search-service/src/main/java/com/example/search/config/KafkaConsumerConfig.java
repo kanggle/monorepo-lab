@@ -19,8 +19,9 @@ public class KafkaConsumerConfig {
     public CommonErrorHandler kafkaErrorHandler(KafkaTemplate<String, String> kafkaTemplate) {
         var recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate,
                 (ConsumerRecord<?, ?> record, Exception ex) -> {
-                    log.error("Sending record to DLQ. topic={}, offset={}, error={}",
-                            record.topic(), record.offset(), ex.getMessage());
+                    log.error("Sending record to DLQ. topic={}, partition={}, offset={}, cause={}",
+                            record.topic(), record.partition(), record.offset(),
+                            org.springframework.core.NestedExceptionUtils.getMostSpecificCause(ex), ex);
                     return new TopicPartition(
                             record.topic() + ".DLT", -1);
                 });

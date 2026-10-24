@@ -9,6 +9,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
@@ -75,9 +76,9 @@ public class KafkaConsumerConfig {
                         other.increment();
                         reason = "other";
                     }
-                    log.error("Sending to DLQ: topic={} partition={} offset={} key={} reason={} error={}",
+                    log.error("Sending to DLQ: topic={} partition={} offset={} key={} reason={} cause={}",
                             record.topic(), record.partition(), record.offset(), record.key(),
-                            reason, ex.getMessage());
+                            reason, NestedExceptionUtils.getMostSpecificCause(ex), ex);
                     return new TopicPartition(record.topic() + ".DLT", -1);
                 });
 
