@@ -185,7 +185,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 **`ADR-MONO-084` 실행 시리즈 (ACCEPTED 2026-10-23 — 갈래 없음 · OD 기본값)** — 도메인 개요 맨 위에 실적 줄(이번 주 · 이번 달 · 직전 대비 · 일별). 🔴 **P1 이 먼저** — P2~P7 은 P1 의 DTO · 경계 · 콘솔 컴포넌트를 쓴다. P2~P7 은 서로 독립이지만 콘솔 공유 파일을 건드리므로 **직렬 머지**. P8 = `projects/platform-console` `TASK-PC-FE-368`.
 
-- `TASK-MONO-811-iam-overview-performance-metrics.md` — **P6 IAM** (READY): 로그인 성공 · 실패 · 잠금 · 신규 계정, 원천이 security-service 와 account/admin 에 흩어짐 · 🔴 집계만 내려주고 개인 정보 0. 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-812-finance-overview-performance-metrics.md` — **P7 Finance** (READY): 유형별 거래 건수 · 금액(캡처된 보류만 · 통화마다 따로 · 계정별 행 없음). 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 - `TASK-MONO-816-consumer-failure-cause-logging-and-missing-dead-letter.md` — **소비자 실패 원인 로깅 + 데드레터 없는 소비자 하나** (READY, 2026-10-24 UTC): `TASK-MONO-813` AC-0 ⑤ 에서 나눠 왔다(소유자 «별도 티켓으로 분리»). 원인을 남기지 않는 곳: wms 4 · scm logistics · `@RetryableTopic` 5 서비스(⚪ 기본 DLT 핸들러가 원인을 남기는지 먼저 잰다). iam account-service 는 error handler 가 없어 재시도 뒤 레코드를 버린다. `TASK-BE-651` 의 `CauseLoggingRetryListener` 를 복사한다. 🔴 813 머지 뒤 착수(같은 파일). 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-MONO-815-wms-throughput-card-kst-window-with-bake.md` — **WMS 처리량 카드 KST 창 · 문구** (READY, 2026-10-24 UTC): 🔴 `TASK-MONO-808` admin V6 를 싣는 **굽기와 같은 창에** 머지(콘솔은 Vercel 즉시 배포 — 먼저 나가면 화면이 데이터보다 앞서 «한국 시간» 이라 말한다). 선행 808 + 굽기. 분석=Opus 5.5 / 구현 권장=Sonnet.
@@ -210,6 +209,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
+- `TASK-MONO-811-iam-overview-performance-metrics.md` — **P6 IAM** (IN-PROGRESS, 2026-10-24 UTC): 로그인 성공 · 실패 · 잠금 · 신규 계정, 원천이 security-service 와 account/admin 에 흩어짐 · 🔴 집계만 내려주고 개인 정보 0. 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
