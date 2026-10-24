@@ -8,6 +8,7 @@ import type {
 } from '../api/delegation-types';
 import { delegationStatusTone, isActiveGrant } from '../api/delegation-types';
 import { approvalErrorMessage } from './approval-error';
+import { ApprovalEmployeeRef } from './approval-refs';
 import { formatDateTime } from '@/shared/lib/datetime';
 import { statusToneClass } from '@/shared/ui/StatusBadge';
 
@@ -120,7 +121,10 @@ export function DelegationGrantList({
               className="flex items-center justify-between rounded border border-border px-3 py-2 text-sm"
             >
               <div className="flex-1 min-w-0">
-                <span className="font-medium">{g[idField]}</span>
+                {/* TASK-PC-FE-371: an employee id (approval v2.4) — drawn as `번호 · 이름`, the id only in `title`. */}
+                <span className="font-medium">
+                  <ApprovalEmployeeRef employeeId={g[idField]} field={`delegation.${idField}`} />
+                </span>
                 <span className="ml-2 text-xs text-muted-foreground">
                   {periodText(g)}
                 </span>

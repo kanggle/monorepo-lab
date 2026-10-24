@@ -124,6 +124,8 @@ _(없음)_
 
 ## review
 
+- `TASK-PC-FE-371-delegation-rows-show-employee-ids-not-names.md` — **ERP 위임 화면(«내가 위임한» · «나에게 위임된» · 위임 현황 표)이 직원 이름 대신 내부 id 를 그린다** (REVIEW 2026-10-25 UTC · AC-5 = Vercel · 데모 창 라이브): 34차 창 발견 · `PC-FE-355` Out of Scope. 위임의 사람 칸은 직원 id(approval v2.4)이고, 결재 화면의 `ApprovalEmployeeRef` 로 그대로 풀린다 — 콘솔만, 굽기 무관. 분석=Opus 5.5 / 구현 권장=Sonnet. 구현: 두 렌더 자리에 `ApprovalEmployeeRef`. 수정 전 빨강 5 · console 전체 5544 초록.
+
 - `TASK-PC-FE-364-operator-overview-business-kpis.md` — **운영자 통합 개요 카드 여섯을 업무 지표로 — 잠긴 계정 · 미출고 주문 · 제출 대기 발주 · 미해소 대사 차이 · 내 결재 대기 · 출고 대기 주문** — 카드당 호출 1개 그대로(1:1 교체) · 서버 변경 없음 · 계약 § 2.4.9.1 먼저 · 소유자 결정 2026-10-22 KST (REVIEW, 2026-10-22 UTC · 문구 · 권한 표 소유자 승인 · 콘솔 nightly · federation e2e success · AC-3 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ❌ — WMS 출고 · SCM 발주 카드 `DOWNSTREAM_ERROR` · «WMS 점검 불가» → `TASK-PC-FE-369`.
 
 - `TASK-PC-FE-358-wms-daily-throughput-chart.md` — **WMS 개요 일별 입고 · 출고 처리량 그래프** — 계약 § 1.2 `GET /dashboard/throughput` 를 BFF · SSR · 화면으로 잇는다 · AC-0 닫힘 · 소유자 결정(창고 선택 · UTC 14일 · 건수 막대) · 새 문구 13 소유자 승인 · 브랜치 nightly success (REVIEW, 2026-10-22 UTC · AC-4 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-4 🟡 — 14일 창 그래프 ✅ · 빈 창 문구는 데이터상 못 잼.

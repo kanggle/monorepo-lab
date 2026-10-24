@@ -109,6 +109,8 @@ function makeFetchMock(
   delegateList = DELEGATE_LIST,
 ) {
   return vi.fn((url: string) => {
+    const employee = employeeDetailResponse(url);
+    if (employee) return Promise.resolve(employee);
     if (String(url).includes('role=DELEGATE') && !String(url).includes('role=DELEGATOR')) {
       return Promise.resolve(jsonResponse(delegateList));
     }
@@ -143,10 +145,12 @@ describe('DelegationScreen — renders both lists', () => {
         screen.getByTestId(`delegation-row-${ACTIVE_GRANT_DELEGATOR.id}`),
       ).toBeInTheDocument(),
     );
-    // delegateId shown.
-    expect(
-      screen.getByTestId(`delegation-row-${ACTIVE_GRANT_DELEGATOR.id}`).textContent,
-    ).toContain('emp-delegate');
+    // delegate shown by name (TASK-PC-FE-371 — the raw id only in `title`).
+    await waitFor(() =>
+      expect(
+        screen.getByTestId(`delegation-row-${ACTIVE_GRANT_DELEGATOR.id}`).textContent,
+      ).toContain('EMP-0101 · 김대행'),
+    );
     // Revoke button exists for ACTIVE grant in delegator list.
     expect(
       screen.getByTestId(`delegation-revoke-${ACTIVE_GRANT_DELEGATOR.id}`),
@@ -174,9 +178,11 @@ describe('DelegationScreen — renders both lists', () => {
         screen.getByTestId(`delegation-row-${ACTIVE_GRANT_DELEGATE.id}`),
       ).toBeInTheDocument(),
     );
-    expect(
-      screen.getByTestId(`delegation-row-${ACTIVE_GRANT_DELEGATE.id}`).textContent,
-    ).toContain('emp-boss');
+    await waitFor(() =>
+      expect(
+        screen.getByTestId(`delegation-row-${ACTIVE_GRANT_DELEGATE.id}`).textContent,
+      ).toContain('EMP-0001 · 최위임'),
+    );
     // No revoke button in delegate list.
     expect(
       screen.queryByTestId(`delegation-revoke-${ACTIVE_GRANT_DELEGATE.id}`),
@@ -720,5 +726,58 @@ describe('DelegationScreen — revoke dialog', () => {
     expect(errEl.textContent).toContain('찾을 수 없습니다');
     // Dialog still mounted (no crash).
     expect(screen.getByTestId('delegation-revoke-dialog')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK-PC-FE-371 — the people in a delegation are employee ids (approval v2.4);
+// the row resolves each through `GET /api/erp/masterdata/employees/{id}`
+// (`ApprovalEmployeeRef` → `useEmployee`). An id with no employee → 404.
+// ---------------------------------------------------------------------------
+const EMPLOYEE_DETAIL_PREFIX = '/api/erp/masterdata/employees/';
+const EMPLOYEES_BY_ID: Record<string, { employeeNumber: string; name: string }> = {
+  'emp-delegate': { employeeNumber: 'EMP-0101', name: '김대행' },
+  'emp-delegate-2': { employeeNumber: 'EMP-0102', name: '박대행' },
+  'emp-boss': { employeeNumber: 'EMP-0001', name: '최위임' },
+  'emp-me': { employeeNumber: 'EMP-0002', name: '이운영' },
+  'emp-A-001': { employeeNumber: 'EMP-0201', name: '정위임' },
+  'emp-D-001': { employeeNumber: 'EMP-0301', name: '한대행' },
+};
+/** The detail GET for a known id → that employee; unknown → 404. `null` = not a detail URL. */
+function employeeDetailResponse(url: string): Response | null {
+  const u = String(url);
+  if (!u.startsWith(EMPLOYEE_DETAIL_PREFIX) || u.startsWith(EMPLOYEE_DETAIL_PREFIX + 'picker')) return null;
+  const id = decodeURIComponent(u.slice(EMPLOYEE_DETAIL_PREFIX.length).split(/[?/]/)[0]);
+  const e = EMPLOYEES_BY_ID[id];
+  if (!e) return errorResponse('MASTERDATA_NOT_FOUND', 404);
+  return jsonResponse({
+    id, employeeNumber: e.employeeNumber, name: e.name, status: 'ACTIVE',
+    effectivePeriod: { effectiveFrom: '2020-01-01', effectiveTo: null },
+  });
+}
+
+describe('DelegationScreen — TASK-PC-FE-371 people are named, not ids', () => {
+  it('🔴 AC-1 — «내가 위임한» names the delegate and «나에게 위임된» names the delegator; the raw id is not row text', async () => {
+    vi.stubGlobal('fetch', makeFetchMock());
+    render(<DelegationScreen canWrite />, { wrapper: wrapper() });
+
+    const mine = await screen.findByTestId(`delegation-row-${ACTIVE_GRANT_DELEGATOR.id}`);
+    await waitFor(() => expect(mine.textContent).toContain('EMP-0101 · 김대행'));
+    expect(mine.textContent).not.toContain('emp-delegate');
+    expect(mine.querySelector('[title="emp-delegate"]')).not.toBeNull();
+
+    const toMe = await screen.findByTestId(`delegation-row-${ACTIVE_GRANT_DELEGATE.id}`);
+    await waitFor(() => expect(toMe.textContent).toContain('EMP-0001 · 최위임'));
+    expect(toMe.textContent).not.toContain('emp-boss');
+  });
+
+  it('🔴 AC-3 — an id with no employee reads «이름 확인 불가», never the id', async () => {
+    const orphan = { ...ACTIVE_GRANT_DELEGATOR, id: 'dg-orphan', delegateId: 'emp-gone' };
+    vi.stubGlobal('fetch', makeFetchMock({ data: [orphan], meta: { page: 0, size: 1, totalElements: 1 } }));
+    render(<DelegationScreen canWrite />, { wrapper: wrapper() });
+
+    const row = await screen.findByTestId('delegation-row-dg-orphan');
+    await waitFor(() => expect(row.textContent).toContain('이름 확인 불가'));
+    expect(row.textContent).not.toContain('emp-gone');
   });
 });
