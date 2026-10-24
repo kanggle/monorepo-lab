@@ -8,7 +8,7 @@ shipping-service 가 `order.order.cancelled` 를 소비하지 않는다 — 출�
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -174,3 +174,11 @@ X-A 의 포장 뒤 거부나 출하 확정과의 경합이면, 취소된 배송�
 - ⚪ shipping-service 로그의 거짓 `ALERT wms outbound cancelled`(자기가 요청한 취소의 메아리) 부재는 확인하지 않았다.
 - 🔴 같은 취소에서 WMS 쪽 예약이 풀리지 않았다 — 이 티켓 밖(wms inventory-service), `TASK-BE-650` § 라이브 확인 · 새 `TASK-BE-651`.
 - ⇒ 이 티켓은 `review` 에 남는다(체크 칸은 동결 규칙으로 고치지 않음).
+
+---
+
+## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
+
+- **AC-3 — 닫힘.** 34차 창(2026-10-24 UTC): 주문 `7e457d10-…`(`TASK-BE-646` AC-2 와 같은 주문)을 취소하자 shipping `PREPARING→CANCELLED` · `shipping_outbox` 에 `FulfillmentCancelRequested` 한 행 · 로그 «echo of our own cancel request, ALERT suppressed» 가 남았고 `ALERT wms outbound cancelled` 는 0줄이다. 33차 창에서 ⚪ 였던 경보 메아리 부재가 이로써 확인됐다.
+- 🔵 기록만: 첫 발행에서 `ecommerce.fulfillment.cancel-requested.v1=UNKNOWN_TOPIC_OR_PARTITION` 경고가 한 번 났다(토픽이 자동 생성되어 흐름은 정상). (증거 o07 · o11)
+- (원문 체크박스는 동결 규칙(HARDSTOP-05)상 바꾸지 않았다 — 이 절이 그 AC 의 닫힘 기록이다. 위 «이 티켓은 `review` 에 남는다» 문장은 33차 창 시점의 기록이며 지금은 `done` 이다.)

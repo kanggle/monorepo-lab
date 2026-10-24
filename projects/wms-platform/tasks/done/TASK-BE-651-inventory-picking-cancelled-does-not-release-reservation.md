@@ -8,7 +8,7 @@ inventory-service 가 `wms.outbound.picking.cancelled.v1` 로 예약을 풀지 �
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -160,3 +160,11 @@ Fix issue found in TASK-BE-650. 출고가 예약을 잡은 상태에서 취소�
 
 - AC-1 «CI 의 wms 잡 초록» — 푸시 전이라 미측정.
 - AC-2 라이브 — 다음 굽기 · 창(`TASK-MONO-672`). 창에서 함께 볼 것: `wms.outbound.picking.cancelled.v1.DLT` 의 끝 오프셋(③ 의 «유실 아님» 가설), inventory 로그에 `kafka_listener_failed` 가 없는지.
+
+---
+
+## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
+
+- **AC-2 — 닫힘.** 34차 창(2026-10-24 UTC): PICKING 경로 — 예약 `21391989…` 이 `RELEASED`(사유 `CANCELLED`, `system:picking-cancelled-consumer`), SKU …2013 `reservedQty` 1→0 · 가용 99→100(RELEASE 이동 행 2건), 사가 `CANCELLED`, `wms.outbound.picking.cancelled.v1.DLT` 0건. inventory 로그의 오류는 OTel 수출 잡음뿐이다. (증거 o07 · o11)
+- ⚪ 33차 창에서 멈춘 사가: 굽기가 볼륨을 새로 만들어 사라졌다. 이 하위 검사는 측정 대상이 없다.
+- (원문 체크박스는 동결 규칙(HARDSTOP-05)상 바꾸지 않았다 — 이 절이 그 AC 의 닫힘 기록이다.)

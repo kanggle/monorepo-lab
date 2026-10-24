@@ -8,7 +8,7 @@ TASK-MONO-809
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -127,3 +127,10 @@ ERP 개요(`/erp`)는 지금 마스터 건수 · 결재 상태 분포 · 내 결
 
 - `Integration (erp-platform, Testcontainers)` 초록. `ApprovalMetricsIntegrationTest` 가 **건너뛴 것이 아니라 돌았다** — 이 서비스의 IT 는 `DockerAvailableCondition` 으로 Docker 가 없으면 조용히 빠지므로 초록만으로는 부족하다; job 로그에 그 클래스의 `STANDARD_OUT` 과 Spring 컨텍스트 기동 줄이 있다(27 곳). ⇒ AC-1(대조군: 회수 · 중간 단계 승인이 섞이지 않음) · AC-2(테넌트 격리 · `TENANT_FORBIDDEN` · 반열린 창)가 **실 MySQL 에서 통과** — 닫힘.
 - AC-4(굽기 · 데모 창 라이브)가 남아 review 유지.
+
+---
+
+## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
+
+- **AC-4 — 닫힘.** 34차 창(2026-10-24 UTC): `main` = #4510 `c76a60d73` · AMI = `ami-0d9f8da7d20d7a180`(`d5bb28f14` ⊇ `c76a60d73`) · 라이브 = erp 지표 API 200, 상신 2 · 승인 0 · 반려 0. 소유자 화면 `/erp` 실적 줄이 렌더됨. (증거 o04)
+- (원문 체크박스는 동결 규칙(HARDSTOP-05)상 바꾸지 않았다 — 이 절이 그 AC 의 닫힘 기록이다. 위 «review 유지» 문장은 CI 판정 시점의 기록이며 지금은 `done` 이다.)

@@ -82,13 +82,11 @@ _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DON
 
 ## in-progress
 
+_(없음)_
+
 ## review
 
-- `TASK-BE-649-shipping-service-ignores-order-cancelled.md` — **REVIEW (2026-10-23 UTC · 컴파일 빨강 → 초록 · 브랜치 nightly success · AC-3 = 굽기 뒤 라이브) — ADR-MONO-022 D4 v2(d) ACCEPTED (X-A / Y-A) · 선행 TASK-BE-650 머지됨 · 이번 굽기 제외.** shipping-service 가 `order.order.cancelled` 를 받아 `PREPARING` 배송을 끝 상태 `CANCELLED` 로 보낸다. WMS 를 거친 배송이면 `ecommerce.fulfillment.cancel-requested.v1` 을 낸다. 주문 취소 · 환불은 지금처럼 즉시 끝난다. 선행 = WMS `TASK-BE-650`(계약 + 소비자). 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ✅(배송 `PREPARING → CANCELLED` · WMS 출고 `CANCELLED`) · 거짓 ALERT 메아리 ⚪ · WMS 예약 미해제는 `TASK-BE-651`.
-
 - `TASK-BE-645-operator-confirm-backordered-skips-reservation.md` — **REVIEW (2026-10-22 UTC · #4474 머지 · AC-2 = 굽기 뒤 라이브) — 서버 변경 = 굽기.** 운영자 상태 변경 API 가 `BACKORDERED → CONFIRMED` 를 받아 준다(`AdminOrderStatusService.java:34` → `Order.confirm` `:214` 는 재입고 재예약 사가용 갈래) — 재고 예약 없이 확정. 운영자 경로에서는 거부 · 사가 경로는 그대로. 콘솔은 `TASK-PC-FE-365` 부터 취소만 낸다. 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-2 ⚪ — `BACKORDERED` 0 건.
-
-- `TASK-BE-646-admin-status-cancel-publishes-no-order-cancelled.md` — **REVIEW (2026-10-22 UTC · CI 빨강(6) → 초록 · AC-2 = 굽기 뒤 라이브) — 서버 변경 = 굽기 · 선행 `TASK-BE-645` 머지됨.** 관리자 상태 변경의 «취소»(콘솔이 쓰는 경로)가 `OrderCancelled` 를 내지 않는다(`AdminOrderStatusService.java:51`) — 환불 · 재고 해제 없음 · 백오더는 다음 재입고 때 차감 뒤 소비 실패. 이벤트를 내는 `OperatorOrderCancellationService` 는 내부 엔드포인트에만 붙어 있다. 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-2 🟡 — 취소 200 · 환불 완료 · 배송 `CANCELLED`, outbox 행 · 상품 예약 해제 · 세 DB 조회 미측정.
 
 - `TASK-FE-109-store-post-login-405-in-logs.md` — **스토어 Vercel 로그의 `POST /login 405` 반복 — 출처 밝히기** (REVIEW, 2026-10-13 UTC · impl PR **#4328**). AC-0 가설 확인: `/api/vitals` 비콘(`web-vitals.tsx:32-36`)이 `middleware.ts` 공개 경로 목록에 없어 307→`/login`(메서드 보존)→405. 수정: 두 공개 경로 표(`middleware.ts`·`auth.ts`)에 `/api/vitals` 추가. bite = CI run 38412464400(수정 전, 2 실패) → 38413114273(수정 후, 17/17 통과). AC-0~1 ✅ · ⚪ "다음 창 Vercel 로그 0줄"은 다음 창. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
@@ -96,6 +94,8 @@ _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DON
 - `TASK-BE-624-profile-email-name-still-null-despite-be-575-be-577.md` — **IAM 가입 계정의 마이페이지 「기본 정보」가 여전히 빈칸** (REVIEW, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). 원인은 세 후보(ⓐ배포 미반영·ⓑ클레임 없음·ⓒ소셜 가입)가 아니라 **ⓓ** — `TASK-BE-575` 의 pull-through 프로비저닝과 `TASK-MONO-511`(이후 완료)이 살린 `account.created` 이벤트 소비자가 서로 레이스하고, 이벤트 쪽이 거의 항상 먼저 도착해 `email=null` 로 행을 선점한다(`AccountCreatedHandler.java:28` 이 항상 `null` 전달, `UserProfileProvisioner` 의 기존 no-op 이 뒤따르는 pull-through 의 실 이메일을 버림). `UserProfile.assignEmail` + `UserProfileProvisioner.backfillEmailIfMissing` 로 1회 백필 추가, 단위 테스트 추가(`./gradlew :…:user-service:test` BUILD SUCCESSFUL). 라이브 재확인은 AMI 재굽기 이후(AC-4 ⚪ 미체크). impl PR **#4184**. 분석=Opus 5.5 / 구현 권장=Sonnet(실제: Opus 5.5 — 레이스 조건 진단은 복잡 도메인 작업).
 
 ## done
+- ✅ `TASK-BE-649-shipping-service-ignores-order-cancelled.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4490(`8de95f2c7`, 실패 0) · 주문이 취소되면 출고 전 배송도 취소하고 WMS 에 출고 취소를 요청한다 · 34차 창 배송 `PREPARING→CANCELLED` · `FulfillmentCancelRequested` 1행 · 메아리 ALERT 억제(`ALERT wms outbound cancelled` 0줄).
+- ✅ `TASK-BE-646-admin-status-cancel-publishes-no-order-cancelled.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4480(`ab7f5d26c`, 실패 0) · 관리자 상태 변경의 취소가 `OrderCancelled` 를 낸다 — 환불 · 재고 해제 · 34차 창 콘솔 경로 취소 200 → outbox `OrderCancelled` · payment `REFUNDED` 3,490,000 · 상품 예약 `RESERVED→RELEASED`.
 - ✅ `TASK-FE-110-store-shipping-tracker-cancelled-status.md` — **DONE 2026-10-23 UTC (4-dim verified)** — impl PR **#4491**, 스쿼시 **`e5fb1e715`** (머지 시점 실패 0 — SUCCESS 19 · SKIPPED 50). 웹스토어 배송 추적이 «취소됨» 을 안다 — «주문이 취소되어 배송이 취소되었습니다.»(문구 승인). 33차 창 라이브(AC-3): 데모 구매자 `/my/orders/49eae2f6…` 에 빨간 문구 · 단계/택배사/운송장 없음. 🔵 AC-0 체크 칸 누락 = § CORRECTION.
 - ✅ `TASK-BE-648-operator-confirm-removed.md` — **DONE 2026-10-23 UTC (4-dim verified)** — impl PR **#4485**, 스쿼시 **`40992f1a6`** (머지 시점 실패 0 — SUCCESS 19 · SKIPPED 50). 운영자 주문 «확정» 제거 — 목표 `CONFIRMED` 는 현재 상태와 무관하게 400 `INVALID_ORDER_REQUEST`. 33차 창 라이브(AC-2, `ami-02b3ba00a3b2ff622` ⊇ `40992f1a6`): `PENDING` 주문에 콘솔 BFF 확정 → 400 `INVALID_ORDER_REQUEST`.
 - ✅ `TASK-FE-108-signup-then-first-store-login-fails-configuration-error.md` — **DONE 2026-10-16 UTC (4-dim verified)** — impl PR **#4301**, 스쿼시 **`69da5d1b5`** (머지 시점 실패 0). 가입 직후 첫 스토어 로그인 `Configuration` 실패 — `/signup` 자동 이동 중 두 번째 `signIn` 이 state 를 덮어씀 → 단일 시작. 28차 창 라이브(AC-3): 신규 가입 → 첫 로그인 재시도 없이 성공.

@@ -107,3 +107,11 @@ Fix issue found in TASK-BE-644. 콘솔 `GET /api/wms/settings` → admin-service
 - 첫 IT 와의 차이(코드 측정): ① IT 는 정렬 없는 `PageRequest.of(0,200)` 를 직접 저장소에 넘겼다(컨트롤러 · 정렬 없음). ② IT 는 같은 Spring 컨텍스트에서 `keyPrefix` 있는 호출이 먼저 실행됐을 수 있다(Hibernate 쿼리 해석 캐시가 따뜻함). 라이브는 재기동 뒤 첫 호출이 곧 무필터 호출이다.
 - 배제한 차이: DB 버전(IT `postgres:16-alpine` = `docker-compose.yml:51`), Hibernate 속성(`application.yml:13-20` 이 IT·라이브 동일, `application-test.yml` 은 `ddl-auto` 만), 시드 행 4개라 `size=20` 에서 count 쿼리는 양쪽 모두 안 돈다.
 - 후속 시험: `SettingsListLiveShapeIT`(컨트롤러 `list(null,null,null,0,20,"key,asc")` + 정렬된 Pageable 저장소 호출, 매 시험 전 `getQueryEngine().getInterpretationCache().close()`). 🔴 **이 호스트에서 실행하지 못했다(Docker 없음)** — 위 ①②중 어느 쪽이 원인인지는 CI 빨강으로만 가려진다. 둘 다 초록이면 차이는 아직 못 찾은 것이다.
+
+---
+
+## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
+
+- **AC-2 — 닫힘 (settings 절반).** 34차 창(2026-10-24 UTC): ✅ settings — `GET /api/v1/admin/settings` 를 필터 없이 불러 200, 설정 4행(`inventory.low_stock.default_threshold_qty` = 10 포함). 같은 방식의 `/users` 는 403 `FORBIDDEN`(demo-corp 토큰에 `WMS_ADMIN` 이 없다 — 500 이 아니고, 이 토큰으로는 잴 수 없다). 소유자는 콘솔 «WMS 운영설정» 화면을 따로 확인하지 않았다 — 화면 절반은 ⚪. `TASK-BE-644` AC-3 은 그 티켓에 ⚪ 로 적었다. (증거 o05)
+- **AC-0 — 열린 채 유지.** AC-0 이 열려 있어 티켓은 `review` 에 남는다.
+- (원문 체크박스는 동결 규칙(HARDSTOP-05)상 바꾸지 않았다 — 이 절이 AC-2 settings 절반의 닫힘 기록이다.)

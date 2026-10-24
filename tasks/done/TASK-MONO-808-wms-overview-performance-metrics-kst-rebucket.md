@@ -8,7 +8,7 @@ TASK-MONO-808
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -152,3 +152,10 @@ WMS 의 일별 입고 · 출고 집계는 지금 UTC 날짜로 잘려 저장된�
 
 - admin-service `integrationTest` = `@Tag("integration")` 클래스 + Kafka IT 의 시험 **92 개**(소스에서 셈: 다시 쌓기 IT 6 · Flyway 7 · Kafka 4 파일 35 · 나머지 44). 첫 판 로그가 정확히 **«92 tests completed, 2 failed»**(실패 = 위 Kafka IT 둘)였고 둘째 판은 그 job 이 초록 ⇒ `ThroughputKstRebuildIntegrationTest` 6 개(보존 대조군 출고 · 입고 · 옛 볼륨 합계 변화 · 거부 경로 · 건별 멱등 · `[from,to)` + null UUID 바인딩)와 Flyway V6 확인이 **실 Postgres 에서 통과**.
 - 🔵 이름이 아니라 **수로** 확인했다 — Gradle 은 통과 시험 이름을 로그에 안 찍고 시험 보고서 아티팩트도 올리지 않는다(이 런의 아티팩트는 `wms-boot-jars` 하나).
+
+---
+
+## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
+
+- **AC-5 — 닫힘.** 34차 창(2026-10-24 UTC): `main` = #4506 `4335ed688` · AMI = `ami-0d9f8da7d20d7a180`(`d5bb28f14` ⊇ `4335ed688`) · 라이브 = wms 지표 API 200, 경계 `Asia/Seoul`. 입고 수량 8,695 · 출고 수량 10 · 출고 건수 1, 전부 KST 10/25 칸이다(이벤트 16:05Z = 01:05 KST, UTC 날짜로 잘랐다면 10/24 에 붙었을 시각). 소유자 화면 `/wms` 실적 줄이 같은 값이고 월간 일별 막대 10/25 = 10. 다시 쌓기(백필)는 필요 없었다 — 신선 볼륨이라 옛 행이 0 이다. 창고별 대조: 입고 WH-MAIN 86건/8,600 + WH01 1건/95, 출고 WH01 1건/10(`admin_throughput_*_daily`, o12) = 실적 줄 합계. (증거 o04 · o12)
+- (원문 체크박스는 동결 규칙(HARDSTOP-05)상 바꾸지 않았다 — 이 절이 그 AC 의 닫힘 기록이다.)

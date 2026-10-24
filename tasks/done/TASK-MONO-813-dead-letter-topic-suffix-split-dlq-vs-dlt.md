@@ -8,7 +8,7 @@ Dead-letter topic suffix is split across the fleet — platform says `<topic>.dl
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -109,3 +109,12 @@ Make one dead-letter naming rule true everywhere — the platform rule, every co
 
 1. Only the platform text changes and the code keeps both suffixes → the split stays. AC-2's guard prevents this.
 2. Auto-create is turned off on some broker later → every `.DLT` send fails and the record is lost. Today's split hides this.
+
+---
+
+## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
+
+- **AC-3 — 닫힘.** 34차 창(2026-10-24 UTC): `.DLT` topics were pre-created (iam 32 · wms 29 · erp 10 · scm 6 · finance 2 · ecommerce 1 · fan 0; o03). One malformed record sent to `wms.admin.settings.v1` p1 off0 at 16:32:01Z landed within 10 s on `wms.admin.settings.v1.DLT` p0 off0, header `kafka_dlt-exception-cause-fqcn=java.lang.IllegalArgumentException`, «malformed admin.settings event JSON» (o08). inventory-service logged WARN `kafka_listener_failed … cause=JsonParseException`, then ERROR `kafka_listener_dead_lettered … dlt=wms.admin.settings.v1.DLT` (o09) — `TASK-MONO-816`'s cause logging, live.
+- 🔴 Finding (recorded here, not a reopen): the wms inventory-service resolver still returns the source partition (`KafkaConsumerConfig.java:49-50`, `record.partition() < 0 ? 0 : record.partition()`), so Kafka warned «Destination resolver returned non-existent partition wms.admin.settings.v1.DLT-1, KafkaProducer will determine partition». The record was still delivered (p0).
+- Left on the volume: 1 record on the source topic and 1 on its `.DLT`.
+- (원문 체크박스는 동결 규칙(HARDSTOP-05)상 바꾸지 않았다 — 이 절이 그 AC 의 닫힘 기록이다.)
