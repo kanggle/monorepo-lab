@@ -85,9 +85,11 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-SCM-BE-063-asn-receipt-bypasses-po-status-check.md` — **READY (2026-10-24 UTC)**: 공급사 ASN 입고가 발주 상태 검사를 건너뛴다 — `PurchaseOrder.applyAsnLine` 이 전량이면 상태와 무관하게 `RECEIVED` ⇒ SUBMITTED · ACKNOWLEDGED · **CANCELED** 발주도 입고 완료(계약은 422 `PO_STATUS_TRANSITION_INVALID`). 출처 `TASK-MONO-810` AC-0. 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
+
 ## review
 
+- `TASK-SCM-BE-063-asn-receipt-bypasses-po-status-check.md` — **ASN 입고가 발주 상태 기계를 건너뛰었다 — 취소 · 미확정 발주가 RECEIVED 가 됐다** (REVIEW, 2026-10-24 UTC · AC-0~2 닫힘 · AC-3 = 배포 상태). 이제 SYSTEM 전이 규칙을 지나고, 거절은 422 `PO_STATUS_TRANSITION_INVALID`(계약 `:508` 이 이미 약속하던 코드)다. 부분 ASN · DRAFT 도 거절한다. 이력은 ASN 당 한 행이다. 🔴 상태 검사를 끄면 거절 케이스 14건이 정확히 빨강이 된다. ⚪ 잘못 RECEIVED 가 된 데모 행 수는 측정 불가(Docker) → 다음 창. 분석=Opus 5.5 / 구현=Opus 5.5 + diff 대조.
 - `TASK-SCM-BE-062-suggestion-carries-reorder-point-at-trigger.md` — **REVIEW (2026-10-22 UTC · CI IT pass · AC-3 = 굽기 뒤 라이브) — 소유자 결정 (가) 스냅샷 `reorderPointAtTrigger` · 계약 · 구현 완료, 단위/슬라이스/계약 시험 로컬 초록 · Testcontainers IT 는 CI 대기 · 서버 변경 = 굽기.** 보충 제안 행에 «발동 당시 재주문점» 을 저장 · 응답 — 콘솔이 SKU 마다 정책을 따로 부르지 않고 «재주문점 · 발동 재고 · 제안 수량» 막대를 그리게. AC-0: `ADR-MONO-017` 갈래 B 해당 **안 함**(D3 = 교차 도메인 집계 엔드포인트 · 이것은 단일 도메인 기존 행의 필드 추가) · 콘솔 zod `.passthrough()` 라 추가가 안 깨짐. 소유자 결정: 스냅샷(추천) vs 현재 정책. 후속 = 콘솔 티켓. 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ⚪ — 보충 제안 0 건.
 
 
