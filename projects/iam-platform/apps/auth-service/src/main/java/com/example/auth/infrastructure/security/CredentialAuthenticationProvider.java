@@ -387,10 +387,11 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
             // No single identity: accountId=null (contract), tenant = the login's own tenant
             // context. Same exception as a wrong password — no enumeration via the response.
             String contextTenant = clientTenant != null ? clientTenant : TenantContext.DEFAULT_TENANT_ID;
+            // No credential → no pool account → no siteTenantId (TASK-BE-653).
             telemetry("attempted", () ->
-                    loginEventRecorder.recordAttempted(null, emailHash, contextTenant, ctx));
+                    loginEventRecorder.recordAttempted(null, emailHash, contextTenant, null, ctx));
             telemetry("failed", () -> loginEventRecorder.recordFailed(
-                    null, emailHash, contextTenant, lookup.failureReason(), ctx));
+                    null, emailHash, contextTenant, null, lookup.failureReason(), ctx));
             throw new BadCredentialsException("Invalid credentials");
         }
 
@@ -401,9 +402,14 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
         String tenantId = Optional.ofNullable(credential.getTenantId())
                 .filter(s -> !s.isBlank())
                 .orElse(TenantContext.DEFAULT_TENANT_ID);
+        // TASK-BE-653: a consumer-pool credential's events also say WHICH SITE it logged in to — the
+        // initiating client's tenant (no fan-platform substitute: clientTenant is null without a client).
+        // Null for a non-pool credential, and for a pool login with no client (invitation acceptance,
+        // direct visit) or through the console ({@code iam}). tenantId above is unchanged.
+        String siteTenantId = TenantContext.siteTenantOfPoolLogin(tenantId, clientTenant);
 
         telemetry("attempted", () ->
-                loginEventRecorder.recordAttempted(accountId, emailHash, tenantId, ctx));
+                loginEventRecorder.recordAttempted(accountId, emailHash, tenantId, siteTenantId, ctx));
 
         // TASK-BE-600: account status is looked up BEFORE the password is verified, and the
         // password is verified whatever the status turns out to be — see the class javadoc
@@ -414,7 +420,7 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
             log.debug("form-login password verification failed for emailHash=<redacted>");
             // accountId MUST be present: VelocityRule ignores failures without one.
             telemetry("failed", () -> loginEventRecorder.recordFailed(
-                    accountId, emailHash, tenantId, REASON_CREDENTIALS_INVALID, ctx));
+                    accountId, emailHash, tenantId, siteTenantId, REASON_CREDENTIALS_INVALID, ctx));
             throw new BadCredentialsException("Invalid credentials");
         }
 
@@ -424,7 +430,7 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
             log.info("form-login rejected: account status is not ACTIVE (reason={})", rejection);
             if (CONTRACT_STATUS_REASONS.contains(rejection)) {
                 telemetry("failed", () -> loginEventRecorder.recordFailed(
-                        accountId, emailHash, tenantId, rejection, ctx));
+                        accountId, emailHash, tenantId, siteTenantId, rejection, ctx));
             } else {
                 // A status outside account-service's enum: rejected all the same, but there is
                 // no failureReason in the event contract to carry it, and inventing one would
@@ -491,7 +497,8 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
 
         // Last, once every step that can still reject the login has passed — so a
         // succeeded event is never recorded for a login that then fails.
-        telemetry("succeeded", () -> loginEventRecorder.recordSucceeded(accountId, tenantId, ctx));
+        telemetry("succeeded", () ->
+                loginEventRecorder.recordSucceeded(accountId, tenantId, siteTenantId, ctx));
         return authenticated;
     }
 

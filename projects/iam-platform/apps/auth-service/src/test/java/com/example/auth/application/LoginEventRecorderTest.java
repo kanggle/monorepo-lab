@@ -43,28 +43,28 @@ class LoginEventRecorderTest {
     @Test
     @DisplayName("attempted is published verbatim (accountId, emailHash, tenant, ctx)")
     void recordAttempted_publishes() {
-        recorder.recordAttempted("acc-1", "0123456789", "acme-corp", CTX);
+        recorder.recordAttempted("acc-1", "0123456789", "acme-corp", null, CTX);
 
-        verify(authEventPublisher).publishLoginAttempted("acc-1", "0123456789", "acme-corp", CTX);
+        verify(authEventPublisher).publishLoginAttempted("acc-1", "0123456789", "acme-corp", null, CTX);
         verifyNoMoreInteractions(authEventPublisher);
     }
 
     @Test
     @DisplayName("failed carries failCount=0 — no auth-service failure counter on this path (ⓑ declined)")
     void recordFailed_failCountZero() {
-        recorder.recordFailed("acc-1", "0123456789", "acme-corp", "CREDENTIALS_INVALID", CTX);
+        recorder.recordFailed("acc-1", "0123456789", "acme-corp", null, "CREDENTIALS_INVALID", CTX);
 
         verify(authEventPublisher).publishLoginFailed(
-                "acc-1", "0123456789", "acme-corp", "CREDENTIALS_INVALID", 0, CTX);
+                "acc-1", "0123456789", "acme-corp", null, "CREDENTIALS_INVALID", 0, CTX);
         verifyNoMoreInteractions(authEventPublisher);
     }
 
     @Test
     @DisplayName("succeeded carries deviceId=null / isNewDevice=null / sessionJti=null, and NOTHING else is published (no auth.session.created)")
     void recordSucceeded_noDeviceFields_noSessionCreated() {
-        recorder.recordSucceeded("acc-1", "acme-corp", CTX);
+        recorder.recordSucceeded("acc-1", "acme-corp", null, CTX);
 
-        verify(authEventPublisher).publishLoginSucceeded("acc-1", null, "acme-corp", CTX, null, null);
+        verify(authEventPublisher).publishLoginSucceeded("acc-1", null, "acme-corp", null, CTX, null, null, null);
         // ⓒ withdrawn: no auth.session.created, no other event.
         verifyNoMoreInteractions(authEventPublisher);
     }
@@ -72,10 +72,28 @@ class LoginEventRecorderTest {
     @Test
     @DisplayName("TASK-BE-602: social succeeded carries loginMethod, the same null device fields, and nothing else")
     void recordSucceeded_social_carriesLoginMethod() {
-        recorder.recordSucceeded("acc-1", "ecommerce", CTX, "OAUTH_NAVER");
+        recorder.recordSucceeded("acc-1", "ecommerce", null, CTX, "OAUTH_NAVER");
 
         verify(authEventPublisher).publishLoginSucceeded(
-                "acc-1", null, "ecommerce", CTX, null, null, "OAUTH_NAVER");
+                "acc-1", null, "ecommerce", null, CTX, null, null, "OAUTH_NAVER");
+        verifyNoMoreInteractions(authEventPublisher);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-653: siteTenantId is passed through on all three events, tenantId untouched")
+    void siteTenantId_passedThrough() {
+        recorder.recordAttempted("acc-p", "0123456789", "consumer-pool", "ecommerce", CTX);
+        recorder.recordFailed("acc-p", "0123456789", "consumer-pool", "ecommerce", "CREDENTIALS_INVALID", CTX);
+        recorder.recordSucceeded("acc-p", "consumer-pool", "ecommerce", CTX);
+        recorder.recordSucceeded("acc-p", "consumer-pool", "fan-platform", CTX, "OAUTH_GOOGLE");
+
+        verify(authEventPublisher).publishLoginAttempted("acc-p", "0123456789", "consumer-pool", "ecommerce", CTX);
+        verify(authEventPublisher).publishLoginFailed(
+                "acc-p", "0123456789", "consumer-pool", "ecommerce", "CREDENTIALS_INVALID", 0, CTX);
+        verify(authEventPublisher).publishLoginSucceeded(
+                "acc-p", null, "consumer-pool", "ecommerce", CTX, null, null, null);
+        verify(authEventPublisher).publishLoginSucceeded(
+                "acc-p", null, "consumer-pool", "fan-platform", CTX, null, null, "OAUTH_GOOGLE");
         verifyNoMoreInteractions(authEventPublisher);
     }
 
@@ -96,9 +114,9 @@ class LoginEventRecorderTest {
     @DisplayName("a publish failure propagates to the caller (so the transaction rolls back); the caller decides to swallow it")
     void recordSucceeded_publishFailurePropagates() {
         doThrow(new IllegalStateException("outbox down")).when(authEventPublisher)
-                .publishLoginSucceeded(anyString(), isNull(), anyString(), any(), isNull(), isNull());
+                .publishLoginSucceeded(anyString(), isNull(), anyString(), isNull(), any(), isNull(), isNull(), isNull());
 
-        assertThatThrownBy(() -> recorder.recordSucceeded("acc-1", "acme-corp", CTX))
+        assertThatThrownBy(() -> recorder.recordSucceeded("acc-1", "acme-corp", null, CTX))
                 .isInstanceOf(IllegalStateException.class);
     }
 

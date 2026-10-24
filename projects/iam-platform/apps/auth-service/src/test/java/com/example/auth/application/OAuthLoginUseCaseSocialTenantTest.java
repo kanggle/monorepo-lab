@@ -115,7 +115,7 @@ class OAuthLoginUseCaseSocialTenantTest {
         existingIdentity("acc-ec");
         accountServiceAnswers("acc-ec", "ecommerce", "LOCKED");
 
-        assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, CLIENT_TENANT))
+        assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, CLIENT_TENANT, CLIENT_TENANT))
                 .isInstanceOf(AccountLockedException.class);
 
         // The tenant-less lookup replaced the pinned one; the pinned one is not called at all.
@@ -129,7 +129,7 @@ class OAuthLoginUseCaseSocialTenantTest {
         existingIdentity("acc-ec");
         accountServiceAnswers("acc-ec", "ecommerce", "DORMANT");
 
-        assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, CLIENT_TENANT))
+        assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, CLIENT_TENANT, CLIENT_TENANT))
                 .isInstanceOf(AccountStatusException.class);
     }
 
@@ -142,7 +142,7 @@ class OAuthLoginUseCaseSocialTenantTest {
                 .thenReturn(new SocialSignupResult("acc-new", "ACTIVE", true));
         when(accountServicePort.getAccountStatusAndTenant("acc-new")).thenReturn(Optional.empty());
 
-        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, CLIENT_TENANT);
+        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, CLIENT_TENANT, CLIENT_TENANT);
 
         assertThat(result.accountId()).isEqualTo("acc-new");
         assertThat(result.isNewAccount()).isTrue();
@@ -159,7 +159,7 @@ class OAuthLoginUseCaseSocialTenantTest {
                 new AccountServiceUnavailableException("status-with-tenant rejected: 401");
         when(accountServicePort.getAccountStatusAndTenant("acc-ec")).thenThrow(outage);
 
-        assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, CLIENT_TENANT)).isSameAs(outage);
+        assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, CLIENT_TENANT, CLIENT_TENANT)).isSameAs(outage);
 
         verify(socialIdentityRepository, never()).save(any());
         verifyNoInteractions(loginEventRecorder);
@@ -184,7 +184,7 @@ class OAuthLoginUseCaseSocialTenantTest {
                 .thenReturn(new SocialSignupResult("acc-fan", "ACTIVE", true));
         accountServiceAnswers("acc-fan", FAN_TENANT, "ACTIVE");
 
-        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, FAN_TENANT);
+        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, FAN_TENANT, FAN_TENANT);
 
         assertThat(result.accountId()).isEqualTo("acc-fan");
         assertThat(result.isNewAccount()).isTrue();
@@ -194,7 +194,7 @@ class OAuthLoginUseCaseSocialTenantTest {
         assertThat(saved.getValue().getAccountId()).isEqualTo("acc-fan");
         verify(socialIdentityRepository, never())
                 .findByTenantIdAndProviderAndProviderUserId(eq(CLIENT_TENANT), any(), any());
-        verify(loginEventRecorder).recordSucceeded("acc-fan", FAN_TENANT, CTX, "OAUTH_GOOGLE");
+        verify(loginEventRecorder).recordSucceeded("acc-fan", FAN_TENANT, null, CTX, "OAUTH_GOOGLE");
     }
 
     @Test
@@ -203,7 +203,7 @@ class OAuthLoginUseCaseSocialTenantTest {
         existingIdentity("acc-ec");
         accountServiceAnswers("acc-ec", CLIENT_TENANT, "ACTIVE");
 
-        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, CLIENT_TENANT);
+        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, CLIENT_TENANT, CLIENT_TENANT);
 
         assertThat(result.accountId()).isEqualTo("acc-ec");
         assertThat(result.isNewAccount()).isFalse();
@@ -223,7 +223,7 @@ class OAuthLoginUseCaseSocialTenantTest {
                 .thenReturn(new SocialSignupResult("acc-old", "ACTIVE", false));
         accountServiceAnswers("acc-old", FAN_TENANT, "ACTIVE");
 
-        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, FAN_TENANT);
+        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, FAN_TENANT, FAN_TENANT);
 
         assertThat(result.accountId()).isEqualTo("acc-old");
         assertThat(result.isNewAccount()).isFalse();
@@ -241,11 +241,11 @@ class OAuthLoginUseCaseSocialTenantTest {
         existingIdentity("acc-ec");
         accountServiceAnswers("acc-ec", "ecommerce", "ACTIVE");
 
-        useCase.resolveBrowserLogin(command, CLIENT_TENANT);
+        useCase.resolveBrowserLogin(command, CLIENT_TENANT, CLIENT_TENANT);
 
-        verify(loginEventRecorder).recordAttempted("acc-ec", EMAIL_HASH, "ecommerce", CTX);
-        verify(loginEventRecorder).recordSucceeded("acc-ec", "ecommerce", CTX, "OAUTH_GOOGLE");
-        verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), any());
+        verify(loginEventRecorder).recordAttempted("acc-ec", EMAIL_HASH, "ecommerce", null, CTX);
+        verify(loginEventRecorder).recordSucceeded("acc-ec", "ecommerce", null, CTX, "OAUTH_GOOGLE");
+        verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -254,10 +254,10 @@ class OAuthLoginUseCaseSocialTenantTest {
         existingIdentity("acc-old");
         accountServiceAnswers("acc-old", "fan-platform", "ACTIVE");
 
-        useCase.resolveBrowserLogin(command, CLIENT_TENANT);
+        useCase.resolveBrowserLogin(command, CLIENT_TENANT, CLIENT_TENANT);
 
-        verify(loginEventRecorder).recordAttempted("acc-old", EMAIL_HASH, "fan-platform", CTX);
-        verify(loginEventRecorder).recordSucceeded("acc-old", "fan-platform", CTX, "OAUTH_GOOGLE");
+        verify(loginEventRecorder).recordAttempted("acc-old", EMAIL_HASH, "fan-platform", null, CTX);
+        verify(loginEventRecorder).recordSucceeded("acc-old", "fan-platform", null, CTX, "OAUTH_GOOGLE");
     }
 
     @Test
@@ -266,12 +266,12 @@ class OAuthLoginUseCaseSocialTenantTest {
         existingIdentity("acc-ec");
         accountServiceAnswers("acc-ec", "ecommerce", "LOCKED");
 
-        assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, CLIENT_TENANT))
+        assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, CLIENT_TENANT, CLIENT_TENANT))
                 .isInstanceOf(AccountLockedException.class);
 
-        verify(loginEventRecorder).recordAttempted("acc-ec", EMAIL_HASH, "ecommerce", CTX);
-        verify(loginEventRecorder).recordFailed("acc-ec", EMAIL_HASH, "ecommerce", "ACCOUNT_LOCKED", CTX);
-        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any(), any());
+        verify(loginEventRecorder).recordAttempted("acc-ec", EMAIL_HASH, "ecommerce", null, CTX);
+        verify(loginEventRecorder).recordFailed("acc-ec", EMAIL_HASH, "ecommerce", null, "ACCOUNT_LOCKED", CTX);
+        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -280,12 +280,12 @@ class OAuthLoginUseCaseSocialTenantTest {
         existingIdentity("acc-ec");
         accountServiceAnswers("acc-ec", "ecommerce", "SUSPENDED_BY_MARS");
 
-        assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, CLIENT_TENANT))
+        assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, CLIENT_TENANT, CLIENT_TENANT))
                 .isInstanceOf(AccountStatusException.class);
 
-        verify(loginEventRecorder).recordAttempted("acc-ec", EMAIL_HASH, "ecommerce", CTX);
-        verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), any());
-        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any(), any());
+        verify(loginEventRecorder).recordAttempted("acc-ec", EMAIL_HASH, "ecommerce", null, CTX);
+        verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), any(), any());
+        verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -294,11 +294,11 @@ class OAuthLoginUseCaseSocialTenantTest {
         existingIdentity("acc-ec");
         accountServiceAnswers("acc-ec", "ecommerce", "ACTIVE");
         doThrow(new IllegalStateException("outbox down"))
-                .when(loginEventRecorder).recordAttempted(any(), any(), any(), any());
+                .when(loginEventRecorder).recordAttempted(any(), any(), any(), any(), any());
         doThrow(new IllegalStateException("outbox down"))
-                .when(loginEventRecorder).recordSucceeded(any(), any(), any(), any());
+                .when(loginEventRecorder).recordSucceeded(any(), any(), any(), any(), any());
 
-        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, CLIENT_TENANT);
+        BrowserLoginResolution result = useCase.resolveBrowserLogin(command, CLIENT_TENANT, CLIENT_TENANT);
 
         assertThat(result.accountId()).isEqualTo("acc-ec");
     }
@@ -309,9 +309,9 @@ class OAuthLoginUseCaseSocialTenantTest {
         existingIdentity("acc-ec");
         accountServiceAnswers("acc-ec", "ecommerce", "LOCKED");
         doThrow(new IllegalStateException("outbox down"))
-                .when(loginEventRecorder).recordFailed(any(), any(), any(), any(), any());
+                .when(loginEventRecorder).recordFailed(any(), any(), any(), any(), any(), any());
 
-        assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, CLIENT_TENANT))
+        assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, CLIENT_TENANT, CLIENT_TENANT))
                 .isInstanceOf(AccountLockedException.class);
     }
 }

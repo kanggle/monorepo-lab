@@ -50,25 +50,29 @@ public class LoginEventRecorder {
     /**
      * {@code auth.login.attempted}.
      *
-     * @param accountId the resolved account, or {@code null} when the email matched no single
-     *                  credential
-     * @param tenantId  the account's own tenant when resolved; otherwise the login's tenant
-     *                  context (initiating client, or the default)
+     * @param accountId    the resolved account, or {@code null} when the email matched no single
+     *                     credential
+     * @param tenantId     the account's own tenant when resolved; otherwise the login's tenant
+     *                     context (initiating client, or the default)
+     * @param siteTenantId TASK-BE-653 — the site a consumer-pool account logged in to
+     *                     ({@link com.example.auth.domain.tenant.TenantContext#siteTenantOfPoolLogin});
+     *                     {@code null} for every other login (the field is then omitted)
      */
     @Transactional
     public void recordAttempted(String accountId, String emailHash, String tenantId,
-                                SessionContext ctx) {
-        authEventPublisher.publishLoginAttempted(accountId, emailHash, tenantId, ctx);
+                                String siteTenantId, SessionContext ctx) {
+        authEventPublisher.publishLoginAttempted(accountId, emailHash, tenantId, siteTenantId, ctx);
     }
 
     /**
      * {@code auth.login.failed}. {@code accountId} MUST be filled whenever the credential was
      * found (e.g. a wrong password) — VelocityRule ignores failures without one.
+     * {@code siteTenantId}: as {@link #recordAttempted}.
      */
     @Transactional
     public void recordFailed(String accountId, String emailHash, String tenantId,
-                             String failureReason, SessionContext ctx) {
-        authEventPublisher.publishLoginFailed(accountId, emailHash, tenantId,
+                             String siteTenantId, String failureReason, SessionContext ctx) {
+        authEventPublisher.publishLoginFailed(accountId, emailHash, tenantId, siteTenantId,
                 failureReason, NO_FAILURE_COUNTER, ctx);
     }
 
@@ -76,23 +80,27 @@ public class LoginEventRecorder {
      * {@code auth.login.succeeded} — no device session is registered on this path (see class
      * javadoc), so {@code deviceId} and {@code isNewDevice} are {@code null}. {@code sessionJti}
      * is {@code null} too: the refresh token does not exist yet when the password is verified
-     * (SAS mints it later, at {@code /oauth2/token}).
+     * (SAS mints it later, at {@code /oauth2/token}). No {@code loginMethod} — omitted, which the
+     * contract reads as {@code EMAIL_PASSWORD}. {@code siteTenantId}: as {@link #recordAttempted}.
      */
     @Transactional
-    public void recordSucceeded(String accountId, String tenantId, SessionContext ctx) {
-        authEventPublisher.publishLoginSucceeded(accountId, null, tenantId, ctx, null, null);
+    public void recordSucceeded(String accountId, String tenantId, String siteTenantId,
+                                SessionContext ctx) {
+        authEventPublisher.publishLoginSucceeded(accountId, null, tenantId, siteTenantId, ctx,
+                null, null, null);
     }
 
     /**
      * TASK-BE-602 — {@code auth.login.succeeded} for the social-login callback. Same payload as
-     * {@link #recordSucceeded(String, String, SessionContext)} plus {@code loginMethod}
+     * {@link #recordSucceeded(String, String, String, SessionContext)} plus {@code loginMethod}
      * ({@code OAUTH_<PROVIDER>}, auth-events.md). {@code tenantId} is the account's own tenant as
-     * account-service reported it — never the initiating client's.
+     * account-service reported it — never the initiating client's. {@code siteTenantId}: as
+     * {@link #recordAttempted}.
      */
     @Transactional
-    public void recordSucceeded(String accountId, String tenantId, SessionContext ctx,
-                                String loginMethod) {
-        authEventPublisher.publishLoginSucceeded(accountId, null, tenantId, ctx, null, null,
-                loginMethod);
+    public void recordSucceeded(String accountId, String tenantId, String siteTenantId,
+                                SessionContext ctx, String loginMethod) {
+        authEventPublisher.publishLoginSucceeded(accountId, null, tenantId, siteTenantId, ctx,
+                null, null, loginMethod);
     }
 }

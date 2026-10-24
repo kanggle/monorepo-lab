@@ -34,9 +34,17 @@ import java.util.TreeMap;
  *
  * <p>Every row is attributed to its {@code occurred_at}; the window is half-open {@code [from, to)}.
  * The KST date is cut <b>here</b>, in Java, with {@link KstPeriodBounds#dateOf} — never in SQL
- * (performance-metrics-contract.md § 2). The tenant filter is the {@code tenant_id} the row was
- * recorded with; for a pool account that is {@code consumer-pool} (the event's tenant — the
- * account's own), so a consumer site's counts exclude its pool members (contract § key definitions).
+ * (performance-metrics-contract.md § 2).
+ *
+ * <p><b>Tenant filter (TASK-BE-653).</b> The login keys count a {@code login_history} row for tenant X
+ * when {@code tenant_id = X} <b>or</b> {@code site_tenant_id = X}. A consumer-pool account's login is
+ * recorded under {@code tenant_id = consumer-pool} (the account's own tenant) with
+ * {@code site_tenant_id} = the site it logged in to, so it counts in that site's view AND in the
+ * {@code consumer-pool} view — intended (admin-api.md § GET /api/admin/metrics). {@code '*'} reads every
+ * row once, unfiltered. Rows written before TASK-BE-653 have no site (no backfill), so a site's pool
+ * logins count only from that deployment on. {@code accountLocked} is unchanged — the
+ * {@code account_lock_history} {@code tenant_id} only: a pool account's lock is not a site's
+ * (owner decision, TASK-BE-653 AC-1), so a site's view does not count it.
  *
  * <p>Read-only, and reads only {@code (outcome, occurred_at)} / {@code (occurred_at)} — no PII column
  * is selected. Lives in {@code query/} like {@link SecurityQueryService} (architecture.md: the query

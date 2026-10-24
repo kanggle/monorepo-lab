@@ -294,4 +294,72 @@ class AuthEventMapperTest {
         assertThat(absent.deviceId()).isNull();
         assertThat(present.deviceId()).isEqualTo("dev-xyz");
     }
+
+    // ── TASK-BE-653 — optional siteTenantId ───────────────────────────────────────────────────
+
+    private static String loginEvent(String eventType, String siteTenantField) {
+        return """
+                {
+                  "eventId": "evt-653",
+                  "eventType": "%s",
+                  "source": "auth-service",
+                  "occurredAt": "2026-10-24T10:00:00Z",
+                  "schemaVersion": 1,
+                  "partitionKey": "acc-pool",
+                  "payload": {
+                    "accountId": "acc-pool",
+                    "emailHash": "abc123",
+                    "tenantId": "consumer-pool",%s
+                    "ipMasked": "10.0.*.*",
+                    "userAgentFamily": "Chrome 120",
+                    "deviceFingerprint": "fp",
+                    "geoCountry": "KR",
+                    "timestamp": "2026-10-24T10:00:00Z"
+                  }
+                }
+                """.formatted(eventType, siteTenantField);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-653: siteTenantId is mapped on attempted / failed / succeeded; tenantId stays the account's (consumer-pool)")
+    void mapsSiteTenantId_onAllThreeLoginEvents() throws Exception {
+        for (String type : new String[] {"auth.login.attempted", "auth.login.failed", "auth.login.succeeded"}) {
+            JsonNode envelope = objectMapper.readTree(loginEvent(type, " \"siteTenantId\": \"ecommerce\","));
+            LoginHistoryEntry entry = AuthEventMapper.toLoginHistoryEntry(envelope, LoginOutcome.SUCCESS);
+
+            assertThat(entry.getSiteTenantId()).as(type).isEqualTo("ecommerce");
+            assertThat(entry.getTenantId()).as(type).isEqualTo("consumer-pool");
+        }
+    }
+
+    @Test
+    @DisplayName("TASK-BE-653: an event without the field (every pre-653 event) still maps — siteTenantId=null")
+    void absentSiteTenantId_mapsToNull() throws Exception {
+        JsonNode envelope = objectMapper.readTree(loginEvent("auth.login.succeeded", ""));
+        LoginHistoryEntry entry = AuthEventMapper.toLoginHistoryEntry(envelope, LoginOutcome.SUCCESS);
+
+        assertThat(entry.getSiteTenantId()).isNull();
+        assertThat(entry.getTenantId()).isEqualTo("consumer-pool");
+        assertThat(entry.getEventId()).isEqualTo("evt-653");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-653: siteTenantId JSON null or blank → null")
+    void nullOrBlankSiteTenantId_mapsToNull() throws Exception {
+        JsonNode nullField = objectMapper.readTree(loginEvent("auth.login.failed", " \"siteTenantId\": null,"));
+        JsonNode blankField = objectMapper.readTree(loginEvent("auth.login.failed", " \"siteTenantId\": \"  \","));
+
+        assertThat(AuthEventMapper.toLoginHistoryEntry(nullField, LoginOutcome.FAILURE).getSiteTenantId()).isNull();
+        assertThat(AuthEventMapper.toLoginHistoryEntry(blankField, LoginOutcome.FAILURE).getSiteTenantId()).isNull();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-653 control: the detection input is keyed on tenantId, never on siteTenantId")
+    void evaluationContext_keepsAccountTenant() throws Exception {
+        JsonNode envelope = objectMapper.readTree(loginEvent("auth.login.failed", " \"siteTenantId\": \"ecommerce\","));
+
+        EvaluationContext ctx = AuthEventMapper.toEvaluationContext(envelope, "auth.login.failed");
+
+        assertThat(ctx.tenantId()).isEqualTo("consumer-pool");
+    }
 }

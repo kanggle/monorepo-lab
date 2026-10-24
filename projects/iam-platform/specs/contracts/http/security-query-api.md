@@ -122,7 +122,7 @@ IAM 개요 실적 줄(admin-api.md [§ GET /api/admin/metrics](admin-api.md#get-
 
 | 파라미터 | 타입 | 설명 |
 |---|---|---|
-| `tenantId` | string (**required**) | 셀 테넌트(행의 `tenant_id` 와 정확히 일치). `*` → 전 테넌트(`consumer-pool` 포함). admin-service 가 `QueryTenantScopeGate` 로 이미 게이트한 값이다 — 이 서비스는 다시 판정하지 않는다(내부 신뢰 자세, `GET /internal/accounts` 와 같다) |
+| `tenantId` | string (**required**) | 셀 테넌트. 로그인 두 키는 행의 `tenant_id` **또는** `site_tenant_id` 와 정확히 일치(TASK-BE-653), `accountLocked` 는 `tenant_id` 와 정확히 일치. `*` → 전 테넌트(`consumer-pool` 포함). admin-service 가 `QueryTenantScopeGate` 로 이미 게이트한 값이다 — 이 서비스는 다시 판정하지 않는다(내부 신뢰 자세, `GET /internal/accounts` 와 같다) |
 | `from` | ISO-8601 instant (**required**) | 창 시작(포함). `…Z` 또는 오프셋(`+09:00`) |
 | `to` | ISO-8601 instant (**required**) | 창 끝(**제외**) — 창은 반열림 `[from, to)` |
 
@@ -143,8 +143,8 @@ IAM 개요 실적 줄(admin-api.md [§ GET /api/admin/metrics](admin-api.md#get-
 - `days` — 센 행이 하나라도 있는 **KST 날짜**만, 오름차순. 없는 날은 빠진다(0 채우기는 admin-service 가 공용 `PerformanceMetrics.of` 로 한다).
 - `date` 는 `occurred_at` 을 Java 의 `KstPeriodBounds.dateOf` 로 자른 KST 날짜다 — SQL 에서 날을 자르지 않는다(performance-metrics-contract.md § 2).
 - `loginSuccess` = `outcome = SUCCESS` 행 수 · `loginFailure` = `outcome = FAILURE` 행 수 · `accountLocked` = `account_lock_history` 행 수. `ATTEMPTED` · `RATE_LIMITED` · `TOKEN_REUSE` · `REFRESH` 는 읽지도 않는다.
-- 🔴 테넌트는 **행에 기록된 `tenant_id`** 다. 소비자 풀 계정의 로그인 · 잠금은 `consumer-pool` 로 기록되므로 사이트 테넌트를 물으면 잡히지 않는다(admin-api.md 의 알려진 공백 · 후속 티켓).
-- 인덱스: `V0012__metrics_indexes.sql` — `login_history (tenant_id, outcome, occurred_at)` · `account_lock_history (tenant_id, occurred_at)` · `account_lock_history (occurred_at)`. `*` 의 로그인 쿼리는 기존 `idx_login_history_occurred_at`.
+- 🔴 테넌트 (TASK-BE-653): **로그인 두 키**는 `tenant_id = X OR site_tenant_id = X` 인 행을 **한 술어로** 센다(한 행은 한 번만). 소비자 풀 계정의 로그인은 `tenant_id = consumer-pool` · `site_tenant_id` = 로그인한 사이트로 기록되므로 그 사이트 X 와 `consumer-pool` 양쪽에 잡힌다(의도 — admin-api.md § GET /api/admin/metrics «소비자 풀 계정의 로그인»). `X = consumer-pool` 은 지금 그대로 풀 로그인 전부(생산자는 `siteTenantId` 에 `consumer-pool` 을 싣지 않는다). `*` 는 필터 없이 행마다 한 번. **TASK-BE-653 배포 이전 행은 `site_tenant_id` 가 없다(백필 없음)** — 그 날들의 사이트 값에는 풀 로그인이 없다. **`accountLocked` 는 `tenant_id` 만**(풀 계정 잠금은 `consumer-pool` 에만 — 소유자 결정, TASK-BE-653 AC-1).
+- 인덱스: `V0012__metrics_indexes.sql` — `login_history (tenant_id, outcome, occurred_at)` · `account_lock_history (tenant_id, occurred_at)` · `account_lock_history (occurred_at)`. `V0013__login_history_site_tenant.sql`(TASK-BE-653) — `login_history.site_tenant_id` 컬럼 + `idx_login_history_site_outcome_occurred (site_tenant_id, outcome, occurred_at)`(OR 의 사이트 쪽). `*` 의 로그인 쿼리는 기존 `idx_login_history_occurred_at`.
 
 **Errors**:
 

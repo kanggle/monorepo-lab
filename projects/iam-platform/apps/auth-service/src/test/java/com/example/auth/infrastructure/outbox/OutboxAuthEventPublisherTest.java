@@ -198,4 +198,86 @@ class OutboxAuthEventPublisherTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("tenantId required");
     }
+
+    // ── TASK-BE-653 — optional siteTenantId on the three login events ─────────────────────────
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> payloadOf(AuthOutboxJpaEntity row) throws Exception {
+        return (Map<String, Object>) envelopeOf(row).get("payload");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-653: attempted with a site → siteTenantId right after tenantId; tenantId unchanged")
+    void publishLoginAttempted_withSite() throws Exception {
+        SessionContext ctx = new SessionContext("127.0.0.1", "Chrome/120", "fp-123", "KR");
+        publisher().publishLoginAttempted(ACCOUNT_ID, "email-hash", "consumer-pool", "ecommerce", ctx);
+
+        Map<String, Object> payload = payloadOf(captureRow());
+        assertThat(payload.keySet()).containsExactly("accountId", "emailHash", "tenantId", "siteTenantId",
+                "ipMasked", "userAgentFamily", "deviceFingerprint", "geoCountry", "timestamp");
+        assertThat(payload).containsEntry("tenantId", "consumer-pool").containsEntry("siteTenantId", "ecommerce");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-653 control: attempted with siteTenantId=null → the field is omitted (pre-653 payload)")
+    void publishLoginAttempted_noSite_fieldOmitted() throws Exception {
+        SessionContext ctx = new SessionContext("127.0.0.1", "Chrome/120", "fp-123", "KR");
+        publisher().publishLoginAttempted(ACCOUNT_ID, "email-hash", "fan-platform", null, ctx);
+
+        assertThat(payloadOf(captureRow()).keySet()).containsExactly("accountId", "emailHash", "tenantId",
+                "ipMasked", "userAgentFamily", "deviceFingerprint", "geoCountry", "timestamp");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-653: failed with a site → siteTenantId right after tenantId")
+    void publishLoginFailed_withSite() throws Exception {
+        SessionContext ctx = new SessionContext("127.0.0.1", "Chrome/120", "fp-123", "KR");
+        publisher().publishLoginFailed(ACCOUNT_ID, "email-hash", "consumer-pool", "fan-platform",
+                "CREDENTIALS_INVALID", 0, ctx);
+
+        Map<String, Object> payload = payloadOf(captureRow());
+        assertThat(payload.keySet()).containsExactly("accountId", "emailHash", "tenantId", "siteTenantId",
+                "failureReason", "failCount", "ipMasked", "userAgentFamily", "deviceFingerprint", "geoCountry",
+                "timestamp");
+        assertThat(payload).containsEntry("siteTenantId", "fan-platform");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-653: failed (6-arg, pre-653 form) carries no siteTenantId")
+    void publishLoginFailed_legacyForm_noSite() throws Exception {
+        SessionContext ctx = new SessionContext("127.0.0.1", "Chrome/120", "fp-123", "KR");
+        publisher().publishLoginFailed(ACCOUNT_ID, "email-hash", "fan-platform", "CREDENTIALS_INVALID", 0, ctx);
+
+        assertThat(payloadOf(captureRow())).doesNotContainKey("siteTenantId");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-653: succeeded with a site, no loginMethod (form) → siteTenantId after tenantId, loginMethod omitted")
+    void publishLoginSucceeded_withSite_formShape() throws Exception {
+        SessionContext ctx = new SessionContext("127.0.0.1", "Chrome/120", "fp-123", "KR");
+        publisher().publishLoginSucceeded(ACCOUNT_ID, null, "consumer-pool", "ecommerce", ctx, null, null, null);
+
+        Map<String, Object> payload = payloadOf(captureRow());
+        assertThat(payload.keySet()).containsExactly("accountId", "tenantId", "siteTenantId", "ipMasked",
+                "userAgentFamily", "deviceFingerprint", "geoCountry", "sessionJti", "deviceId", "isNewDevice",
+                "timestamp");
+        assertThat(payload).containsEntry("siteTenantId", "ecommerce");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-653 control: succeeded with no site → exactly the pre-653 6-arg (form) and 7-arg (social) shapes")
+    void publishLoginSucceeded_noSite_matchesPre653Shapes() throws Exception {
+        SessionContext ctx = new SessionContext("127.0.0.1", "Chrome/120", "fp-123", "KR");
+        publisher().publishLoginSucceeded(ACCOUNT_ID, null, "fan-platform", null, ctx, null, null, null);
+        publisher().publishLoginSucceeded(ACCOUNT_ID, null, "fan-platform", ctx, null, null);
+        publisher().publishLoginSucceeded(ACCOUNT_ID, null, "ecommerce", null, ctx, null, null, "OAUTH_GOOGLE");
+        publisher().publishLoginSucceeded(ACCOUNT_ID, null, "ecommerce", ctx, null, null, "OAUTH_GOOGLE");
+
+        ArgumentCaptor<AuthOutboxJpaEntity> rows = ArgumentCaptor.forClass(AuthOutboxJpaEntity.class);
+        verify(outboxRepository, org.mockito.Mockito.times(4)).save(rows.capture());
+        List<AuthOutboxJpaEntity> all = rows.getAllValues();
+        assertThat(payloadOf(all.get(0)).keySet()).containsExactlyElementsOf(payloadOf(all.get(1)).keySet());
+        assertThat(payloadOf(all.get(2)).keySet()).containsExactlyElementsOf(payloadOf(all.get(3)).keySet());
+        assertThat(payloadOf(all.get(2))).containsEntry("loginMethod", "OAUTH_GOOGLE");
+    }
 }

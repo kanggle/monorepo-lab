@@ -22,6 +22,12 @@ public class LoginHistoryJpaEntity {
     @Column(name = "tenant_id", nullable = false, length = 32)
     private String tenantId;
 
+    // TASK-BE-653 (V0013): the site a consumer-pool account logged in to; NULL otherwise and on
+    // every row written before V0013 (no backfill). Metrics count a site's logins by
+    // tenant_id = X OR site_tenant_id = X (idx_login_history_site_outcome_occurred).
+    @Column(name = "site_tenant_id", length = 32)
+    private String siteTenantId;
+
     @Column(name = "event_id", nullable = false, unique = true)
     private String eventId;
 
@@ -53,8 +59,19 @@ public class LoginHistoryJpaEntity {
                                               String ipMasked, String userAgentFamily,
                                               String deviceFingerprint, String geoCountry,
                                               Instant occurredAt) {
+        return from(tenantId, null, eventId, accountId, outcome, ipMasked, userAgentFamily,
+                deviceFingerprint, geoCountry, occurredAt);
+    }
+
+    /** TASK-BE-653 — with the optional {@code site_tenant_id}. */
+    public static LoginHistoryJpaEntity from(String tenantId, String siteTenantId, String eventId,
+                                              String accountId, String outcome,
+                                              String ipMasked, String userAgentFamily,
+                                              String deviceFingerprint, String geoCountry,
+                                              Instant occurredAt) {
         LoginHistoryJpaEntity entity = new LoginHistoryJpaEntity();
         entity.tenantId = tenantId;
+        entity.siteTenantId = siteTenantId;
         entity.eventId = eventId;
         entity.accountId = accountId;
         entity.outcome = outcome;

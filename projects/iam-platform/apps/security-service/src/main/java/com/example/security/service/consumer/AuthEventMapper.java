@@ -44,8 +44,16 @@ public final class AuthEventMapper {
                 nullableText(payload, "tenantId"),
                 Tenants.DEFAULT_TENANT_ID);
 
+        // TASK-BE-653: optional, additive. Absent (every event before TASK-BE-653, every non-pool login,
+        // a pool login with no site) → null. Stored, never used to re-key: tenantId above stays the
+        // account's own tenant, which is what the detection rules and PII masking key on.
+        String siteTenantId = nullableText(payload, "siteTenantId");
+        if (siteTenantId != null && siteTenantId.isBlank()) {
+            siteTenantId = null;
+        }
+
         return new LoginHistoryEntry(
-                tenantId, eventId, accountId, outcome,
+                tenantId, siteTenantId, eventId, accountId, outcome,
                 ipMasked, userAgentFamily, deviceFingerprint, geoCountry,
                 occurredAt
         );

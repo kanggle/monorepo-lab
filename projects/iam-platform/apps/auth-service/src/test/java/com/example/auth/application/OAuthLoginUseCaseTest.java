@@ -145,7 +145,7 @@ class OAuthLoginUseCaseTest {
                 .thenReturn(Optional.of(new AccountStatusWithTenantLookupResult("acc-123", TENANT_ID, "ACTIVE")));
 
         // when
-        BrowserLoginResolution result = oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID);
+        BrowserLoginResolution result = oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID, TENANT_ID);
 
         // then — all HTTP (provider + account-service) must happen BEFORE the transactional step
         InOrder order = inOrder(oAuthClient, accountServicePort, socialIdentityPersistStep);
@@ -183,7 +183,7 @@ class OAuthLoginUseCaseTest {
         when(accountServicePort.getAccountStatusAndTenant("acc-existing"))
                 .thenReturn(Optional.of(new AccountStatusWithTenantLookupResult("acc-existing", TENANT_ID, "ACTIVE")));
 
-        BrowserLoginResolution result = oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID);
+        BrowserLoginResolution result = oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID, TENANT_ID);
 
         // socialSignup must NOT be called on the existing-identity path
         verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
@@ -212,7 +212,7 @@ class OAuthLoginUseCaseTest {
                 .thenReturn(new SocialSignupResult("acc-new", "ACTIVE", true));
         when(accountServicePort.getAccountStatusAndTenant("acc-new")).thenReturn(Optional.empty());
 
-        oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID);
+        oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID, TENANT_ID);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Optional<String>> statusCaptor = ArgumentCaptor.forClass(Optional.class);
@@ -239,7 +239,7 @@ class OAuthLoginUseCaseTest {
                 new AccountServiceUnavailableException("status lookup rejected: 401");
         when(accountServicePort.getAccountStatusAndTenant("acc-existing")).thenThrow(outage);
 
-        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID))
+        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID, TENANT_ID))
                 .isSameAs(outage);
 
         verify(socialIdentityPersistStep, never())
@@ -261,7 +261,7 @@ class OAuthLoginUseCaseTest {
         // BE-602 this was how a new ecommerce account looked through the fan-platform-pinned lookup.
         when(accountServicePort.getAccountStatusAndTenant("acc-new")).thenReturn(Optional.empty());
 
-        BrowserLoginResolution result = oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID);
+        BrowserLoginResolution result = oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID, TENANT_ID);
 
         assertThat(result.accountId()).isEqualTo("acc-new");
         assertThat(result.isNewAccount()).isTrue();
@@ -274,7 +274,7 @@ class OAuthLoginUseCaseTest {
     void callback_invalidStateSkipsHttpAndTxn() {
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID))
+        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID, TENANT_ID))
                 .isInstanceOf(InvalidOAuthStateException.class);
 
         verifyNothingDownstreamRan();
@@ -290,7 +290,7 @@ class OAuthLoginUseCaseTest {
         // instead of discarding it.
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.KAKAO));
 
-        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID))
+        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID, TENANT_ID))
                 .isInstanceOf(InvalidOAuthStateException.class);
 
         // Rejected at the state gate — nothing downstream runs.
@@ -306,7 +306,7 @@ class OAuthLoginUseCaseTest {
                 new OAuthProviderException("google token exchange failed");
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenThrow(providerFailure);
 
-        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID))
+        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID, TENANT_ID))
                 .isSameAs(providerFailure);
 
         verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
@@ -324,7 +324,7 @@ class OAuthLoginUseCaseTest {
                 "provider-user-1", "", "User", OAuthProvider.GOOGLE);
         when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(noEmail);
 
-        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID))
+        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID, TENANT_ID))
                 .isInstanceOf(OAuthEmailRequiredException.class);
 
         verify(accountServicePort, never()).socialSignup(anyString(), anyString(), anyString(), anyString(), any());
@@ -350,7 +350,7 @@ class OAuthLoginUseCaseTest {
         doThrow(dbFailure).when(socialIdentityPersistStep)
                 .persistIdentityAndCheckStatus(any(), any(), anyString(), anyString(), any());
 
-        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID))
+        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID, TENANT_ID))
                 .isSameAs(dbFailure);
 
         // HTTP fetches happened exactly once; no retry after txn failure
@@ -421,7 +421,7 @@ class OAuthLoginUseCaseTest {
         OAuthCallbackCommand evil = new OAuthCallbackCommand(
                 "GOOGLE", CODE, STATE, "https://attacker.example.com/cb", CTX);
 
-        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(evil, TENANT_ID))
+        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(evil, TENANT_ID, TENANT_ID))
                 .isInstanceOf(InvalidOAuthRedirectUriException.class);
 
         verifyNothingDownstreamRan();
@@ -461,7 +461,7 @@ class OAuthLoginUseCaseTest {
 
         OAuthCallbackCommand blankRedirect = new OAuthCallbackCommand(
                 "GOOGLE", CODE, STATE, "", CTX);
-        oAuthLoginUseCase.resolveBrowserLogin(blankRedirect, TENANT_ID);
+        oAuthLoginUseCase.resolveBrowserLogin(blankRedirect, TENANT_ID, TENANT_ID);
 
         verify(oAuthClient).exchangeCodeForUserInfo(CODE, "http://default/callback");
     }

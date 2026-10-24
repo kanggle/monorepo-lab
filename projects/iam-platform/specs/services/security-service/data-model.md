@@ -22,6 +22,7 @@ security-service 는 **이상 로그인 탐지·자동 잠금**을 책임지는 
 |---|---|---|---|---|
 | `id` | BIGINT | PK, AUTO_INCREMENT | internal | — |
 | `tenant_id` | VARCHAR(32) | NOT NULL, INDEX | internal | (R8) cross-tenant isolation 키 |
+| `site_tenant_id` | VARCHAR(32) | NULL, INDEX | internal | **TASK-BE-653** (`V0013`) — 소비자 풀 계정이 로그인한 사이트(이벤트의 선택 필드 `siteTenantId`). 그 밖의 모든 행과 V0013 이전 행은 `NULL`(백필 없음). 실적 집계의 로그인 두 키만 읽는다(`tenant_id = X OR site_tenant_id = X`) — 탐지 규칙 · PII 마스킹은 `tenant_id` 그대로 |
 | `account_id` | VARCHAR(36) | NOT NULL, INDEX | internal | account-service.accounts.id 참조 (FK 없음 — 서비스 경계) |
 | `event_type` | VARCHAR(20) | NOT NULL | internal | `LOGIN_ATTEMPTED` / `LOGIN_FAILED` / `LOGIN_SUCCEEDED` |
 | `ip_masked` | VARCHAR(45) | NOT NULL | **confidential** | (R1) PII. GDPR 삭제 시 `'0.0.0.0'` 으로 마스킹 |
@@ -31,7 +32,7 @@ security-service 는 **이상 로그인 탐지·자동 잠금**을 책임지는 
 | `occurred_at` | DATETIME(6) | NOT NULL | internal | UTC |
 
 **불변성**: append-only. UPDATE/DELETE 는 GDPR 마스킹 (TASK-BE-258) 만 허용 — 그 외 트리거로 차단 (V0002).
-**인덱스**: `idx_login_history_tenant_account_time` `(tenant_id, account_id, occurred_at DESC)`. **TASK-MONO-811** (`V0012`): `idx_login_history_tenant_outcome_occurred` `(tenant_id, outcome, occurred_at)` — 실적 집계(security-query-api.md § GET /internal/security/metrics/daily).
+**인덱스**: `idx_login_history_tenant_account_time` `(tenant_id, account_id, occurred_at DESC)`. **TASK-MONO-811** (`V0012`): `idx_login_history_tenant_outcome_occurred` `(tenant_id, outcome, occurred_at)` — 실적 집계(security-query-api.md § GET /internal/security/metrics/daily). **TASK-BE-653** (`V0013`): `idx_login_history_site_outcome_occurred` `(site_tenant_id, outcome, occurred_at)` — 같은 집계의 사이트 쪽(OR).
 **보존**: 기본 1년 (운영 정책에 따라 조정).
 
 ### `suspicious_events`
@@ -131,6 +132,7 @@ GDPR 삭제 마스킹 처리의 멱등성 + audit 로그.
 | V0007 | `account_lock_history` 신규 |
 | V0008 | 모든 테이블 `tenant_id` 컬럼 추가 (multi-tenant 도입) |
 | V0009 | `pii_masking_log` 신규 (TASK-BE-258) |
+| V0013 | `login_history.site_tenant_id` (NULL) + `idx_login_history_site_outcome_occurred` (TASK-BE-653) |
 
 ---
 
