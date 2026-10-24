@@ -71,7 +71,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-657-dead-letter-resolver-returns-source-partition.md` — **wms 데드레터 리졸버 5개가 아직 원본 파티션을 돌려준다 — 원본 파티션 1·2 에서 온 레코드마다 «non-existent partition …DLT-N» 경고** (READY, 2026-10-25 UTC): `TASK-MONO-813` AC-3 의 34차 창 관측에서 나왔다(레코드는 p0 에 전달됨 — `createProducerRecord` 재정의가 파티션을 지운다). inventory · outbound · inbound · notification · admin 다섯 곳 모두 같은 모양이다. 리졸버를 `-1` 로 바꾸고, 쓸모가 없어진 재정의를 지운다. 가드 R6 의 면제는 ADR-MONO-085 D3 이 허락한 갈래라 범위 밖이다(회수 = 소유자 결정). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 <details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 done/)</summary>
 
