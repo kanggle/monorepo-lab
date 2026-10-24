@@ -74,12 +74,12 @@ class AuditQueryUseCaseTest {
 
         SecurityServiceClient.LoginHistoryEntry loginEntry = new SecurityServiceClient.LoginHistoryEntry(
                 "evt-login", "acc-1", "SUCCESS", "1.x.x.x", "KR", Instant.now().minusSeconds(5));
-        when(securityServiceClient.queryLoginHistory(eq("acc-1"), any(), any()))
+        when(securityServiceClient.queryLoginHistory(eq("fan-platform"), eq("acc-1"), any(), any()))
                 .thenReturn(List.of(loginEntry));
 
         SecurityServiceClient.SuspiciousEventEntry suspEntry = new SecurityServiceClient.SuspiciousEventEntry(
-                "evt-susp", "acc-1", "VELOCITY", "1.x.x.x", Instant.now());
-        when(securityServiceClient.querySuspiciousEvents(eq("acc-1"), any(), any()))
+                "evt-susp", "acc-1", "VELOCITY", 80, "ALERT", Instant.now());
+        when(securityServiceClient.querySuspiciousEvents(eq("fan-platform"), eq("acc-1"), any(), any()))
                 .thenReturn(List.of(suspEntry));
 
         AuditQueryResult result = useCase.query(cmd("op-1", "acc-1", null, 0, 20, null));
@@ -97,8 +97,8 @@ class AuditQueryUseCaseTest {
     void query_sourceAdmin_securityClientNotCalled() {
         useCase.query(cmd("op-1", "acc-1", "admin", 0, 20, null));
 
-        verify(securityServiceClient, never()).queryLoginHistory(any(), any(), any());
-        verify(securityServiceClient, never()).querySuspiciousEvents(any(), any(), any());
+        verify(securityServiceClient, never()).queryLoginHistory(any(), any(), any(), any());
+        verify(securityServiceClient, never()).querySuspiciousEvents(any(), any(), any(), any());
     }
 
     @Test
@@ -106,8 +106,8 @@ class AuditQueryUseCaseTest {
     void query_nullAccountId_skipsLoginAndSuspicious() {
         useCase.query(cmd("op-1", null, null, 0, 20, null));
 
-        verify(securityServiceClient, never()).queryLoginHistory(any(), any(), any());
-        verify(securityServiceClient, never()).querySuspiciousEvents(any(), any(), any());
+        verify(securityServiceClient, never()).queryLoginHistory(any(), any(), any(), any());
+        verify(securityServiceClient, never()).querySuspiciousEvents(any(), any(), any(), any());
     }
 
     // ── size / page 클램핑 ─────────────────────────────────────────────────────
@@ -172,8 +172,8 @@ class AuditQueryUseCaseTest {
     @Test
     @DisplayName("BE-654: 보안 소스를 읽으면 detail 에 그 소스 · permission_used = audit.read+security.event.read")
     void metaAudit_securitySources_recordedWithCompositePermission() {
-        when(securityServiceClient.queryLoginHistory(eq("acc-1"), any(), any())).thenReturn(List.of());
-        when(securityServiceClient.querySuspiciousEvents(eq("acc-1"), any(), any())).thenReturn(List.of());
+        when(securityServiceClient.queryLoginHistory(eq("fan-platform"), eq("acc-1"), any(), any())).thenReturn(List.of());
+        when(securityServiceClient.querySuspiciousEvents(eq("fan-platform"), eq("acc-1"), any(), any())).thenReturn(List.of());
 
         useCase.query(cmd("op-1", "acc-1", null, 0, 20, null));
 
@@ -185,7 +185,7 @@ class AuditQueryUseCaseTest {
     @Test
     @DisplayName("🔴 BE-654: security-service 조회가 실패해도 FAILURE 행이 남고 원래 예외가 나간다")
     void metaAudit_downstreamFailure_leavesFailureRow() {
-        when(securityServiceClient.queryLoginHistory(eq("acc-1"), any(), any()))
+        when(securityServiceClient.queryLoginHistory(eq("fan-platform"), eq("acc-1"), any(), any()))
                 .thenThrow(new IllegalStateException("security-service timeout"));
 
         assertThatThrownBy(() -> useCase.query(cmd("op-1", "acc-1", "login_history", 0, 20, null)))
@@ -205,7 +205,7 @@ class AuditQueryUseCaseTest {
     @Test
     @DisplayName("BE-654: 실패 행 쓰기마저 실패하면 원래 예외가 나가고 감사 실패는 suppressed 로 붙는다")
     void metaAudit_failureRowWriteFails_originalExceptionWins() {
-        when(securityServiceClient.queryLoginHistory(eq("acc-1"), any(), any()))
+        when(securityServiceClient.queryLoginHistory(eq("fan-platform"), eq("acc-1"), any(), any()))
                 .thenThrow(new IllegalStateException("security-service timeout"));
         org.mockito.Mockito.doThrow(new IllegalStateException("audit store down"))
                 .when(auditor).recordWithPermission(any(), any());
@@ -254,6 +254,63 @@ class AuditQueryUseCaseTest {
 
         verify(adminActionRepo).searchCrossTenant(eq("fan-platform"), any(), any(), any(), any(), any(Pageable.class));
         verify(adminActionRepo, never()).findByTenantId(anyString(), any(), any(), any(), any(), any(Pageable.class));
+    }
+
+    // ── TASK-BE-656: 보안 소스도 게이트된 테넌트로 읽는다 ───────────────────────────────
+
+    @Test
+    @DisplayName("🔴 BE-656 AC-2: 게이트된 테넌트(fan-platform 아님)가 두 보안 조회에 그대로 넘어간다")
+    void securitySources_receiveGatedTenant() {
+        when(queryTenantScopeGate.resolve(any(), any(), eq(ActionCode.AUDIT_QUERY), eq("audit.read")))
+                .thenReturn(new QueryTenantScopeGate.Resolved("ecommerce", false));
+        when(securityServiceClient.queryLoginHistory(any(), any(), any(), any())).thenReturn(List.of());
+        when(securityServiceClient.querySuspiciousEvents(any(), any(), any(), any())).thenReturn(List.of());
+
+        useCase.query(cmd("op-1", "acc-1", null, 0, 20, "ecommerce"));
+
+        verify(securityServiceClient).queryLoginHistory(eq("ecommerce"), eq("acc-1"), any(), any());
+        verify(securityServiceClient).querySuspiciousEvents(eq("ecommerce"), eq("acc-1"), any(), any());
+    }
+
+    @Test
+    @DisplayName("BE-656: platform scope — '*' 는 '*' 로, 특정 테넌트는 그 테넌트로(admin 소스의 finder 와 같은 값)")
+    void securitySources_platformScope() {
+        when(securityServiceClient.queryLoginHistory(any(), any(), any(), any())).thenReturn(List.of());
+        when(securityServiceClient.querySuspiciousEvents(any(), any(), any(), any())).thenReturn(List.of());
+        when(adminActionRepo.searchCrossTenant(anyString(), any(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        when(queryTenantScopeGate.resolve(any(), any(), eq(ActionCode.AUDIT_QUERY), eq("audit.read")))
+                .thenReturn(new QueryTenantScopeGate.Resolved("*", true));
+        useCase.query(cmd("super-op", "acc-1", null, 0, 20, null));
+        verify(securityServiceClient).queryLoginHistory(eq("*"), eq("acc-1"), any(), any());
+        verify(securityServiceClient).querySuspiciousEvents(eq("*"), eq("acc-1"), any(), any());
+
+        when(queryTenantScopeGate.resolve(any(), any(), eq(ActionCode.AUDIT_QUERY), eq("audit.read")))
+                .thenReturn(new QueryTenantScopeGate.Resolved("consumer-pool", true));
+        useCase.query(cmd("super-op", "acc-1", null, 0, 20, "consumer-pool"));
+        verify(securityServiceClient).queryLoginHistory(eq("consumer-pool"), eq("acc-1"), any(), any());
+        verify(securityServiceClient).querySuspiciousEvents(eq("consumer-pool"), eq("acc-1"), any(), any());
+    }
+
+    @Test
+    @DisplayName("🔴 BE-656: 의심 이벤트 행은 계약의 id · ruleCode · detectedAt 로 채워진다(IP 없음)")
+    void suspiciousEntry_mappedFromContractFields() {
+        Instant detectedAt = Instant.parse("2026-10-20T01:02:03Z");
+        when(securityServiceClient.querySuspiciousEvents(eq("fan-platform"), eq("acc-1"), any(), any()))
+                .thenReturn(List.of(new SecurityServiceClient.SuspiciousEventEntry(
+                        "susp-1", "acc-1", "GEO_ANOMALY", 85, "AUTO_LOCK", detectedAt)));
+
+        AuditQueryResult result = useCase.query(cmd("op-1", "acc-1", "suspicious", 0, 20, null));
+
+        assertThat(result.content()).singleElement().satisfies(e -> {
+            assertThat(e.source()).isEqualTo("suspicious");
+            assertThat(e.eventId()).isEqualTo("susp-1");
+            assertThat(e.actionCode()).isEqualTo("GEO_ANOMALY");
+            assertThat(e.accountId()).isEqualTo("acc-1");
+            assertThat(e.ipMasked()).isNull();
+            assertThat(e.occurredAt()).isEqualTo(detectedAt);
+        });
     }
 
     // ── gate 거부 전파 ─────────────────────────────────────────────────────────

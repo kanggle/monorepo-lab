@@ -17,6 +17,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -61,7 +62,7 @@ class SecurityServiceClientUnitTest {
                                 "\"geoCountry\":\"KR\",\"occurredAt\":\"2026-01-01T12:00:00Z\"}]}")));
 
         List<SecurityServiceClient.LoginHistoryEntry> entries =
-                client.queryLoginHistory("acc-1", FROM, TO);
+                client.queryLoginHistory("ecommerce", "acc-1", FROM, TO);
 
         assertThat(entries).hasSize(1);
         assertThat(entries.get(0).eventId()).isEqualTo("evt-1");
@@ -69,21 +70,69 @@ class SecurityServiceClientUnitTest {
     }
 
     @Test
-    @DisplayName("querySuspiciousEvents — 200 응답 → SuspiciousEventEntry 리스트 반환")
-    void querySuspiciousEvents_200_returnsList() {
+    @DisplayName("🔴 TASK-BE-656: querySuspiciousEvents — the contract's body (id · ruleCode · detectedAt, security-query-api.md) is read, not nulls")
+    void querySuspiciousEvents_200_contractShape_returnsList() {
+        // the body security-service actually sends (SuspiciousEventView) — before TASK-BE-656 this stub used
+        // eventId/signalType/occurredAt, a shape security-service never sends, so the test stayed green while
+        // every real row reached the audit view with a null id, type and time
         wireMock.stubFor(get(urlPathMatching("/internal/security/suspicious-events.*"))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody("{\"content\":[{\"eventId\":\"evt-2\",\"accountId\":\"acc-1\"," +
-                                "\"signalType\":\"CREDENTIAL_STUFFING\",\"ipMasked\":\"1.2.3.*\"," +
-                                "\"occurredAt\":\"2026-01-01T12:00:00Z\"}]}")));
+                        .withBody("{\"content\":[{\"id\":\"evt-2\",\"accountId\":\"acc-1\"," +
+                                "\"ruleCode\":\"GEO_ANOMALY\",\"riskScore\":85,\"actionTaken\":\"AUTO_LOCK\"," +
+                                "\"evidence\":{\"previousCountry\":\"KR\",\"currentCountry\":\"US\"}," +
+                                "\"detectedAt\":\"2026-01-01T12:00:00Z\"}]," +
+                                "\"page\":0,\"size\":20,\"totalElements\":1,\"totalPages\":1}")));
 
         List<SecurityServiceClient.SuspiciousEventEntry> entries =
-                client.querySuspiciousEvents("acc-1", FROM, TO);
+                client.querySuspiciousEvents("ecommerce", "acc-1", FROM, TO);
 
         assertThat(entries).hasSize(1);
-        assertThat(entries.get(0).signalType()).isEqualTo("CREDENTIAL_STUFFING");
+        SecurityServiceClient.SuspiciousEventEntry e = entries.get(0);
+        assertThat(e.id()).isEqualTo("evt-2");
+        assertThat(e.ruleCode()).isEqualTo("GEO_ANOMALY");
+        assertThat(e.riskScore()).isEqualTo(85);
+        assertThat(e.actionTaken()).isEqualTo("AUTO_LOCK");
+        assertThat(e.detectedAt()).isEqualTo(Instant.parse("2026-01-01T12:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("🔴 TASK-BE-656: both reads send the gated tenant as the tenantId query parameter")
+    void queries_sendTenantId() {
+        wireMock.stubFor(get(urlPathMatching("/internal/security/.*"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"content\":[]}")));
+
+        client.queryLoginHistory("consumer-pool", "acc-1", FROM, TO);
+        client.querySuspiciousEvents("ecommerce", "acc-2", FROM, TO);
+
+        wireMock.verify(getRequestedFor(urlPathEqualTo("/internal/security/login-history"))
+                .withQueryParam("tenantId", equalTo("consumer-pool"))
+                .withQueryParam("accountId", equalTo("acc-1")));
+        wireMock.verify(getRequestedFor(urlPathEqualTo("/internal/security/suspicious-events"))
+                .withQueryParam("tenantId", equalTo("ecommerce"))
+                .withQueryParam("accountId", equalTo("acc-2")));
+    }
+
+    @Test
+    @DisplayName("TASK-BE-656: the platform-scope '*' arrives as '*'")
+    void queries_sendWildcardTenant() {
+        wireMock.stubFor(get(urlPathMatching("/internal/security/.*"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"content\":[]}")));
+
+        client.queryLoginHistory("*", "acc-1", FROM, TO);
+        client.querySuspiciousEvents("*", "acc-1", FROM, TO);
+
+        wireMock.verify(getRequestedFor(urlPathEqualTo("/internal/security/login-history"))
+                .withQueryParam("tenantId", equalTo("*")));
+        wireMock.verify(getRequestedFor(urlPathEqualTo("/internal/security/suspicious-events"))
+                .withQueryParam("tenantId", equalTo("*")));
     }
 
     @Test
@@ -95,7 +144,7 @@ class SecurityServiceClientUnitTest {
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"content\":[]}")));
 
-        client.queryLoginHistory("acc-1", FROM, TO);
+        client.queryLoginHistory("ecommerce", "acc-1", FROM, TO);
 
         wireMock.verify(getRequestedFor(urlPathMatching("/internal/security/login-history.*"))
                 .withHeader("Authorization", equalTo("Bearer test-jwt"))
@@ -108,7 +157,7 @@ class SecurityServiceClientUnitTest {
         wireMock.stubFor(get(urlPathMatching("/internal/security/login-history.*"))
                 .willReturn(aResponse().withStatus(400)));
 
-        assertThatThrownBy(() -> client.queryLoginHistory("acc-1", FROM, TO))
+        assertThatThrownBy(() -> client.queryLoginHistory("ecommerce", "acc-1", FROM, TO))
                 .isInstanceOf(NonRetryableDownstreamException.class);
     }
 
@@ -118,7 +167,7 @@ class SecurityServiceClientUnitTest {
         wireMock.stubFor(get(urlPathMatching("/internal/security/login-history.*"))
                 .willReturn(aResponse().withStatus(503)));
 
-        assertThatThrownBy(() -> client.queryLoginHistory("acc-1", FROM, TO))
+        assertThatThrownBy(() -> client.queryLoginHistory("ecommerce", "acc-1", FROM, TO))
                 .isInstanceOf(DownstreamFailureException.class)
                 .isNotInstanceOf(NonRetryableDownstreamException.class);
     }
@@ -129,7 +178,7 @@ class SecurityServiceClientUnitTest {
         wireMock.stubFor(get(urlPathMatching("/internal/security/login-history.*"))
                 .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
 
-        assertThatThrownBy(() -> client.queryLoginHistory("acc-1", FROM, TO))
+        assertThatThrownBy(() -> client.queryLoginHistory("ecommerce", "acc-1", FROM, TO))
                 .isInstanceOf(DownstreamFailureException.class);
     }
 }

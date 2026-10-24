@@ -23,8 +23,10 @@ public class SuspiciousEventQueryController {
 
     private final SecurityQueryService queryService;
 
+    /** TASK-BE-656 — {@code tenantId} required, as on {@code /login-history}. */
     @GetMapping("/suspicious-events")
     public ResponseEntity<?> getSuspiciousEvents(
+            @RequestParam String tenantId,
             @RequestParam String accountId,
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
@@ -44,7 +46,7 @@ public class SuspiciousEventQueryController {
 
         Pageable pageable = PageRequest.of(page, size);
         Page<SuspiciousEventView> result = queryService.findSuspiciousEvents(
-                accountId, fromInstant, toInstant, ruleCode, pageable);
+                tenantId, accountId, fromInstant, toInstant, ruleCode, pageable);
 
         return ResponseEntity.ok(PageResponse.of(result));
     }

@@ -20,8 +20,8 @@
 
 ### Secondary (read-only HTTP — 내부 전용)
 - **admin-service** — 감사 조회:
-  - `GET /internal/security/login-history?accountId=&from=&to=`
-  - `GET /internal/security/suspicious-events?accountId=&from=&to=`
+  - `GET /internal/security/login-history?tenantId=&accountId=&from=&to=`
+  - `GET /internal/security/suspicious-events?tenantId=&accountId=&from=&to=`
 
 이 HTTP 표면은 의도적으로 **매우 좁게** 유지된다. 상태 변경 엔드포인트 추가 금지 ([architecture.md](architecture.md) Forbidden 섹션). 확대되면 `security-query-service`로 분할하는 것이 올바른 방향.
 

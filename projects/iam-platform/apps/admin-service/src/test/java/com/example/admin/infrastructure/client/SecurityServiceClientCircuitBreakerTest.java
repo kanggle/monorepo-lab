@@ -90,7 +90,7 @@ class SecurityServiceClientCircuitBreakerTest {
 
     private java.util.List<SecurityServiceClient.LoginHistoryEntry> callLoginHistory() {
         Supplier<java.util.List<SecurityServiceClient.LoginHistoryEntry>> base =
-                () -> client.queryLoginHistory("acc-x", Instant.now().minusSeconds(60), Instant.now());
+                () -> client.queryLoginHistory("fan-platform", "acc-x", Instant.now().minusSeconds(60), Instant.now());
         Supplier<java.util.List<SecurityServiceClient.LoginHistoryEntry>> cbWrapped =
                 CircuitBreaker.decorateSupplier(circuitBreaker, base);
         return Retry.decorateSupplier(retry, cbWrapped).get();

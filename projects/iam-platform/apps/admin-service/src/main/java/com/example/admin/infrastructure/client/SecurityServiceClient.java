@@ -50,19 +50,25 @@ public class SecurityServiceClient {
         this.tokenProvider = tokenProvider;
     }
 
+    /**
+     * TASK-BE-656 — {@code tenantId} is the tenant {@code QueryTenantScopeGate} resolved for the audit query
+     * ({@code "*"} = every tenant), sent as the required {@code tenantId} parameter (security-query-api.md
+     * § login-history «테넌트»). Before the ticket nothing was sent and security-service read {@code fan-platform}.
+     */
     @Retry(name = "securityService")
     @CircuitBreaker(name = "securityService")
-    public List<LoginHistoryEntry> queryLoginHistory(String accountId, Instant from, Instant to) {
+    public List<LoginHistoryEntry> queryLoginHistory(String tenantId, String accountId, Instant from, Instant to) {
         LoginHistoryResponse resp = callGet(
-                "/internal/security/login-history", accountId, from, to, LoginHistoryResponse.class);
+                "/internal/security/login-history", tenantId, accountId, from, to, LoginHistoryResponse.class);
         return resp == null || resp.content() == null ? Collections.emptyList() : resp.content();
     }
 
+    /** TASK-BE-656 — {@code tenantId} as on {@link #queryLoginHistory}. */
     @Retry(name = "securityService")
     @CircuitBreaker(name = "securityService")
-    public List<SuspiciousEventEntry> querySuspiciousEvents(String accountId, Instant from, Instant to) {
+    public List<SuspiciousEventEntry> querySuspiciousEvents(String tenantId, String accountId, Instant from, Instant to) {
         SuspiciousResponse resp = callGet(
-                "/internal/security/suspicious-events", accountId, from, to, SuspiciousResponse.class);
+                "/internal/security/suspicious-events", tenantId, accountId, from, to, SuspiciousResponse.class);
         return resp == null || resp.content() == null ? Collections.emptyList() : resp.content();
     }
 
@@ -112,14 +118,16 @@ public class SecurityServiceClient {
         return resp;
     }
 
-    private <T> T callGet(String path, String accountId, Instant from, Instant to, Class<T> responseType) {
+    private <T> T callGet(String path, String tenantId, String accountId, Instant from, Instant to,
+                          Class<T> responseType) {
         try {
             return restClient.get()
                     .uri(uriBuilder -> uriBuilder.path(path)
+                            .queryParam("tenantId", "{tenantId}")
                             .queryParamIfPresent("accountId", java.util.Optional.ofNullable(accountId))
                             .queryParamIfPresent("from", java.util.Optional.ofNullable(from))
                             .queryParamIfPresent("to", java.util.Optional.ofNullable(to))
-                            .build())
+                            .build(java.util.Map.of("tenantId", tenantId)))
                     .headers(this::applyAuth)
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (req, resp) -> {
@@ -159,12 +167,20 @@ public class SecurityServiceClient {
             Instant occurredAt
     ) {}
 
+    /**
+     * TASK-BE-656 — the contract's shape (security-query-api.md § suspicious-events: {@code id} · {@code ruleCode}
+     * · {@code detectedAt}). Before the ticket this record read {@code eventId} · {@code signalType} ·
+     * {@code ipMasked} · {@code occurredAt}, none of which security-service sends, so every suspicious row reached
+     * the audit view with a null id, type and time. {@code evidence} is not carried into the audit view.
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     public record SuspiciousEventEntry(
-            String eventId,
+            String id,
             String accountId,
-            String signalType,
-            String ipMasked,
-            Instant occurredAt
+            String ruleCode,
+            int riskScore,
+            String actionTaken,
+            Instant detectedAt
     ) {}
 
     public record LoginHistoryResponse(List<LoginHistoryEntry> content) {}

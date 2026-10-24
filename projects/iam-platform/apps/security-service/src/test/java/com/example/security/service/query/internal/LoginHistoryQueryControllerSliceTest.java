@@ -19,6 +19,8 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -41,10 +43,13 @@ class LoginHistoryQueryControllerSliceTest {
     @MockitoBean
     private JwtDecoder jwtDecoder;
 
+    /** TASK-BE-656 — a tenant other than the old hard-coded {@code fan-platform}. */
+    private static final String TENANT = "ecommerce";
+
     @Test
     @DisplayName("Returns 400 VALIDATION_ERROR when accountId is missing")
     void missingAccountIdReturns400() throws Exception {
-        mockMvc.perform(get("/internal/security/login-history"))
+        mockMvc.perform(get("/internal/security/login-history").param("tenantId", TENANT))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.message").value("Missing required parameter: accountId"))
@@ -54,10 +59,11 @@ class LoginHistoryQueryControllerSliceTest {
     @Test
     @DisplayName("서비스가 IllegalArgumentException을 던지면 400 VALIDATION_ERROR 응답을 반환한다")
     void getLoginHistory_serviceThrowsIllegalArgument_returns400() throws Exception {
-        when(queryService.findLoginHistory(eq("acc-001"), isNull(), isNull(), isNull(), any()))
+        when(queryService.findLoginHistory(eq(TENANT), eq("acc-001"), isNull(), isNull(), isNull(), any()))
                 .thenThrow(new IllegalArgumentException("from must be before to"));
 
         mockMvc.perform(get("/internal/security/login-history")
+                        .param("tenantId", TENANT)
                         .param("accountId", "acc-001"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
@@ -73,14 +79,38 @@ class LoginHistoryQueryControllerSliceTest {
                 "192.168.1.***", "Chrome 120", "abcdef123456",
                 "KR", Instant.parse("2026-04-12T10:00:00Z"));
 
-        when(queryService.findLoginHistory(eq("acc-001"), isNull(), isNull(), isNull(), any()))
+        when(queryService.findLoginHistory(eq(TENANT), eq("acc-001"), isNull(), isNull(), isNull(), any()))
                 .thenReturn(new PageImpl<>(List.of(view), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get("/internal/security/login-history")
+                        .param("tenantId", TENANT)
                         .param("accountId", "acc-001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].eventId").value("evt-001"))
                 .andExpect(jsonPath("$.content[0].ipMasked").value("192.168.1.***"))
                 .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    @DisplayName("🔴 TASK-BE-656: tenantId missing → 400 VALIDATION_ERROR, never a default tenant or «every tenant»")
+    void missingTenantIdReturns400() throws Exception {
+        mockMvc.perform(get("/internal/security/login-history").param("accountId", "acc-001"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Missing required parameter: tenantId"));
+        verifyNoInteractions(queryService);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-656: tenantId reaches the service verbatim — '*' included")
+    void tenantIdPassedThrough() throws Exception {
+        when(queryService.findLoginHistory(eq("*"), eq("acc-001"), isNull(), isNull(), isNull(), any()))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mockMvc.perform(get("/internal/security/login-history")
+                        .param("tenantId", "*")
+                        .param("accountId", "acc-001"))
+                .andExpect(status().isOk());
+        verify(queryService).findLoginHistory(eq("*"), eq("acc-001"), isNull(), isNull(), isNull(), any());
     }
 }

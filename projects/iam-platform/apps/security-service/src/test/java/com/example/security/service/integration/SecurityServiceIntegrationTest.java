@@ -150,7 +150,9 @@ class SecurityServiceIntegrationTest extends AbstractIntegrationTest {
                     .anyMatch(e -> e.getEventId().equals(eventId))).isTrue();
         });
 
+        // TASK-BE-656 control: the event is fan-platform's, queried as fan-platform — unchanged by the fix
         mockMvc.perform(get("/internal/security/login-history")
+                        .param("tenantId", "fan-platform")
                         .param("accountId", accountId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray())
@@ -164,6 +166,7 @@ class SecurityServiceIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("Suspicious events endpoint returns empty placeholder")
     void suspiciousEventsPlaceholder() throws Exception {
         mockMvc.perform(get("/internal/security/suspicious-events")
+                        .param("tenantId", "fan-platform")
                         .param("accountId", "acc-001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isEmpty())
