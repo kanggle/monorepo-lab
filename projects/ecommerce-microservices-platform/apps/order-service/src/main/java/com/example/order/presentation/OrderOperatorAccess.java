@@ -33,6 +33,18 @@ final class OrderOperatorAccess {
         }
     }
 
+    /**
+     * TASK-MONO-817 — the overview metrics refuse the wildcard tenant. Tenant {@code *} owns no order, so the
+     * figures would be all {@code "0"}, which a client renders as «nothing happened»
+     * ({@code performance-metrics-contract.md} § Wildcard tenant). Applies whatever the roles; the other reads keep
+     * the wildcard read above.
+     */
+    static void requireConcreteTenant(String tenantId) {
+        if (WILDCARD_TENANT.equals(tenantId)) {
+            throw new AccessDeniedException();
+        }
+    }
+
     static void requireWrite(String userRole) {
         if (!RoleListHeader.holdsAny(userRole, ORDER_WRITE)) {
             throw new AccessDeniedException();

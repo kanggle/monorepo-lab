@@ -4,6 +4,7 @@ import com.example.common.metrics.PerformanceMetrics;
 import com.example.common.time.MetricsPeriod;
 import com.example.finance.account.application.ActorContext;
 import com.example.finance.account.application.TransactionMetricsService;
+import com.example.finance.account.domain.error.DomainErrors.PermissionDeniedException;
 import com.example.finance.account.presentation.advice.InvalidQueryParameterException;
 import com.example.security.servlet.actor.ActorContextResolver;
 import lombok.RequiredArgsConstructor;
@@ -31,11 +32,19 @@ import org.springframework.web.bind.annotation.RestController;
  * path — {@link MetricsPeriod#parse}'s {@link IllegalArgumentException}, re-thrown as
  * {@link InvalidQueryParameterException} so it answers 400 (this service maps a bare
  * {@code IllegalArgumentException} to 422).
+ *
+ * <p>TASK-MONO-817 — a platform wildcard token ({@code tenant_id='*'}) is refused with 403
+ * {@code PERMISSION_DENIED}. Tenant {@code *} owns no transaction, so the figures would be all
+ * {@code "0"}, which the console renders as «nothing happened»
+ * ({@code performance-metrics-contract.md} § Wildcard tenant). The other account reads keep their
+ * wildcard behaviour.
  */
 @RestController
 @RequestMapping("/api/finance/accounts/metrics")
 @RequiredArgsConstructor
 public class TransactionMetricsController {
+
+    static final String WILDCARD_TENANT = "*";
 
     private final TransactionMetricsService service;
 
@@ -48,6 +57,9 @@ public class TransactionMetricsController {
             throw new InvalidQueryParameterException(e.getMessage(), e);
         }
         ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
+        if (WILDCARD_TENANT.equals(actor.tenantId())) {
+            throw new PermissionDeniedException("metrics require a concrete tenant");
+        }
         return ResponseEntity.ok(service.getMetrics(actor, parsed));
     }
 }

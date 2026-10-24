@@ -208,6 +208,8 @@ class AccountBusinessRoleGateSliceTest {
         expectAllowed(get(metrics), roles("FINANCE_OPERATOR", "FINANCE_ACCOUNT_READ"));
         expectAllowed(get(metrics), roles("FINANCE_ACCOUNT_WRITE"));
         expectAllowed(get(metrics), c -> c.claim("scope", List.of("finance.read")));
+        // The URL gate still admits the wildcard; TransactionMetricsController then refuses it (TASK-MONO-817,
+        // pinned in TransactionMetricsControllerSliceTest). This probe measures the gate only.
         expectAllowed(get(metrics), c -> c.claim(TenantClaimValidator.CLAIM_TENANT_ID, "*"));
         expectDenied(get(metrics), roles("FINANCE_OPERATOR", "FINANCE_LEDGER_READ", "FINANCE_LEDGER_WRITE",
                 "FINANCE_LEDGER_CONTROL"));

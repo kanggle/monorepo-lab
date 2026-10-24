@@ -312,13 +312,14 @@ Performance metrics for the operator overview's «실적» strip (ADR-MONO-084 P
 - **Attributed to:** `paid_at`, bucketed by its **KST** date. Not `created_at`: an order placed on Sunday and paid on Monday is Monday's sale.
 - 🔴 **A past day can still change.** A `BACKORDERED` order that is later confirmed joins the day it was **paid** (ADR-MONO-084 OD-1). And because payment and stock confirmation arrive on separate events, a just-confirmed order whose `paid_at` has not landed yet joins its paid day when it does.
 - Tenant-scoped; a bound seller scope narrows as above, inside the tenant filter.
+- 🔴 **Wildcard tenant (`X-Tenant-Id = '*'`) → `403`, whatever the roles** (TASK-MONO-817 · shared contract § Wildcard tenant). Tenant `*` owns no order, so the figures would all be `"0"`. This is the one operator read that does **not** keep the `'*'` wildcard read in the note at the top; `/summary`, `/insights`, the list and the detail keep it.
 
 **Error responses**
 | Status | Code | Reason |
 |---|---|---|
 | 400 | INVALID_ORDER_REQUEST | `period` missing or not `week` / `month` |
 | 401 | UNAUTHORIZED | Missing or invalid access token |
-| 403 | ACCESS_DENIED | Requires `ECOMMERCE_ORDER_READ` / `ECOMMERCE_ORDER_WRITE` (same as the other admin order reads) |
+| 403 | ACCESS_DENIED | Requires `ECOMMERCE_ORDER_READ` / `ECOMMERCE_ORDER_WRITE` (same as the other admin order reads) — or the tenant is the wildcard `*` |
 
 ---
 

@@ -92,7 +92,13 @@ class AdminOrderBusinessRoleGateSliceTest {
                 Arguments.of("legacy-compat (every business role)", ALL_BUSINESS, "ecommerce", true, true),
                 Arguments.of("lower-case role (comparison ignores case)", "ecommerce_order_read", "ecommerce", true, false),
                 Arguments.of("substring is not membership", "ECOMMERCE_ORDER_READX", "ecommerce", false, false),
-                Arguments.of("'*' wildcard (platform SUPER_ADMIN, no roles) — read only, as today", "", "*", true, false));
+                Arguments.of("'*' wildcard (platform SUPER_ADMIN, no roles) — read only, as today (except metrics)", "", "*", true, false),
+                Arguments.of("🔴 '*' wildcard WITH the order read role — still no metrics", ENTRY + ",ECOMMERCE_ORDER_READ", "*", true, false));
+    }
+
+    /** TASK-MONO-817 — the metrics refuse a wildcard tenant whatever the roles (it would read all zeros). */
+    private static boolean wildcardMetrics(Endpoint e, String tenant) {
+        return "metrics".equals(e.name()) && "*".equals(tenant);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -103,7 +109,7 @@ class AdminOrderBusinessRoleGateSliceTest {
         for (Endpoint e : ENDPOINTS) {
             int status = mockMvc.perform(e.request().header("X-User-Role", roleHeader).header("X-Tenant-Id", tenant))
                     .andReturn().getResponse().getStatus();
-            boolean expectAllowed = e.write() ? mayWrite : mayRead;
+            boolean expectAllowed = (e.write() ? mayWrite : mayRead) && !wildcardMetrics(e, tenant);
             if (expectAllowed == (status == 403)) {
                 wrong.add(e.name() + " → " + status + " (expected " + (expectAllowed ? "allowed" : "403") + ")");
             }

@@ -101,6 +101,15 @@ The meaning of each key — the states it includes, the timestamp a row is attri
 
 A failed strip is **never shown as zero**: «0» reads as «nothing happened».
 
+### Wildcard tenant
+
+A caller whose tenant is the platform wildcard (`*`) gets **one of two answers, never a silent zero**:
+
+- **An explicit all-tenant total**, only where the owning domain's contract states it, together with who may ask for it. Money keeps one key per currency, as everywhere else.
+- **403**, everywhere else. The client shows it as «권한 없음» (the 403 row above).
+
+What is forbidden is the third behaviour: tenant `*` owns no rows, so a query filtered by it answers `"0"` for every key, and the client renders that «0» as a real figure. An endpoint that would do this refuses instead. Two tests are required. The first sends a `*` tenant and expects 403, with no query issued. The second is the control group: a concrete tenant still gets its values.
+
 ## 5. Verification obligations for a conforming endpoint
 
 - Window tests with an injected `Clock`, not the host clock — at least one case across KST midnight and one across the end of a short month.
