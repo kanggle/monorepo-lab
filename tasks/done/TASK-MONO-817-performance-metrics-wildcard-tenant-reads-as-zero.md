@@ -8,7 +8,7 @@ A performance-metrics call made with a wildcard tenant (`tenant_id='*'`) answers
 
 # Status
 
-review
+done
 
 # Owner
 
