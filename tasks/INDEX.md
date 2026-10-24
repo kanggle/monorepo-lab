@@ -208,7 +208,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-812-finance-overview-performance-metrics.md` — **P7 Finance** (IN-PROGRESS 2026-10-24 UTC · READY): 유형별 거래 건수 · 금액(캡처된 보류만 · 통화마다 따로 · 계정별 행 없음). 선행 806. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
@@ -219,6 +218,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-812-finance-overview-performance-metrics.md` — **`ADR-MONO-084` P7 Finance 실적 지표** (REVIEW, 2026-10-24 UTC · AC-0~5 닫힘 · AC-6 = 배포 상태). account-service `GET /api/finance/accounts/metrics`: 충전 · 이체 · 캡처의 건수와 통화별 금액을 낸다(확정된 돈만, `settledAt` 귀속). 🔴 HOLD 행은 걸리는 순간 `COMPLETED` 라 상태가 아니라 유형으로 뺀다. ledger 는 복식부기라 원천에서 제외했다. 🔵 `tenant_id=*` 토큰은 전부 0 이다(SCM 과 같은 시리즈 공통 동작, 계약에 명시). 🔴 발견 · 미수정: 콘솔 거래 유형 필터가 `CREDIT`/`DEBIT` 을 보내 백엔드 422. ⚪ MySQL IT 는 로컬 미실행 → CI. 분석=Opus 5.5 / 구현=Opus 5.5 + diff 대조.
 
 - `TASK-MONO-811-iam-overview-performance-metrics.md` — **`ADR-MONO-084` P6 IAM 실적 지표** (REVIEW, 2026-10-24 UTC · AC-0~4 닫힘 · AC-5 = 배포 상태). admin-service `GET /api/admin/metrics`(`audit.read` · 감사 조회와 같은 테넌트 게이트)가 security · account 내부 집계를 모은다. 키: 로그인 성공 · 실패 · 계정 잠금 · 신규 계정. 🔴 소유자 결정: 풀 소비자의 로그인 · 잠금은 `consumer-pool` 로 기록돼 사이트에서 빠진다 → 후속 `TASK-BE-653`. `auth-events.md:158` 스펙 충돌을 코드에 맞춰 정정했다. 🔴 기존 공백(미수정): security 내부 조회의 A5 감사가 코드에 없다. ⚪ MySQL IT 셋은 로컬 미실행 → CI. 분석=Opus 5.5 / 구현=Opus 5.5(백엔드 · 콘솔 에이전트 + diff 대조).
 
