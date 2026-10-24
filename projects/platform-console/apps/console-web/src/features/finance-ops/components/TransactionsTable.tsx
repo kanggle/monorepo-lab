@@ -8,6 +8,7 @@ import {
   formatMoney,
   KNOWN_TXN_STATUSES,
   KNOWN_TXN_TYPES,
+  TXN_TYPE_FILTER_OPTIONS,
   txnStatusTone,
   type Transaction,
   type TransactionsQueryParams,
@@ -112,7 +113,7 @@ export function TransactionsTable({
             className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <option value="">전체</option>
-            {KNOWN_TXN_TYPES.map((t) => (
+            {TXN_TYPE_FILTER_OPTIONS.map((t) => (
               <option key={t} value={t}>
                 {t}
               </option>
