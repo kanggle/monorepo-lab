@@ -18,6 +18,7 @@ base path: `/internal/security`
 
 | 파라미터 | 타입 | 설명 |
 |---|---|---|
+| `tenantId` | string (**required**, TASK-BE-656) | 조회 테넌트. 행의 `tenant_id` **또는** `site_tenant_id` 와 정확히 일치하는 행만(아래 «테넌트»). `*` → 테넌트 필터 없음. admin-service 가 `QueryTenantScopeGate` 로 이미 게이트한 값이다 — 이 서비스는 다시 판정하지 않는다(`metrics/daily` 와 같은 내부 신뢰 자세) |
 | `accountId` | string (required) | 대상 계정 |
 | `from` | ISO 8601 datetime (optional) | 시작 시각 |
 | `to` | ISO 8601 datetime (optional) | 종료 시각 |
@@ -52,11 +53,17 @@ base path: `/internal/security`
 - `deviceFingerprint`: SHA256 해시의 앞 12자만
 - 이메일: 응답에 포함하지 않음
 
+**테넌트 (TASK-BE-656)** — `accountId` 는 전역 유일이지만 테넌트 술어를 **빼지 않는다**(빼면 테넌트 A 로 게이트된 조회가 테넌트 B 계정의 행을 읽는다):
+- **구체 테넌트 X**: `tenant_id = X OR site_tenant_id = X` 인 행(한 술어 — 한 행은 한 번). [§ metrics/daily](#get-internalsecuritymetricsdaily) 로그인 두 키와 같은 술어다.
+- 🔵 **소비자 풀 계정 (소유자 결정 2026-10-25 «그 사이트 것만»)**: 풀 계정의 로그인은 `tenant_id = consumer-pool` · `site_tenant_id` = 로그인한 사이트로 기록되므로, 사이트 X 의 운영자는 그 계정이 **X 에 로그인한 행만** 본다(다른 사이트 로그인 · 사이트 없는 로그인은 안 보인다). `X = consumer-pool` 은 풀 로그인 전부. **TASK-BE-653 배포 이전 행은 `site_tenant_id` 가 없으므로(백필 없음) 사이트 뷰에 나오지 않는다.**
+- **`*`**: 테넌트 필터 없음 — 그 계정의 행 전부.
+- `tenantId` 누락 → 400. 🔴 기본값은 없다 — TASK-BE-656 이전엔 `fan-platform` 으로 고정돼 다른 테넌트 계정의 이력이 늘 비어 보였고, «누락 = 필터 없음» 이면 교차 테넌트 읽기가 된다.
+
 **Errors**:
 
 | Status | Code | 조건 |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | accountId 누락, from > to 등 |
+| 400 | `VALIDATION_ERROR` | `tenantId` · accountId 누락, from > to 등 |
 | 403 | `PERMISSION_DENIED` | 인증 실패 |
 
 ---
@@ -71,6 +78,7 @@ base path: `/internal/security`
 
 | 파라미터 | 타입 | 설명 |
 |---|---|---|
+| `tenantId` | string (**required**, TASK-BE-656) | 조회 테넌트. 행의 `tenant_id` 와 정확히 일치하는 행만(아래 «테넌트»). `*` → 테넌트 필터 없음. admin-service 가 이미 게이트한 값 — login-history 와 같다 |
 | `accountId` | string (required) | — |
 | `from` | ISO 8601 datetime (optional) | — |
 | `to` | ISO 8601 datetime (optional) | — |
@@ -103,11 +111,16 @@ base path: `/internal/security`
 }
 ```
 
+**테넌트 (TASK-BE-656)**:
+- **구체 테넌트 X**: `tenant_id = X` 인 행만. `suspicious_events` 에는 사이트 칸이 없다 — 탐지는 **계정** 단위다.
+- 🔵 **소비자 풀 계정 (소유자 결정 2026-10-25)**: 풀 계정의 의심 이벤트는 `tenant_id = consumer-pool` 로 기록되므로 **사이트 운영자의 조회에는 나오지 않고** `tenantId=consumer-pool` · `*` 에만 나온다 — 풀 계정의 계정 잠금(`accountLocked`, TASK-BE-653 AC-1)과 같은 결이다(계정 단위의 것은 어느 사이트의 것도 아니다).
+- **`*`**: 테넌트 필터 없음. `tenantId` 누락 → 400(기본값 없음 — login-history 와 같은 이유).
+
 **Errors**:
 
 | Status | Code | 조건 |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | accountId 누락 |
+| 400 | `VALIDATION_ERROR` | `tenantId` · accountId 누락 |
 | 403 | `PERMISSION_DENIED` | — |
 
 ---

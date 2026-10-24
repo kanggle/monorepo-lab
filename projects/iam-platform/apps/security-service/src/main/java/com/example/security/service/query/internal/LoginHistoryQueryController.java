@@ -18,8 +18,14 @@ public class LoginHistoryQueryController {
 
     private final SecurityQueryService queryService;
 
+    /**
+     * TASK-BE-656 — {@code tenantId} is required (no default): the tenant admin-service already gated,
+     * {@code *} = every tenant ({@code security-query-api.md} § login-history «테넌트»). Missing → 400
+     * VALIDATION_ERROR (MissingServletRequestParameterException, inherited handler).
+     */
     @GetMapping("/login-history")
     public ResponseEntity<?> getLoginHistory(
+            @RequestParam String tenantId,
             @RequestParam String accountId,
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
@@ -32,7 +38,7 @@ public class LoginHistoryQueryController {
         }
 
         Pageable pageable = PageRequest.of(page, size);
-        Page<LoginHistoryView> result = queryService.findLoginHistory(accountId, from, to, outcome, pageable);
+        Page<LoginHistoryView> result = queryService.findLoginHistory(tenantId, accountId, from, to, outcome, pageable);
 
         return ResponseEntity.ok(PageResponse.of(result));
     }

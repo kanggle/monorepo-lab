@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -56,10 +57,13 @@ class SuspiciousEventQueryControllerSliceTest {
     @MockitoBean
     private JwtDecoder jwtDecoder;
 
+    /** TASK-BE-656 — a tenant other than the old hard-coded {@code fan-platform}. */
+    private static final String TENANT = "ecommerce";
+
     @Test
     @DisplayName("accountId 파라미터가 누락되면 400 VALIDATION_ERROR 응답을 반환한다")
     void getSuspiciousEvents_missingAccountId_returns400() throws Exception {
-        mockMvc.perform(get("/internal/security/suspicious-events"))
+        mockMvc.perform(get("/internal/security/suspicious-events").param("tenantId", TENANT))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.message").value("Missing required parameter: accountId"))
@@ -69,10 +73,11 @@ class SuspiciousEventQueryControllerSliceTest {
     @Test
     @DisplayName("서비스가 IllegalArgumentException을 던지면 400 VALIDATION_ERROR 응답을 반환한다")
     void getSuspiciousEvents_serviceThrowsIllegalArgument_returns400() throws Exception {
-        when(queryService.findSuspiciousEvents(eq("acc-001"), any(Instant.class), any(Instant.class), isNull(), any()))
+        when(queryService.findSuspiciousEvents(eq(TENANT), eq("acc-001"), any(Instant.class), any(Instant.class), isNull(), any()))
                 .thenThrow(new IllegalArgumentException("from must be before to"));
 
         mockMvc.perform(get("/internal/security/suspicious-events")
+                        .param("tenantId", TENANT)
                         .param("accountId", "acc-001"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
@@ -84,6 +89,7 @@ class SuspiciousEventQueryControllerSliceTest {
     @DisplayName("page 파라미터가 정수가 아니면 400 VALIDATION_ERROR 응답을 반환한다")
     void getSuspiciousEvents_pageParameterTypeMismatch_returns400() throws Exception {
         mockMvc.perform(get("/internal/security/suspicious-events")
+                        .param("tenantId", TENANT)
                         .param("accountId", "acc-001")
                         .param("page", "not-a-number"))
                 .andExpect(status().isBadRequest())
@@ -104,10 +110,11 @@ class SuspiciousEventQueryControllerSliceTest {
                 "evt-1", "acc-001", "GEO_ANOMALY", 85, "AUTO_LOCK",
                 evidence, Instant.parse("2026-04-12T10:00:00Z"));
 
-        when(queryService.findSuspiciousEvents(eq("acc-001"), any(Instant.class), any(Instant.class), isNull(), any()))
+        when(queryService.findSuspiciousEvents(eq(TENANT), eq("acc-001"), any(Instant.class), any(Instant.class), isNull(), any()))
                 .thenReturn(new PageImpl<>(List.of(view), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get("/internal/security/suspicious-events")
+                        .param("tenantId", TENANT)
                         .param("accountId", "acc-001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value("evt-1"))
@@ -129,11 +136,12 @@ class SuspiciousEventQueryControllerSliceTest {
     @Test
     @DisplayName("size가 100을 초과하면 100으로 캡 처리된다")
     void getSuspiciousEvents_sizeOver100_isCappedAt100() throws Exception {
-        when(queryService.findSuspiciousEvents(eq("acc-001"), any(), any(), isNull(),
+        when(queryService.findSuspiciousEvents(eq(TENANT), eq("acc-001"), any(), any(), isNull(),
                 argThat(p -> p.getPageSize() == 100)))
                 .thenReturn(new PageImpl<>(Collections.emptyList(), PageRequest.of(0, 100), 0));
 
         mockMvc.perform(get("/internal/security/suspicious-events")
+                        .param("tenantId", TENANT)
                         .param("accountId", "acc-001")
                         .param("size", "200"))
                 .andExpect(status().isOk())
@@ -143,11 +151,12 @@ class SuspiciousEventQueryControllerSliceTest {
     @Test
     @DisplayName("size=0 요청 시 size=1로 캡 처리된다")
     void getSuspiciousEvents_sizeZero_isCappedAtOne() throws Exception {
-        when(queryService.findSuspiciousEvents(eq("acc-001"), any(), any(), isNull(),
+        when(queryService.findSuspiciousEvents(eq(TENANT), eq("acc-001"), any(), any(), isNull(),
                 argThat(p -> p.getPageSize() == 1)))
                 .thenReturn(new PageImpl<>(Collections.emptyList(), PageRequest.of(0, 1), 0));
 
         mockMvc.perform(get("/internal/security/suspicious-events")
+                        .param("tenantId", TENANT)
                         .param("accountId", "acc-001")
                         .param("size", "0"))
                 .andExpect(status().isOk())
@@ -161,11 +170,12 @@ class SuspiciousEventQueryControllerSliceTest {
                 "evt-1", "acc-001", "GEO_ANOMALY", 85, "AUTO_LOCK",
                 Map.of(), Instant.parse("2026-04-12T10:00:00Z"));
 
-        when(queryService.findSuspiciousEvents(eq("acc-001"), any(Instant.class), any(Instant.class),
+        when(queryService.findSuspiciousEvents(eq(TENANT), eq("acc-001"), any(Instant.class), any(Instant.class),
                 eq("GEO_ANOMALY"), any()))
                 .thenReturn(new PageImpl<>(List.of(geoEvent), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get("/internal/security/suspicious-events")
+                        .param("tenantId", TENANT)
                         .param("accountId", "acc-001")
                         .param("ruleCode", "GEO_ANOMALY"))
                 .andExpect(status().isOk())
@@ -173,5 +183,15 @@ class SuspiciousEventQueryControllerSliceTest {
                 .andExpect(jsonPath("$.content[0].id").value("evt-1"))
                 .andExpect(jsonPath("$.content[0].ruleCode").value("GEO_ANOMALY"))
                 .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    @DisplayName("🔴 TASK-BE-656: tenantId missing → 400 VALIDATION_ERROR, never a default tenant or «every tenant»")
+    void getSuspiciousEvents_missingTenantId_returns400() throws Exception {
+        mockMvc.perform(get("/internal/security/suspicious-events").param("accountId", "acc-001"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("Missing required parameter: tenantId"));
+        verifyNoInteractions(queryService);
     }
 }

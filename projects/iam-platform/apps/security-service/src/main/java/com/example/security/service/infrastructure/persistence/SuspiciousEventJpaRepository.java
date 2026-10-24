@@ -21,4 +21,14 @@ public interface SuspiciousEventJpaRepository extends JpaRepository<SuspiciousEv
 
     Page<SuspiciousEventJpaEntity> findByTenantIdAndAccountIdAndRuleCodeAndDetectedAtBetweenOrderByDetectedAtDesc(
             String tenantId, String accountId, String ruleCode, Instant from, Instant to, Pageable pageable);
+
+    /**
+     * TASK-BE-656 — the platform-scope {@code '*'} read: no tenant predicate. Only reachable with an explicit
+     * {@code tenantId=*} ({@code security-query-api.md} § suspicious-events «테넌트»).
+     */
+    Page<SuspiciousEventJpaEntity> findByAccountIdAndDetectedAtBetweenOrderByDetectedAtDesc(
+            String accountId, Instant from, Instant to, Pageable pageable);
+
+    Page<SuspiciousEventJpaEntity> findByAccountIdAndRuleCodeAndDetectedAtBetweenOrderByDetectedAtDesc(
+            String accountId, String ruleCode, Instant from, Instant to, Pageable pageable);
 }

@@ -12,8 +12,8 @@
 
 | 호출자 | 목적 | 엔드포인트 |
 |---|---|---|
-| `admin-service` | 로그인 이력 조회 (감사) | `GET /internal/security/login-history?accountId=&from=&to=` |
-| `admin-service` | 의심 이벤트 조회 (감사) | `GET /internal/security/suspicious-events?accountId=&from=&to=` |
+| `admin-service` | 로그인 이력 조회 (감사) | `GET /internal/security/login-history?tenantId=&accountId=&from=&to=` |
+| `admin-service` | 의심 이벤트 조회 (감사) | `GET /internal/security/suspicious-events?tenantId=&accountId=&from=&to=` |
 
 응답에서 PII 마스킹 ([rules/traits/regulated.md](../../../../../rules/traits/regulated.md) R4): IP 일부만, 이메일 마스킹. 상태 변경 메서드는 **절대 없음** (원칙 유지 — [architecture.md](architecture.md) 참조).
 

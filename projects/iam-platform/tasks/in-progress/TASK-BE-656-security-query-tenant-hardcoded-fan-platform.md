@@ -8,7 +8,7 @@ security-service login-history and suspicious-event reads filter by a hard-coded
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -79,3 +79,21 @@ An operator who may see an account's audit trail sees that account's login histo
 
 1. The parameter is added to security-service but admin-service keeps not sending it, so the default still applies. AC-2 goes end to end through admin-service.
 2. The default is replaced by «no filter» with no parameter → cross-tenant read. AC-3.
+
+---
+
+# AC-0 — measured 2026-10-25 UTC on origin/main `6c5462e38`
+
+| # | Question | Finding |
+|---|---|---|
+| 1 | The defect | `SecurityQueryService.java:41` (suspicious) and `:72` (login history) set `tenantId = Tenants.DEFAULT_TENANT_ID` (`fan-platform`). Neither controller takes a tenant (`LoginHistoryQueryController.java:22-28`, `SuspiciousEventQueryController.java:27-33`). |
+| 2 | What admin-service knows | `AuditQueryUseCase.java:59-62` — `QueryTenantScopeGate.resolve(…, "audit.read")` gives `requestedTenantId` (`*` for an omitted tenant under a `'*'` grant, `QueryTenantScopeGate.java:138-139`). It is used for the `admin` source only; `SecurityServiceClient.java:115-122` sends `accountId · from · to` and nothing else. The same client already sends a gated `tenantId` (`*` = every tenant) for `metrics/daily` (`:72-88`) — the precedent this fix follows. |
+| 3 | Contract today | `security-query-api.md` § login-history (`:17-26`) and § suspicious-events (`:70-79`) say nothing about tenant. |
+| 4 | Pool rows | Login rows: `tenant_id = consumer-pool` + `site_tenant_id` = the site (`AuthEventMapper.java:42-56`; only rows after TASK-BE-653's deploy, no backfill). Suspicious rows: `tenant_id` = the event's tenant, **no site column** (`AuthEventMapper.java:112-118` → `SuspiciousEventPersistenceService.java:37`). |
+| 5 | Observed empty result | ⚪ not measured live — no Docker on the host and no demo window (owner: not needed). Stood in for by tests that fail on the pre-change behaviour (mutation, below). |
+| 6 | 🔴 Found while measuring | admin-service reads a suspicious event as `eventId · signalType · ipMasked · occurredAt` (`SecurityServiceClient.java:162-168`), but security-service answers per contract `id · ruleCode · riskScore · actionTaken · evidence · detectedAt` (`SuspiciousEventView.java`). Unknown fields are ignored, so every suspicious row reaches the audit view with a null id, type and time. `SecurityServiceClientUnitTest` stubbed the wrong shape (`signalType`), so it stayed green. |
+
+# Owner decisions — 2026-10-25 UTC (AskUserQuestion)
+
+- **Pool accounts → «그 사이트 것만» (recommended).** Login history = `tenant_id = X OR site_tenant_id = X` (the TASK-BE-653 metrics predicate). Suspicious events = `tenant_id = X` only — a pool account's suspicious events are account-level, like its account locks (TASK-BE-653 AC-1), so they show under `consumer-pool` and `*`, not under a site. Accepted cost: a pool login recorded before TASK-BE-653's deploy has no `site_tenant_id` and does not show in a site's view.
+- **DTO mismatch → in this ticket (recommended).** admin-service's suspicious-event DTO is aligned to the contract (`id` · `ruleCode` · `detectedAt`); the stub is changed to the contract shape.

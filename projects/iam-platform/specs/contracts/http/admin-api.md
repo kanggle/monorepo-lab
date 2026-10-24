@@ -490,7 +490,7 @@ base path: `/api/admin`
 | `from` | ISO 8601 datetime | 시작 시각 |
 | `to` | ISO 8601 datetime | 종료 시각 |
 | `source` | string (optional) | `admin` / `login_history` / `suspicious`. **생략 시**(TASK-BE-655): `security.event.read` 가 있으면 세 소스 통합(보안 소스는 `accountId` 가 있을 때만) · 없으면 **`admin` 하나로 좁힌다**(200, 403 아님 — security-service 를 부르지 않는다). 이전엔 생략 + `accountId` 가 권한 검사 없이 보안 소스를 섞었다 |
-| `tenantId` | string (optional) | **TASK-BE-249** — 조회할 테넌트. 생략 시 운영자 자신의 테넌트. `*`는 SUPER_ADMIN 전용 (크로스 테넌트). 일반 운영자가 자신의 테넌트가 아닌 값을 지정하면 `403 TENANT_SCOPE_DENIED`. **TASK-MONO-784 S3 부터**: § 행동 테넌트 — grant scope(`audit.read`) + 생략 규칙(생략 · 구체 테넌트 둘 이상 → `400 VALIDATION_ERROR`). 배정만 있는 회사의 감사는 `403`(AC-1). 결과는 `admin_actions.tenant_id` = 그 테넌트인 행 — 784 부터 그 칸은 행동 테넌트라(D-13) 홈이 다른 운영자가 이 테넌트에서 한 행위도 여기 보인다 |
+| `tenantId` | string (optional) | **TASK-BE-249** — 조회할 테넌트. 생략 시 운영자 자신의 테넌트. `*`는 SUPER_ADMIN 전용 (크로스 테넌트). 일반 운영자가 자신의 테넌트가 아닌 값을 지정하면 `403 TENANT_SCOPE_DENIED`. **TASK-MONO-784 S3 부터**: § 행동 테넌트 — grant scope(`audit.read`) + 생략 규칙(생략 · 구체 테넌트 둘 이상 → `400 VALIDATION_ERROR`). 배정만 있는 회사의 감사는 `403`(AC-1). 결과는 `admin_actions.tenant_id` = 그 테넌트인 행 — 784 부터 그 칸은 행동 테넌트라(D-13) 홈이 다른 운영자가 이 테넌트에서 한 행위도 여기 보인다. **TASK-BE-656**: 보안 소스(`login_history` · `suspicious`)도 **같은 게이트 값**으로 걸러진다 — admin-service 가 그 값을 security-service 에 `tenantId` 로 넘긴다(`*` = 필터 없음). 로그인 이력은 `tenant_id` 또는 `site_tenant_id` 가 그 테넌트인 행, 의심 이벤트는 `tenant_id` 가 그 테넌트인 행. 소비자 풀 계정은 사이트 운영자에게 **그 사이트에 로그인한 행만** 보이고 의심 이벤트는 안 보인다(소유자 결정 «그 사이트 것만» — [security-query-api.md § login-history «테넌트»](security-query-api.md)). 그 전엔 `fan-platform` 으로 고정돼 다른 테넌트 계정의 보안 소스가 늘 비었다 |
 | `page` | int (default 0) | — |
 | `size` | int (default 20, max 100) | — |
 
@@ -516,6 +516,14 @@ base path: `/api/admin`
       "ipMasked": "192.168.*.*",
       "geoCountry": "KR",
       "occurredAt": "2026-04-12T09:58:00Z"
+    },
+    {
+      "source": "suspicious",
+      "eventId": "string (security-service id)",
+      "actionCode": "GEO_ANOMALY (security-service ruleCode)",
+      "accountId": "string",
+      "targetId": "string",
+      "occurredAt": "2026-04-12T10:00:00Z (security-service detectedAt)"
     }
   ],
   "page": 0,

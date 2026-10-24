@@ -76,8 +76,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-656-security-query-tenant-hardcoded-fan-platform.md` — **security-service 로그인 이력 · 의심 이벤트 조회가 `fan-platform` 고정 테넌트로 걸러진다 — 다른 테넌트 계정의 감사 화면이 비어 보인다** (READY, 2026-10-24 UTC): `TASK-BE-653` AC-0 에서 발견했고 원문으로 확인했다(`SecurityQueryService` 의 «TASK-BE-248 Phase 1 placeholder» — Phase 2 를 가진 티켓이 없다). 풀 계정(`consumer-pool`)이 바로 그 경우다. AC-0 = 빈 결과 실측 + admin-service 가 넘길 게이트 테넌트 + 풀 계정 규칙 → 계약 → 수선 · 격리 시험. 분석=Opus 5.5 / 구현 권장=Sonnet.
-
 (아래는 과거 로드맵/스윕의 완결 기록)
 
 **IAM 라이브 풀스택 기능 스윕에서 발굴 (2026-07-15, `docker-compose.e2e.yml` 실기동 + 게이트웨이 경유 HTTP 실측).** nightly `E2E full (iam docker-compose)` 는 초록이었으나 그 e2e 6클래스가 운영자 플로우만 보고 게이트웨이 경유 사용자 경로를 안 봄 → 결함이 초록으로 새어나감. 각 티켓 AC-0 = 착수=재측정(코드가 이긴다).
@@ -115,7 +113,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-(empty)
+- `TASK-BE-656-security-query-tenant-hardcoded-fan-platform.md` — **security-service 로그인 이력 · 의심 이벤트 조회가 `fan-platform` 고정 테넌트로 걸러진다 — 다른 테넌트 계정의 감사 화면이 비어 보인다** (IN-PROGRESS, 2026-10-25 UTC): 소유자 결정 — 풀 계정은 «그 사이트 것만»(로그인 = `tenant_id=X ∨ site_tenant_id=X`, 의심 이벤트 = `tenant_id=X`) · admin-service 의심 이벤트 DTO 불일치(`signalType`/`occurredAt` vs 계약 `ruleCode`/`detectedAt`)도 이 티켓에서. 분석=Opus 5.5 / 구현=Opus 5.5.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 

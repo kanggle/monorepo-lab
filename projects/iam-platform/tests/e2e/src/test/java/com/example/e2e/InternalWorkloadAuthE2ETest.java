@@ -90,18 +90,19 @@ class InternalWorkloadAuthE2ETest extends E2EBase {
         //     the per-service status difference is intentional.
         Response noAuth = RestAssured.given()
                 .baseUri(ComposeFixture.SECURITY_BASE_URL)
-                .get("/internal/security/login-history?accountId={id}", accountId);
+                .get("/internal/security/login-history?tenantId=fan-platform&accountId={id}", accountId);
         assertThat(noAuth.statusCode())
                 .as("security /internal/security/** rejects unauthenticated request (403 PERMISSION_DENIED)")
                 .isEqualTo(403);
 
         // (b) valid GAP Bearer → 200 with an empty page for an unknown account
+        //     (TASK-BE-656: tenantId is a required parameter — without it this leg would be 400, not 200)
         String token = mintWorkloadToken("admin-service-client");
         Response withJwt = RestAssured.given()
                 .baseUri(ComposeFixture.SECURITY_BASE_URL)
                 .accept(ContentType.JSON)
                 .header("Authorization", "Bearer " + token)
-                .get("/internal/security/login-history?accountId={id}", accountId);
+                .get("/internal/security/login-history?tenantId=fan-platform&accountId={id}", accountId);
         assertThat(withJwt.statusCode())
                 .as("security /internal/security/** accepts a valid GAP JWT")
                 .isEqualTo(200);

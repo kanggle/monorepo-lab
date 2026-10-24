@@ -123,10 +123,14 @@ public class AuditQueryUseCase {
                 sourcesRead.add("admin");
             }
 
+            // TASK-BE-656: the security sources are read in the same gated tenant as the admin source
+            // (requestedTenantId — '*' for a platform-scope query of every tenant). security-service filters
+            // login history by tenant_id OR site_tenant_id and suspicious events by tenant_id (security-query-api.md).
             if (includeLogin && cmd.accountId() != null) {
                 reading = "login_history";
                 List<SecurityServiceClient.LoginHistoryEntry> lh =
-                        securityServiceClient.queryLoginHistory(cmd.accountId(), cmd.from(), cmd.to());
+                        securityServiceClient.queryLoginHistory(
+                                requestedTenantId, cmd.accountId(), cmd.from(), cmd.to());
                 totalElements += lh.size();
                 for (SecurityServiceClient.LoginHistoryEntry e : lh) {
                     entries.add(new AuditQueryResult.Entry(
@@ -149,22 +153,24 @@ public class AuditQueryUseCase {
             if (includeSuspicious && cmd.accountId() != null) {
                 reading = "suspicious";
                 List<SecurityServiceClient.SuspiciousEventEntry> se =
-                        securityServiceClient.querySuspiciousEvents(cmd.accountId(), cmd.from(), cmd.to());
+                        securityServiceClient.querySuspiciousEvents(
+                                requestedTenantId, cmd.accountId(), cmd.from(), cmd.to());
                 totalElements += se.size();
                 for (SecurityServiceClient.SuspiciousEventEntry e : se) {
+                    // TASK-BE-656: the contract's fields — id · ruleCode · detectedAt (no IP on this source)
                     entries.add(new AuditQueryResult.Entry(
                             "suspicious",
                             null,
-                            e.eventId(),
-                            e.signalType(),
+                            e.id(),
+                            e.ruleCode(),
                             null,
                             e.accountId(),
                             e.accountId(),
                             null,
                             null,
-                            e.ipMasked(),
                             null,
-                            e.occurredAt()));
+                            null,
+                            e.detectedAt()));
                 }
                 sourcesRead.add("suspicious");
             }
