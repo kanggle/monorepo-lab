@@ -8,7 +8,7 @@ wms dead-letter resolvers still return the source partition — a record from so
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -57,9 +57,9 @@ A wms dead-lettering never names a partition that does not exist: the resolver r
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — the reproduction above (red on today's code: the resolver names a partition ≥ 1 on a 1-partition dead-letter topic), and a file:line statement of what each override does besides dropping the partition.
-- [ ] **AC-1** — in all five services, a record from source partition 2 is dead-lettered with partition `null`/`-1` and no partition-existence lookup. Red before the change, shown by mutation if the test touches a changed signature.
-- [ ] **AC-2** — control: the key, the value and the headers forwarded to the dead-letter record are unchanged (same assertions on today's code and after). The existing `*ErrorLoggingTest` and `MasterLocationDltRoutingIntegrationTest` stay green (the latter in the CI wms Testcontainers lane, confirmed SUCCESS and not SKIPPED).
+- [x] **AC-0** — the reproduction above (red on today's code: the resolver names a partition ≥ 1 on a 1-partition dead-letter topic), and a file:line statement of what each override does besides dropping the partition.
+- [x] **AC-1** — in all five services, a record from source partition 2 is dead-lettered with partition `null`/`-1` and no partition-existence lookup. Red before the change, shown by mutation if the test touches a changed signature.
+- [x] **AC-2** — control: the key, the value and the headers forwarded to the dead-letter record are unchanged (same assertions on today's code and after). The existing `*ErrorLoggingTest` and `MasterLocationDltRoutingIntegrationTest` stay green (the latter in the CI wms Testcontainers lane, confirmed SUCCESS and not SKIPPED).
 - [ ] **AC-3** — live, next demo window (owner schedules): a poisoned record from a partition ≠ 0 reaches its `.DLT` with no «non-existent partition» warning. ⚪ is acceptable if the window cannot place a record on partition ≠ 0, with the reason.
 
 # Related Specs
@@ -82,3 +82,23 @@ A wms dead-lettering never names a partition that does not exist: the resolver r
 1. Only inventory is fixed (where the warning was seen) and the four siblings keep the pattern. AC-1 names all five.
 2. The override is removed while the resolver still returns the source partition. The send then targets a partition that does not exist, which is worse than today. AC-1 asserts the partition of the sent record, not just the absence of a warning.
 3. Removing the override changes what is forwarded (value bytes vs object, headers). AC-2 checks this.
+
+---
+
+# AC-0 — measured 2026-10-25 UTC (spring-kafka 3.3.1, `javap -c` of `DeadLetterPublishingRecoverer`)
+
+- `accept` → `checkPartition(tp, consumer)` when a consumer is passed and `verifyPartition` is on (default). `checkPartition`: partition `< 0` → returned as is, **no lookup**; otherwise `consumer.partitionsFor(topic, timeout)`; `null` → returned unchanged (DEBUG); partition absent → **WARN «Destination resolver returned non-existent partition …»** and `new TopicPartition(topic, -1)`. So on a 1-partition `.DLT` spring-kafka already fell back to `-1` itself — the wms override was not what saved the record in that case; it only mattered when the lookup returned `null`.
+- Base `createProducerRecord`: partition `null` when `< 0`; key = the raw key bytes if non-null else `record.key()`; value likewise. Raw bytes are non-null only for a deserialization failure (`ErrorHandlingDeserializer` headers). All five wms consumers use plain `StringDeserializer` (`application.yml` `key-/value-deserializer` in each service) with no `ErrorHandlingDeserializer`, so the base sends exactly what the override sent — key, value, headers. The override did nothing else (each was the same 5-line body: topic, `null`, `record.key()`, `record.value()`, headers).
+- Reproduction: `*DeadLetterPartitionTest.sourcePartition2_noPartitionNoLookupNoWarning` on today's code is **red ×5** (`partitionsFor` invoked — the lookup that precedes the WARN).
+
+# Results — 2026-10-25 UTC
+
+| Run | partition 2 → no lookup · no warning | metadata unavailable → still no partition | control (key · value · headers) |
+|---|---|---|---|
+| before the fix | 🔴 ×5 | green ×5 (override dropped it) | green ×5 |
+| after the fix | green ×5 | green ×5 | green ×5 |
+| mutant: override removed, resolver keeps the source partition (failure scenario 2) | 🔴 ×5 | 🔴 ×5 | green ×5 |
+
+- The existing `*ErrorLoggingTest` (×5) stay green. `scripts/check-dead-letter-suffix.sh` rc=0, `--selftest` rc=0 (R6's `createProducerRecord` exemption now has no user — left as is, Out of Scope).
+- `MasterLocationDltRoutingIntegrationTest` (Testcontainers) — CI wms lane, see the PR.
+- AC-3 (live) stays open for the next demo window.
