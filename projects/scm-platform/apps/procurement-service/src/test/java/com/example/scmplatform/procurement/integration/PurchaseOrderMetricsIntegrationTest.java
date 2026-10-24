@@ -262,6 +262,30 @@ class PurchaseOrderMetricsIntegrationTest extends AbstractProcurementIntegration
         assertThat(cur(m, "poCount")).isEqualTo("0");
     }
 
+    @Test
+    @DisplayName("🔴 TASK-SCM-BE-063: a full ASN on a CANCELED PO is rejected and does NOT move receivedCount; the same ASN on a CONFIRMED PO does")
+    void rejectedReceiptDoesNotMoveReceivedCount() {
+        String canceled = seedPo(tenant, "KRW", "1000", "10", PoStatus.CANCELED, null);
+        String canceledLine = lineJpa.findByPoIdOrderByLineNoAsc(canceled).get(0).getId();
+
+        assertThat(cur(month(), "receivedCount")).isEqualTo("0");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.receiveAsn(new ReceiveAsnCommand(
+                        tenant, canceled, "ASN-063-" + UUID.randomUUID(), Instant.now().plus(1, ChronoUnit.DAYS),
+                        List.of(new ReceiveAsnCommand.AsnLine(canceledLine, new BigDecimal("10"))))))
+                .isInstanceOf(com.example.scmplatform.procurement.domain.error.PoStatusTransitionInvalidException.class);
+        assertThat(poJpa.findByIdAndTenantId(canceled, tenant).orElseThrow().getStatus())
+                .isEqualTo(PoStatus.CANCELED);
+        assertThat(cur(month(), "receivedCount")).isEqualTo("0");
+
+        // Control: the same receipt on a CONFIRMED PO counts — the zero above is the guard, not a dead metric.
+        String confirmed = seedPo(tenant, "KRW", "1000", "10", PoStatus.CONFIRMED, null);
+        String confirmedLine = lineJpa.findByPoIdOrderByLineNoAsc(confirmed).get(0).getId();
+        service.receiveAsn(new ReceiveAsnCommand(tenant, confirmed, "ASN-063-" + UUID.randomUUID(),
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                List.of(new ReceiveAsnCommand.AsnLine(confirmedLine, new BigDecimal("10")))));
+        assertThat(cur(month(), "receivedCount")).isEqualTo("1");
+    }
+
     // ---- GET /po submit-date filter ------------------------------------------
 
     @Test

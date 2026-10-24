@@ -359,6 +359,19 @@ SETTLED
 | SYSTEM | RECEIVED | SETTLED |
 | SYSTEM | SETTLED | CLOSED |
 
+> **ASN application goes through this matrix (TASK-SCM-BE-063).**
+> `PurchaseOrder.applyAsn` evaluates a whole ASN at once: it validates every line
+> (exists, positive, cumulative ≤ ordered) and then the one `SYSTEM` transition the
+> ASN would cause (→ `RECEIVED` if every line is complete, else →
+> `PARTIALLY_RECEIVED`) with `PoStatusMachine.ensureTransitionAllowed` — **before**
+> mutating anything. So only `CONFIRMED` / `PARTIALLY_RECEIVED` POs take a receipt;
+> `DRAFT` / `SUBMITTED` / `ACKNOWLEDGED` / `CANCELED` answer 422
+> `PO_STATUS_TRANSITION_INVALID` with nothing written. The guard is in the aggregate,
+> not the webhook controller, so every caller of `receiveAsn` passes it. One
+> `po_status_history` row per status-changing ASN (a multi-line ASN completing a
+> `CONFIRMED` PO is one `CONFIRMED → RECEIVED` row). Supplier-facing behaviour:
+> `procurement-api.md` § POST /webhooks/asn, «Status guard».
+
 > **Actor derivation (roles-only).** The `BUYER` / `OPERATOR` `ActorType` of a
 > REST-driven transition is derived from the verified JWT `roles` claim, **not**
 > from an `account_type` claim or an OAuth scope. The shared

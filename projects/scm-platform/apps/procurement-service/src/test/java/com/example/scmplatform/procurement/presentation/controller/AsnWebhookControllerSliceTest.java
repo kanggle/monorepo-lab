@@ -3,6 +3,9 @@ package com.example.scmplatform.procurement.presentation.controller;
 import com.example.scmplatform.procurement.application.AsnView;
 import com.example.scmplatform.procurement.application.PurchaseOrderApplicationService;
 import com.example.scmplatform.procurement.domain.error.AsnOverreceiptException;
+import com.example.scmplatform.procurement.domain.error.PoStatusTransitionInvalidException;
+import com.example.scmplatform.procurement.domain.po.status.ActorType;
+import com.example.scmplatform.procurement.domain.po.status.PoStatus;
 import com.example.scmplatform.procurement.presentation.advice.GlobalExceptionHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -35,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * chain is bypassed via {@code @AutoConfigureMockMvc(addFilters = false)}, so
  * these tests cover the controller's request binding + business mapping only.
  *
- * <p>Test count: 2
+ * <p>Test count: 3
  */
 @WebMvcTest(AsnWebhookController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -108,5 +111,22 @@ class AsnWebhookControllerSliceTest {
                         .content(validRequestJson()))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("ASN_OVERRECEIPT"));
+    }
+
+    @Test
+    @DisplayName("POST /webhooks/asn — 422 PO_STATUS_TRANSITION_INVALID + details{from,to,actor} when the PO cannot take a receipt (TASK-SCM-BE-063)")
+    void receiveAsnOnCanceledPo() throws Exception {
+        when(service.receiveAsn(any()))
+                .thenThrow(new PoStatusTransitionInvalidException(
+                        PoStatus.CANCELED, PoStatus.RECEIVED, ActorType.SYSTEM));
+
+        mockMvc.perform(post(URL)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validRequestJson()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("PO_STATUS_TRANSITION_INVALID"))
+                .andExpect(jsonPath("$.details.from").value("CANCELED"))
+                .andExpect(jsonPath("$.details.to").value("RECEIVED"))
+                .andExpect(jsonPath("$.details.actor").value("SYSTEM"));
     }
 }

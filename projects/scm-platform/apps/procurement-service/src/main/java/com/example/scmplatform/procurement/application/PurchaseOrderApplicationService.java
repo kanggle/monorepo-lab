@@ -19,6 +19,7 @@ import com.example.scmplatform.procurement.domain.audit.AuditLog;
 import com.example.scmplatform.procurement.domain.audit.AuditLogRepository;
 import com.example.scmplatform.procurement.domain.error.PoNotFoundException;
 import com.example.scmplatform.procurement.domain.error.SupplierNotFoundException;
+import com.example.scmplatform.procurement.domain.po.AsnLineReceipt;
 import com.example.scmplatform.procurement.domain.po.PurchaseOrder;
 import com.example.scmplatform.procurement.domain.po.PurchaseOrderLine;
 import com.example.scmplatform.procurement.domain.po.repository.PurchaseOrderRepository;
@@ -381,6 +382,16 @@ public class PurchaseOrderApplicationService {
 
         PurchaseOrder po = loadPo(cmd.poId(), cmd.tenantId());
 
+        // TASK-SCM-BE-063: the aggregate validates the WHOLE ASN (lines, over-receipt,
+        // and the SYSTEM transition via PoStatusMachine) before it mutates anything, and
+        // before any ASN row / history row / outbox entry exists — a PO that is not
+        // CONFIRMED / PARTIALLY_RECEIVED throws PO_STATUS_TRANSITION_INVALID (422) here
+        // with nothing written. The guard lives in the domain, not the webhook
+        // controller, so every caller of this use case passes through it.
+        PoStatus previous = po.applyAsn(cmd.lines().stream()
+                .map(l -> new AsnLineReceipt(l.poLineId(), l.quantityShipped()))
+                .toList());
+
         AdvanceShipmentNotice asn = AdvanceShipmentNotice.create(
                 UuidV7.randomString(),
                 cmd.tenantId(),
@@ -396,12 +407,11 @@ public class PurchaseOrderApplicationService {
                     line.poLineId(),
                     line.quantityShipped()
             ));
-            // Apply to the PO aggregate — may transition PARTIALLY_RECEIVED / RECEIVED
-            PoStatus previous = po.applyAsnLine(line.poLineId(), line.quantityShipped());
-            if (previous != null && previous != po.getStatus()) {
-                recordTransition(po, previous, po.getStatus(), ActorType.SYSTEM, null,
-                        "ASN " + cmd.supplierAsnRef());
-            }
+        }
+        // One history row per ASN (procurement-api.md § ASN webhook, «Status guard»).
+        if (previous != null) {
+            recordTransition(po, previous, po.getStatus(), ActorType.SYSTEM, null,
+                    "ASN " + cmd.supplierAsnRef());
         }
         asn.markReceivedNow();
         AdvanceShipmentNotice savedAsn = asnRepository.save(asn);

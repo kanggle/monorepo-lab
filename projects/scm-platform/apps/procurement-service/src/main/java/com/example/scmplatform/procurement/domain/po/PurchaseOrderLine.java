@@ -16,7 +16,7 @@ import java.math.BigDecimal;
  * <ul>
  *   <li>{@code line_no} is unique within a PO (DB UNIQUE constraint).</li>
  *   <li>{@code received_quantity} can never exceed {@code quantity}
- *       (enforced in {@link PurchaseOrder#applyAsnLine}).</li>
+ *       (enforced in {@link PurchaseOrder#applyAsn}).</li>
  * </ul>
  *
  * <p>Stored in its own JPA table {@code purchase_order_lines}; this is a
@@ -105,6 +105,15 @@ public class PurchaseOrderLine {
      * {@code received + delta > quantity}. Used by ASN reconciliation.
      */
     public void addReceived(BigDecimal delta) {
+        this.receivedQuantity = receivedAfter(delta);
+    }
+
+    /**
+     * The received quantity this line would hold after {@code delta} — the same
+     * checks as {@link #addReceived}, without mutating. Lets the aggregate validate
+     * a whole ASN before it changes any line (TASK-SCM-BE-063).
+     */
+    public BigDecimal receivedAfter(BigDecimal delta) {
         if (delta == null || delta.signum() <= 0) {
             throw new IllegalArgumentException("delta must be positive: " + delta);
         }
@@ -114,6 +123,6 @@ public class PurchaseOrderLine {
                     "ASN_OVERRECEIPT: received " + next + " > ordered " + this.quantity
                             + " for line " + this.id);
         }
-        this.receivedQuantity = next;
+        return next;
     }
 }
