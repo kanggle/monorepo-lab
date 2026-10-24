@@ -3,7 +3,7 @@
 admin-service가 운영자 명령으로 account-service에 계정 상태 변경(lock/unlock/delete)을 요청한다.
 
 **호출 방향**: admin-service (client) → account-service (server)
-**노출 경로**: `/internal/accounts/*` · `/internal/notifications/operator-invitation`(TASK-MONO-772)
+**노출 경로**: `/internal/accounts/*` · `/internal/notifications/operator-invitation`(TASK-MONO-772) · `/internal/account-metrics/daily`(TASK-MONO-811 — 읽기 전용 건수)
 **인증** (TASK-BE-318b 호출측 / TASK-BE-319b 수신측): `Authorization: Bearer <IAM client_credentials JWT>` — admin-service 가 `admin-service-client` 로 IAM `/oauth2/token` 에서 발급받아 첨부하고, account-service 가 JWKS 서명 + issuer 로 검증한다. 정적 `X-Internal-Token` 은 제거됨.
 
 ---
@@ -698,6 +698,46 @@ root→N 체인 ceiling 교집합. `ORG_ADMIN` grant cap(부여 도메인 ⊆ ef
 | 409 | `TENANT_ORG_NODE_CONFLICT` | 지금 소속 ≠ `expectedOrgNodeId`. |
 
 > 이벤트 없음 · 감사 행 없음(감사는 admin-service `admin_actions` 가 권위). 토큰의 `entitled_domains` 는 다음 발급부터 새 상한으로 계산된다(D6 seam — `GET /internal/tenants/{tenantId}/entitled-domains` 가 매번 `ACTIVE ∩ ceiling` 을 다시 계산한다).
+
+---
+
+## GET /internal/account-metrics/daily
+
+IAM 개요 실적 줄(admin-api.md [§ GET /api/admin/metrics](../admin-api.md#get-apiadminmetrics), TASK-MONO-811)의 **`newAccount`** — **KST 날짜별 건수만**. 계정 id · 이메일 · 상태는 응답에 없고, 쿼리도 `accounts.created_at` · `consumer_site_memberships.consented_at` 외의 컬럼을 읽지 않는다. 키의 규범 정의(재가입 규칙 포함)는 admin-api.md 의 표다.
+
+- **경로**: `/internal/accounts/*` 아래가 **아니다** — `/internal/accounts/{accountId}` 로 읽힐 여지를 두지 않으려고 자기 접두사를 쓴다.
+- **인증**: 이 서비스의 `/internal/**` 체인(`SecurityConfig`) 그대로 — client_credentials JWT + `internal.invoke`. 없음 · 무효 · scope 없음 → **`401 UNAUTHORIZED`**(이 서비스의 기존 `/internal/**` 계약, TASK-BE-319b — security-service 의 403 과 다르다).
+- **테넌트**: admin-service 가 `QueryTenantScopeGate` 로 이미 게이트한 값을 그대로 믿는다(`GET /internal/accounts` 의 `tenantId` 와 같은 내부 신뢰 자세). `X-Tenant-Id` 는 읽지 않는다.
+
+**Query Parameters**:
+
+| 파라미터 | 타입 | 설명 |
+|---|---|---|
+| `tenantId` | string (**required**) | 구체 테넌트 X → `accounts.tenant_id = X` 의 `created_at` **+** `consumer_site_memberships.site_tenant_id = X` 의 `consented_at`. `consumer-pool` → `accounts` 행만. `*` → 전 테넌트의 `accounts` 행만(멤버십을 더하지 않는다 — 풀 계정을 사이트마다 다시 세지 않으려고). 양쪽 모두 현재 상태 무관 |
+| `from` | ISO-8601 instant (**required**) | 창 시작(포함). `…Z` 또는 오프셋(`+09:00`) |
+| `to` | ISO-8601 instant (**required**) | 창 끝(**제외**) — 반열림 `[from, to)` |
+
+**Response 200**:
+```json
+{
+  "tenantId": "fan-platform",
+  "from": "2026-09-30T15:00:00Z",
+  "to": "2026-10-23T05:05:00Z",
+  "days": [ { "date": "2026-10-02", "newAccount": 4 } ]
+}
+```
+
+- `days` — 센 행이 하나라도 있는 KST 날짜만, 오름차순(없는 날은 빠진다 — 0 채우기는 admin-service). 날짜는 Java `KstPeriodBounds.dateOf` 로 자른다(SQL 에서 자르지 않는다).
+- 인덱스: `V0034__metrics_indexes.sql` — `accounts (tenant_id, created_at)` · `accounts (created_at)` · `consumer_site_memberships (site_tenant_id, consented_at)`.
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `tenantId` · `from` · `to` 누락 · instant 가 아님 · `to < from` · 창 > 62일 |
+| 401 | `UNAUTHORIZED` | Bearer JWT 누락 / 무효 / `internal.invoke` 없음 |
+
+> 읽기 전용 · 이벤트 없음 · 감사 행 없음(대상 없는 건수 — admin-service 가 거절만 `METRICS_QUERY` DENIED 행으로 남긴다).
 
 ---
 

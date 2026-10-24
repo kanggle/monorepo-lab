@@ -9,6 +9,13 @@ public enum ActionCode {
     // for the best-effort DENIED row when a cross-tenant `tenantId` is rejected
     // (403 TENANT_SCOPE_DENIED) — the success path is a read and is not audited.
     ACCOUNT_SEARCH,
+    // TASK-MONO-811 (ADR-MONO-084 P6): IAM overview performance metrics (GET /api/admin/metrics).
+    // Like ACCOUNT_SEARCH, used only for the best-effort DENIED row (403 PERMISSION_DENIED from the aspect,
+    // 403 TENANT_SCOPE_DENIED from QueryTenantScopeGate) — a successful read writes no row (BE-486 read-path
+    // rule; the response holds counts only, no subject). target_type=METRICS_QUERY, permission_used=audit.read.
+    // Safe to add: admin_actions.action_code is a VARCHAR(50) with no CHECK / enum constraint (V0001), and
+    // admin.action.performed consumers are forward-compatible on unknown codes (admin-events.md).
+    METRICS_QUERY,
     // TASK-BE-029-2: operator self 2FA enrollment + verify. target_type=OPERATOR.
     OPERATOR_2FA_ENROLL,
     OPERATOR_2FA_VERIFY,

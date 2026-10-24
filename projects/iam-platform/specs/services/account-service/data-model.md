@@ -22,7 +22,7 @@ profile(비밀 아님)과 credentials(비밀)는 **물리적으로 별도 서비
 | `deleted_at` | DATETIME(6) | NULL | internal | 논리 삭제 시점 (유예 시작) |
 | `version` | INT | NOT NULL, DEFAULT 0 | internal | 낙관적 락 (T5) |
 
-**인덱스**: `idx_accounts_email` (UNIQUE), `idx_accounts_status`, `idx_accounts_deleted_at` (유예 만료 배치용)
+**인덱스**: `idx_accounts_email` (UNIQUE), `idx_accounts_status`, `idx_accounts_deleted_at` (유예 만료 배치용). **TASK-MONO-811** (`V0034`): `idx_accounts_tenant_created` `(tenant_id, created_at)` · `idx_accounts_created_at` `(created_at)` — 실적 `newAccount` 집계(admin-to-account.md § GET /internal/account-metrics/daily)
 
 ### `profiles`
 
@@ -110,7 +110,7 @@ profile(비밀 아님)과 credentials(비밀)는 **물리적으로 별도 서비
 
 **CHECK (`V0033` 까지)**: `status` 값 · `left_by` 값 · `ACTIVE` 면 탈퇴 기록 없음 · `LOCKED` 면 `locked_at` 있음 · `LOCKED` 가 아니면 잠금 기록 없음 · `LOCKED` 면 탈퇴 기록 없음.
 
-**PK**: `(account_id, site_tenant_id)`. **인덱스**: `(site_tenant_id, status)` — 사이트 테넌트로 계정을 찾는 표면(목록·콘솔 계정 운영)이 쓴다.
+**PK**: `(account_id, site_tenant_id)`. **인덱스**: `(site_tenant_id, status)` — 사이트 테넌트로 계정을 찾는 표면(목록·콘솔 계정 운영)이 쓴다. **TASK-MONO-811** (`V0034`): `idx_consumer_site_memberships_site_consented` `(site_tenant_id, consented_at)` — 실적 `newAccount` 의 «풀 회원의 사이트 가입» 집계. 재동의가 `consented_at` 을 덮어쓰므로(위 표) 그 가입은 마지막 동의 날로 센다.
 
 ### `consumer_site_roles` (신설 — 같은 출처)
 

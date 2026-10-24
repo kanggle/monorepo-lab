@@ -155,7 +155,7 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
 ```json
 {
   "accountId": "string",
-  "tenantId": "string (발급된 토큰의 tenant_id. 필수)",
+  "tenantId": "string (필수. 로그인한 계정 자신의 테넌트 — 소비자 풀 계정이면 'consumer-pool'. 아래 필드 노트)",
   "ipMasked": "192.168.*.*",
   "userAgentFamily": "Chrome 120",
   "deviceFingerprint": "string",
@@ -166,6 +166,8 @@ auth-service가 발행하는 모든 Kafka 이벤트. security-service가 primary
   "timestamp": "2026-04-12T10:00:00Z"
 }
 ```
+
+**필드 노트** (`tenantId` — TASK-MONO-811 정정): 값은 **로그인한 계정 행의 테넌트**다 — 위 «발행 경로» 표(폼: 자격의 테넌트 · `CredentialAuthenticationProvider` 가 `credential.getTenantId()` 를 싣는다 / 소셜: `status-with-tenant` 의 `tenantId`)와 같다. 발급 토큰의 `tenant_id`(시작 client 의 사이트)가 **아니다** — 이전 문구 «발급된 토큰의 tenant_id» 는 코드와 맞지 않았다. 그래서 소비자 풀 계정(ADR-MONO-078)이 어느 사이트에 로그인하든 이 값은 `consumer-pool` 이고, security-service `login_history` 도 그 값으로 기록한다(admin-api.md § GET /api/admin/metrics 의 «풀 계정 제외» 공백). 사이트 테넌트를 이벤트에 싣는 일은 **후속 티켓**이다 — 스키마 변경은 이 정정에 없다.
 
 **필드 노트** (TASK-BE-025):
 - `deviceId`: 이 로그인에 사용된 `device_sessions.device_id`. auth-service가 발급하는 opaque UUID. 필드 생략/`null`은 레거시 이벤트로 간주.

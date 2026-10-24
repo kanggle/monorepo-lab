@@ -278,6 +278,11 @@ const MACHINE_KEYS = new Set([
   'poCount', // series value (integer string) — 발주 건수
   'poAmount:KRW', // series value (integer string, KRW minor units) — 발주 금액
   'receivedCount', // series value (integer string) — 입고 완료
+  // TASK-MONO-811 — the iam «실적» strip's series value keys (same shape).
+  'loginSuccess', // series value (integer string) — 로그인 성공
+  'loginFailure', // series value (integer string) — 로그인 실패
+  'accountLocked', // series value (integer string) — 계정 잠금
+  'newAccount', // series value (integer string) — 신규 계정
 ]);
 
 /** `*Id` (sourceId, accountId, nodeId, …) and `*At` (createdAt, asOf-like). */

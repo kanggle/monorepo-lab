@@ -112,9 +112,54 @@ base path: `/internal/security`
 
 ---
 
+## GET /internal/security/metrics/daily
+
+IAM 개요 실적 줄(admin-api.md [§ GET /api/admin/metrics](admin-api.md#get-apiadminmetrics), TASK-MONO-811)의 로그인 · 잠금 건수 — **KST 날짜별 건수만**. 행 · 계정 id · IP · 기기 지문은 응답에 없고, 쿼리도 `login_history` 의 `(outcome, occurred_at)` · `account_lock_history` 의 `(occurred_at)` 외의 컬럼을 읽지 않는다. 각 키의 규범 정의는 admin-api.md 의 표다 — 이 절은 그 숫자를 만드는 표면이다.
+
+**Auth required**: internal — 위 두 엔드포인트와 같다(`InternalAuthFilter`: GAP client_credentials JWT + **`internal.invoke` scope**, 없거나 무효 · scope 없음(유저 토큰 포함) → 403 `PERMISSION_DENIED`, fail-closed).
+
+**Query Parameters**:
+
+| 파라미터 | 타입 | 설명 |
+|---|---|---|
+| `tenantId` | string (**required**) | 셀 테넌트(행의 `tenant_id` 와 정확히 일치). `*` → 전 테넌트(`consumer-pool` 포함). admin-service 가 `QueryTenantScopeGate` 로 이미 게이트한 값이다 — 이 서비스는 다시 판정하지 않는다(내부 신뢰 자세, `GET /internal/accounts` 와 같다) |
+| `from` | ISO-8601 instant (**required**) | 창 시작(포함). `…Z` 또는 오프셋(`+09:00`) |
+| `to` | ISO-8601 instant (**required**) | 창 끝(**제외**) — 창은 반열림 `[from, to)` |
+
+`to < from` · 창 길이 62일 초과(한 달 창의 안전 상한 — 실수로 생기는 무제한 스캔 방지)는 400.
+
+**Response 200**:
+```json
+{
+  "tenantId": "fan-platform",
+  "from": "2026-10-18T15:00:00Z",
+  "to": "2026-10-23T05:05:00Z",
+  "days": [
+    { "date": "2026-10-19", "loginSuccess": 30, "loginFailure": 2, "accountLocked": 0 }
+  ]
+}
+```
+
+- `days` — 센 행이 하나라도 있는 **KST 날짜**만, 오름차순. 없는 날은 빠진다(0 채우기는 admin-service 가 공용 `PerformanceMetrics.of` 로 한다).
+- `date` 는 `occurred_at` 을 Java 의 `KstPeriodBounds.dateOf` 로 자른 KST 날짜다 — SQL 에서 날을 자르지 않는다(performance-metrics-contract.md § 2).
+- `loginSuccess` = `outcome = SUCCESS` 행 수 · `loginFailure` = `outcome = FAILURE` 행 수 · `accountLocked` = `account_lock_history` 행 수. `ATTEMPTED` · `RATE_LIMITED` · `TOKEN_REUSE` · `REFRESH` 는 읽지도 않는다.
+- 🔴 테넌트는 **행에 기록된 `tenant_id`** 다. 소비자 풀 계정의 로그인 · 잠금은 `consumer-pool` 로 기록되므로 사이트 테넌트를 물으면 잡히지 않는다(admin-api.md 의 알려진 공백 · 후속 티켓).
+- 인덱스: `V0012__metrics_indexes.sql` — `login_history (tenant_id, outcome, occurred_at)` · `account_lock_history (tenant_id, occurred_at)` · `account_lock_history (occurred_at)`. `*` 의 로그인 쿼리는 기존 `idx_login_history_occurred_at`.
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `tenantId` · `from` · `to` 누락 · instant 가 아님 · `to < from` · 창 > 62일 |
+| 403 | `PERMISSION_DENIED` | 인증 실패(위 Auth) |
+
+---
+
 ## Meta-Audit
 
 이 엔드포인트의 모든 호출은 **조회 자체가 감사 기록됨** ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A5). 호출자(admin-service의 operator_id), 조회 대상(accountId), 시간이 security-service 내부에 `admin_query_audit` 로그로 기록.
+
+🔵 **`GET /internal/security/metrics/daily` 는 이 규칙의 대상이 아니다** (TASK-MONO-811). A5 의 meta-audit 는 «누가 **누구의** 감사 기록을 봤나» 를 남기는 것인데, 이 엔드포인트에는 조회 대상(`accountId`)이 없고 응답은 날짜별 건수뿐이라 어떤 사람의 기록도 드러나지 않는다. 운영자 측 기록은 admin-service 가 진다 — 거절은 `METRICS_QUERY` DENIED 행, 성공은 read-path 규약(BE-486)대로 행 없음(admin-api.md § GET /api/admin/metrics «Side Effects»). 🔴 기록: 2026-10-24 UTC 코드 읽기 기준 security-service 에 `admin_query_audit` 를 쓰는 코드는 **없다**(위 두 행 조회 엔드포인트 포함) — 위 문단은 구현되지 않은 의도다. 이 절이 그 공백을 고치지 않는다.
 
 ---
 

@@ -261,6 +261,32 @@ public class AccountServiceClient {
     }
 
     /**
+     * TASK-MONO-811 — {@code GET /internal/account-metrics/daily} (admin-to-account.md): per-KST-date
+     * {@code newAccount} for {@code [from, to)}. {@code tenantId} is the tenant {@code QueryTenantScopeGate}
+     * resolved ({@code "*"} = every tenant). Any failure → {@link DownstreamFailureException} (4xx →
+     * {@link NonRetryableDownstreamException}), never an empty answer.
+     */
+    @Retry(name = "accountService")
+    @CircuitBreaker(name = "accountService")
+    public AccountMetricsDaily newAccountMetricsDaily(String tenantId, Instant from, Instant to) {
+        String path = "/internal/account-metrics/daily";
+        AccountMetricsDaily resp = execute(path, () -> restClient.get()
+                .uri(uriBuilder -> uriBuilder.path(path)
+                        .queryParam("tenantId", "{tenantId}")
+                        .queryParam("from", "{from}")
+                        .queryParam("to", "{to}")
+                        .build(Map.of("tenantId", tenantId, "from", from.toString(), "to", to.toString())))
+                .headers(h -> h.setBearerAuth(tokenProvider.currentBearer()))
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, ERROR_RAISER)
+                .body(AccountMetricsDaily.class));
+        if (resp == null || resp.days() == null) {
+            throw new DownstreamFailureException("account-service returned no metrics body");
+        }
+        return resp;
+    }
+
+    /**
      * Shared {@code onStatus} handler: re-raises any error status from account-service
      * as an {@link HttpClientErrorException} carrying the response body, which
      * {@link #execute} then maps to the retryable/non-retryable downstream exceptions.
@@ -499,6 +525,14 @@ public class AccountServiceClient {
             DataExportProfile profile,
             Instant exportedAt
     ) {}
+
+    /** TASK-MONO-811 — body of {@code GET /internal/account-metrics/daily}. Counts only. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    public record AccountMetricsDaily(String tenantId, String from, String to, java.util.List<Day> days) {
+        /** {@code date} = {@code yyyy-MM-dd}, a KST date. */
+        @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+        public record Day(String date, long newAccount) {}
+    }
 
     public record DataExportProfile(
             String displayName,

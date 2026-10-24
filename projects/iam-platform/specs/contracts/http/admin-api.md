@@ -154,8 +154,9 @@ base path: `/api/admin`
 | 26 | `GET /operators/{id}/domain-access` · `POST /operators/{id}/domain-permission-sets` · `DELETE …/domain-permission-sets/{setId}` | `X-Tenant-Id` · 생략 규칙(`domain_access.manage`) | grant scope(`domain_access.manage`) + 대상이 `'*'` 운영자면 **`'*'` grant scope 만**(행 전체 규칙의 `'*'` 행과 같은 술어 · OD-3) | 083 P2 |
 | 27 | `GET\|POST /groups/{groupId}/domain-permission-sets` · `DELETE …/{setId}` | 대상(그룹 `tenant_id`) | grant scope(`domain_access.manage`) | 083 P2 |
 | 28 | `GET /me/domain-access` | `X-Tenant-Id`(필수) | 판정 없음 — 자기 자신의 값만(권한 키 없음) | 083 P2 |
+| 29 | `GET /metrics` | `tenantId` · 생략 규칙 | grant scope(`audit.read`) — #7 과 같은 게이트 · `*` = `'*'` grant 만 | 811 |
 
-🔵 24 ~ 28 행은 `TASK-MONO-791`(ADR-MONO-083 P1) 이 더했다 — «784 슬라이스» 열 대신 그 동작을 구현하는 단계(`083 P2` = `TASK-BE-631`)를 적는다. P2 머지 전 이 엔드포인트는 없다.
+🔵 24 ~ 28 행은 `TASK-MONO-791`(ADR-MONO-083 P1) 이 더했다 — «784 슬라이스» 열 대신 그 동작을 구현하는 단계(`083 P2` = `TASK-BE-631`)를 적는다. P2 머지 전 이 엔드포인트는 없다. 29 행은 `TASK-MONO-811`(ADR-MONO-084 P6) 이 더했다 — § GET /api/admin/metrics.
 
 - 게이트를 다시 구현한 사본(운영자 목록 · 초대 목록 · 프로필 · 테넌트 상세)은 게이트 하나로 합친다(D-4) — 엔드포인트마다 술어를 다시 쓰지 않는다.
 - **행동 테넌트 = 감사 테넌트** (D-13 · S3): 테넌트로 판정된 비플랫폼 행위의 `admin_actions.tenant_id` = **행동 테넌트**(지금은 행위자 홈 — 784 AC-0 ②, 그래서 홈 A 인 사람이 B 에서 한 행위가 A 의 감사에 쌓이고 B 관리자가 못 봤다). `'*'` 행위자 = `'*'`(플랫폼 교차 조회 그대로). 자기 흐름(로그인 · 리프레시 · 자기 프로필 · 초대 수락) · DENIED 행 = 홈 그대로(R1 «감사 기본값» · DENIED «no leak»). 과거 행 백필 없음(감사 행 불변).
@@ -536,6 +537,70 @@ base path: `/api/admin`
 **Side Effects** (TASK-BE-262): `403 TENANT_SCOPE_DENIED` 응답 시 `admin_actions` 테이블에 `outcome=DENIED`, `tenant_id=operator's`, `target_tenant_id=operator's`, `downstream_detail`에 시도한 대상 테넌트 기록 — best-effort 쓰기. 실패해도 403 자체는 정상 반환되며 `admin.audit.cross_tenant_deny_failure` 메트릭이 증가한다.
 
 **Note**: 이 조회 자체가 **meta-audit**로 기록됨 ([rules/traits/audit-heavy.md](../../../../../rules/traits/audit-heavy.md) A5). PII는 마스킹됨 (IP 일부, 이메일 미포함).
+
+---
+
+## GET /api/admin/metrics
+
+IAM 개요(`/iam`) 의 «실적» 줄 — 이번 주 · 이번 달 **로그인 성공 · 로그인 실패 · 계정 잠금 · 신규 계정** 과 직전 같은 길이 대비 · 일별 추이 (TASK-MONO-811, ADR-MONO-084 P6). 응답 모양 · 기간(창) · 정수 문자열 규칙은 공용 [`performance-metrics-contract.md`](../../../../../platform/contracts/performance-metrics-contract.md) 이고, 이 절은 **각 키가 무엇을 세는가만** 정한다(ADR-MONO-084 D5).
+
+콘솔이 부르는 입구는 **이것 하나**다(소유자 결정 D-a). admin-service 는 로그인 · 계정 데이터를 갖지 않으므로 security-service([security-query-api.md § GET /internal/security/metrics/daily](security-query-api.md#get-internalsecuritymetricsdaily)) 와 account-service([admin-to-account.md § GET /internal/account-metrics/daily](internal/admin-to-account.md#get-internalaccount-metricsdaily)) 에 **현재 창 · 직전 창** 각각 한 번씩 묻고, 일별 값을 더해 합계를 만들고 현재 창의 일별 값을 `series` 로 쓴다. 두 하위 서비스는 **KST 날짜별 건수만** 답한다 — 행은 admin-service 에도 오지 않는다.
+
+**Auth required**: Yes (operator token, `token_type=admin`)
+**Required permission**: `audit.read` — `GET /api/admin/audit` 와 같은 등급. `security.event.read` 는 요구하지 않는다(행 · 계정 · IP 가 없는 집계 숫자만 내려가므로 — `source=login_history` 의 교집합 규칙은 행을 보여 주는 조회의 것이다).
+
+**Query Parameters**:
+
+| 파라미터 | 타입 | 설명 |
+|---|---|---|
+| `period` | string (**required**) | `week` \| `month` (대소문자 무시) — 공용 계약 § 1 |
+| `tenantId` | string (optional) | 집계할 테넌트. **`GET /api/admin/audit` 와 같은 게이트**(`QueryTenantScopeGate.resolve`, § 행동 테넌트 #7 과 같은 술어): grant scope(`audit.read`) 안이어야 하고 밖이면 `403 TENANT_SCOPE_DENIED`. 생략 → 생략 규칙(grant scope 가 구체 테넌트 하나면 그 테넌트, `'*'` 면 `'*'`, 둘 이상이면 `400 VALIDATION_ERROR`). `*` → `'*'` grant scope(SUPER_ADMIN) 만 — **전 테넌트**(테넌트 필터 없음, `consumer-pool` 포함) |
+
+**Response 200**: 공용 `PerformanceMetrics` 본문, **봉투 없이**(`{ data, meta }` 없음). `metrics` 는 아래 표의 순서 그대로 네 키, 모두 `unit = "count"` · `currency = null`. 응답에는 **계정 id · 이메일 · IP · 기기 지문 · 행이 하나도 없다** — 공용 모양의 필드뿐이다(AC-2).
+
+```json
+{
+  "period": "week",
+  "timezone": "Asia/Seoul",
+  "current":  { "from": "2026-10-19T00:00:00+09:00", "to": "2026-10-23T14:05:00+09:00" },
+  "previous": { "from": "2026-10-12T00:00:00+09:00", "to": "2026-10-16T14:05:00+09:00" },
+  "metrics": [
+    { "key": "loginSuccess",  "unit": "count", "currency": null, "current": "120", "previous": "98" },
+    { "key": "loginFailure",  "unit": "count", "currency": null, "current": "7",   "previous": "11" },
+    { "key": "accountLocked", "unit": "count", "currency": null, "current": "1",   "previous": "0" },
+    { "key": "newAccount",    "unit": "count", "currency": null, "current": "14",  "previous": "9" }
+  ],
+  "series": [
+    { "date": "2026-10-19", "values": { "loginSuccess": "30", "loginFailure": "2", "accountLocked": "0", "newAccount": "3" } }
+  ]
+}
+```
+
+**Metric keys (normative — 한 줄씩)** — 모든 행은 **그 행이 기록된 `tenant_id`** 로 테넌트에 귀속되고, 표의 시각 칸으로 창 `[from, to)` 와 KST 날짜(`KstPeriodBounds.dateOf`)에 귀속된다:
+
+| Key | 센다 | 시각 | 제외 | 과거 날 값이 바뀌나 |
+|---|---|---|---|---|
+| `loginSuccess` | security-service `login_history` 중 `outcome = SUCCESS` 인 행(`auth.login.succeeded` 1건 = 1행). **이벤트 수** — 같은 사람이 세 번 로그인하면 3 | `occurred_at`(이벤트의 `timestamp`) | 다른 모든 `outcome`(`ATTEMPTED` · `FAILURE` · `RATE_LIMITED` · `TOKEN_REUSE` · `REFRESH`). 🔴 **소비자 풀 계정(ADR-MONO-078)의 로그인은 제외된다** — 그 행의 `tenant_id` 는 계정 자신의 테넌트 `consumer-pool` 이다(auth-service 가 `credential.getTenantId()` 를 싣는다 · [auth-events.md § auth.login.succeeded](../events/auth-events.md#authloginsucceeded)). 그래서 소비자 사이트의 값에는 그 사이트에 들어온 풀 회원의 로그인이 **없다** — **알려진 공백**이고, 로그인 이벤트에 사이트 테넌트를 싣는 일은 후속 티켓이다. `tenantId=consumer-pool` · `*` 에는 잡힌다 | **늘 수 있다** — Kafka 로 늦게 소비된 이벤트는 자기 `occurred_at` 의 날에 더해진다. 줄지 않는다(append-only — GDPR 마스킹도 행을 지우지 않는다) |
+| `loginFailure` | `outcome = FAILURE` 인 행(`auth.login.failed` 중 `failureReason ≠ RATE_LIMITED`). **시도 수**이지 사람 수가 아니다 — 같은 사람이 열 번 틀리면 10. 없는 이메일 실패(계정 미확정)도 이벤트의 테넌트(시작 client 의 테넌트)로 잡힌다 | `occurred_at` | `ATTEMPTED` · `RATE_LIMITED` · `TOKEN_REUSE` · `REFRESH` · `SUCCESS`. 풀 계정 제외 — `loginSuccess` 와 같다 | `loginSuccess` 와 같다 |
+| `accountLocked` | security-service `account_lock_history` 행 — `account.locked` 1건 = 1행. 잠금 → 해제 → 재잠금 = **2**. 사유 무관(운영자 · 자동 잠금 모두) | `occurred_at`(이벤트의 `lockedAt`) | 해제(`account.unlocked`). 🔴 **사이트 멤버십 잠금**(TASK-BE-621, 응답 `scope = SITE_MEMBERSHIP`)은 `account.locked` 를 내지 않으므로 세지 않는다. 풀 계정의 계정 잠금은 `consumer-pool` 로 기록되므로 사이트 값에서 제외 — `loginSuccess` 와 같은 공백 | `loginSuccess` 와 같다(늦은 소비 → 늘 수 있음) |
+| `newAccount` | **구체 테넌트 X**: account-service `accounts` 중 `tenant_id = X` 이고 `created_at` 이 창 안인 행 **+** `consumer_site_memberships` 중 `site_tenant_id = X` 이고 `consented_at` 이 창 안인 행 — 풀 회원이 그 사이트에 들어온 것은 그 사이트의 신규 계정이다(그 사이트의 `account.created` 가 나가는 시점 · multi-tenancy.md § 소비자 계정 풀 § 6). 양쪽 모두 **현재 상태 무관**(이후 잠기거나 떠나거나 삭제 대기여도 센다). **X = `consumer-pool`**: `accounts` 행만. **`*`**: 전 테넌트의 `accounts` 행만 — 풀 계정은 그 `accounts` 행으로 **한 번** 세고, 멤버십은 **더하지 않는다**(사이트마다 같은 사람을 다시 세게 된다) | `accounts.created_at` · `consumer_site_memberships.consented_at` | 다른 테넌트의 계정 · 다른 사이트의 멤버십. 운영자(콘솔 사용자) 계정은 admin-service 의 것이라 애초에 없다 | 🔴 **줄 수 있다** — ① **재가입 규칙**: 스스로 떠난(`LEFT` · `left_by = SELF`) 회원이 다시 동의하면 같은 행의 `consented_at` 이 **새 동의 시각으로 덮어써진다**(`ConsentToConsumerSiteUseCase` → `rejoinOnConsent`). 그 가입은 새 날로 옮겨가고 원래 날 값은 1 준다 — 한 (계정, 사이트) 는 언제나 한 번, 가장 최근 동의 날에 센다. 운영자가 내보낸 멤버십(`left_by = OPERATOR`) · 사이트 잠금 · 해제는 `consented_at` 을 바꾸지 않는다. ② 계정 행의 물리 삭제(테스트 정리 · 규제 파기 — 보통은 soft delete)는 그 날 값을 줄인다. ③ 레거시 사이트 계정의 풀 이전(`ConsumerPoolLegacyAccountMover`)은 계정 행을 `consumer-pool` 로 옮기고 멤버십 `consented_at` 에 원래 `created_at` 을 복사하므로 **사이트 X 와 `*` 의 값은 그대로**, `consumer-pool` 의 과거 값만 는다 |
+
+- **순서**: `loginSuccess`, `loginFailure`, `accountLocked`, `newAccount`.
+- **Series**: 현재 창의 KST 날짜마다 네 키 모두, 활동 없는 날은 `"0"`(공용 계약 § 3).
+- **값의 출처가 둘**이다 — 로그인 · 잠금은 security-service, 신규 계정은 account-service. 각자 자기 DB 의 시각으로 세고, 날짜는 둘 다 Java 의 `KstPeriodBounds.dateOf` 로 자른다(SQL 에서 날을 자르지 않는다 — 공용 계약 § 2).
+
+**Errors**:
+
+| Status | Code | 조건 |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `period` 누락 또는 `week` / `month` 가 아님 · `tenantId` 생략인데 grant scope 에 구체 테넌트가 둘 이상(§ 행동 테넌트 생략 규칙) |
+| 401 | `TOKEN_INVALID` | 운영자 토큰 없음 / 무효 |
+| 403 | `PERMISSION_DENIED` | `audit.read` 없음 — `period` 검사보다 **먼저**다 |
+| 403 | `TENANT_SCOPE_DENIED` | `tenantId` 가 `audit.read` grant scope 밖(`*` 를 `'*'` grant 없이 보낸 경우 포함) · grant scope 가 비어 있음 |
+| 503 | `DOWNSTREAM_ERROR` | security-service · account-service **중 하나라도** 실패(5xx · 시간 초과 · 4xx · 본문 없음 · 창 밖 날짜) — **부분 응답은 없다**(공용 계약 § 4: 실패한 줄을 «0» 으로 보이지 않는다) |
+| 503 | `CIRCUIT_OPEN` | 하위 서비스 회로 열림(`securityService` · `accountService` — 기존 Resilience4j 설정) |
+
+**Side Effects**: 성공한 조회는 `admin_actions` 행을 쓰지 **않는다**(BE-486 read-path 규약 — 응답이 대상 없는 건수뿐이라 «누구를 조회했나» 가 없다. `GET /api/admin/audit` 의 SUCCESS meta-audit 행과 다른 점이다). 거절은 best-effort DENIED 행 — `action_code = METRICS_QUERY` · `target_type = METRICS_QUERY` · `permission_used = audit.read`(403 `PERMISSION_DENIED` 는 aspect, 403 `TENANT_SCOPE_DENIED` 는 게이트가 쓴다 — `GET /api/admin/audit` 의 BE-262 행과 같은 모양).
 
 ---
 

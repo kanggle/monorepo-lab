@@ -8,6 +8,12 @@ import { ApiError } from '@/shared/api/errors';
 import { listOperators } from '@/shared/api/iam-operators-read';
 import { searchAccounts } from '@/shared/api/iam-accounts-read';
 import { queryAudit } from '@/shared/api/iam-audit-read';
+import type { MetricsPeriod } from '@/shared/lib/kst-period';
+import {
+  performanceMetricsCell,
+  type PerformanceCell,
+} from '@/shared/api/performance-metrics';
+import { getIamMetrics } from './iam-metrics-api';
 
 /**
  * Server-side IAM **operator overview snapshot** fan-out for the `/iam` landing
@@ -48,6 +54,16 @@ import { queryAudit } from '@/shared/api/iam-audit-read';
  * `400 NO_ACTIVE_TENANT` before any fetch). Rather than surface three identical
  * per-cell messages, the state short-circuits to `noActiveTenant: true` and the
  * screen renders one page-level tenant gate (mirror of the sibling IAM screens).
+ *
+ * ── «실적» strip (ADR-MONO-084 P6, TASK-MONO-811) ──
+ * One more cell, `performance` (`GET /api/admin/metrics?period=&tenantId=`):
+ * 로그인 성공 · 로그인 실패 · 계정 잠금 · 신규 계정. This is the ADR-MONO-084
+ * exception to the «no aggregation endpoint» rule above — the producer counts
+ * (D4), the console never sums list pages for it — and it does not replace any
+ * card's `totalElements`. Same rule as every leg: a `403` makes it `forbidden`,
+ * anything but a `401` `degraded`, and neither touches the cards below it. It
+ * needs the active tenant too (sent as the `tenantId` query param), so with no
+ * tenant it is not called.
  */
 
 export type CellStatus = 'ok' | 'forbidden' | 'degraded';
@@ -116,12 +132,20 @@ export interface IamOverviewState {
   operators: OperatorsSummary;
   accounts: AccountsSummary;
   audit: AuditSummary;
+  /** The period the «실적» strip shows (`?period=`, default `month`). */
+  period: MetricsPeriod;
+  /** The «실적» strip (TASK-MONO-811) — its own cell. */
+  performance: PerformanceCell;
 }
 
-const EMPTY: Omit<IamOverviewState, 'noActiveTenant'> = {
+/** ADR-MONO-084 OD-4: week / month; the overview opens on the month. */
+export const DEFAULT_OVERVIEW_PERIOD: MetricsPeriod = 'month';
+
+const EMPTY: Omit<IamOverviewState, 'noActiveTenant' | 'period'> = {
   operators: { total: null, active: null, suspended: null, status: 'degraded' },
   accounts: { total: null, locked: null, status: 'degraded' },
   audit: { total: null, recent: null, status: 'degraded' },
+  performance: { status: 'degraded', value: null },
 };
 
 /** Recent-activity page size (audit). */
@@ -153,7 +177,9 @@ async function cell<T>(p: Promise<T>): Promise<Cell<T>> {
   }
 }
 
-export async function getIamOverviewState(): Promise<IamOverviewState> {
+export async function getIamOverviewState(
+  period: MetricsPeriod = DEFAULT_OVERVIEW_PERIOD,
+): Promise<IamOverviewState> {
   // All three legs require an active tenant — short-circuit to one page-level
   // gate instead of three identical NO_ACTIVE_TENANT per-cell messages.
   const tenant = await getActiveTenant();
@@ -162,6 +188,7 @@ export async function getIamOverviewState(): Promise<IamOverviewState> {
       noActiveTenant: true,
       tenantNoticeKind: await noTenantNoticeKind(),
       ...EMPTY,
+      period,
     };
   }
 
@@ -173,6 +200,7 @@ export async function getIamOverviewState(): Promise<IamOverviewState> {
       accountsCell,
       accountsLockedCell,
       auditCell,
+      performance,
     ] = await Promise.all([
       cell(listOperators({ page: 0, size: 1 })),
       cell(listOperators({ status: 'ACTIVE', page: 0, size: 1 })),
@@ -182,6 +210,9 @@ export async function getIamOverviewState(): Promise<IamOverviewState> {
       // so a degrade here never blanks the total).
       cell(searchAccounts({ status: 'LOCKED', page: 0, size: 1 })),
       cell(queryAudit({ page: 0, size: RECENT_SIZE })),
+      // TASK-MONO-811 — 401 re-thrown like every leg; anything else degrades
+      // the strip only.
+      performanceMetricsCell(getIamMetrics(period, tenant)),
     ]);
 
     const operators: OperatorsSummary = {
@@ -203,7 +234,7 @@ export async function getIamOverviewState(): Promise<IamOverviewState> {
       status: auditCell.status,
     };
 
-    return { noActiveTenant: false, operators, accounts, audit };
+    return { noActiveTenant: false, operators, accounts, audit, period, performance };
   } catch (err) {
     // Only a `401` re-thrown by a cell reaches here → whole-session re-login.
     if (err instanceof ApiError && err.status === 401) {

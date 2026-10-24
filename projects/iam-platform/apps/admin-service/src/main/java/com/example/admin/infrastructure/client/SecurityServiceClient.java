@@ -66,6 +66,52 @@ public class SecurityServiceClient {
         return resp == null || resp.content() == null ? Collections.emptyList() : resp.content();
     }
 
+    /**
+     * TASK-MONO-811 — {@code GET /internal/security/metrics/daily} (security-query-api.md): per-KST-date
+     * {@code loginSuccess} / {@code loginFailure} / {@code accountLocked} for {@code [from, to)}.
+     * {@code tenantId} is the tenant {@code QueryTenantScopeGate} resolved ({@code "*"} = every tenant).
+     * Fail-fast like the audit reads: any failure is a {@link DownstreamFailureException} (503) — never an
+     * empty list, which the overview would show as «0».
+     */
+    @Retry(name = "securityService")
+    @CircuitBreaker(name = "securityService")
+    public SecurityMetricsDaily loginMetricsDaily(String tenantId, Instant from, Instant to) {
+        String path = "/internal/security/metrics/daily";
+        SecurityMetricsDaily resp;
+        try {
+            resp = restClient.get()
+                    .uri(uriBuilder -> uriBuilder.path(path)
+                            .queryParam("tenantId", "{tenantId}")
+                            .queryParam("from", "{from}")
+                            .queryParam("to", "{to}")
+                            .build(java.util.Map.of("tenantId", tenantId,
+                                    "from", from.toString(), "to", to.toString())))
+                    .headers(this::applyAuth)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, r) -> {
+                        throw HttpClientErrorException.create(
+                                r.getStatusCode(), r.getStatusText(),
+                                r.getHeaders(), r.getBody().readAllBytes(), null);
+                    })
+                    .body(SecurityMetricsDaily.class);
+        } catch (RestClientResponseException e) {
+            log.warn("security-service returned {} on {}: {}", e.getStatusCode(), path, e.getMessage());
+            if (e.getStatusCode().is4xxClientError()) {
+                throw new NonRetryableDownstreamException(
+                        "security-service error " + e.getStatusCode().value(), e);
+            }
+            throw new DownstreamFailureException(
+                    "security-service error " + e.getStatusCode().value(), e);
+        } catch (Exception e) {
+            log.error("security-service call failed on {}", path, e);
+            throw new DownstreamFailureException("security-service unavailable", e);
+        }
+        if (resp == null || resp.days() == null) {
+            throw new DownstreamFailureException("security-service returned no metrics body");
+        }
+        return resp;
+    }
+
     private <T> T callGet(String path, String accountId, Instant from, Instant to, Class<T> responseType) {
         try {
             return restClient.get()
@@ -124,4 +170,12 @@ public class SecurityServiceClient {
     public record LoginHistoryResponse(List<LoginHistoryEntry> content) {}
 
     public record SuspiciousResponse(List<SuspiciousEventEntry> content) {}
+
+    /** TASK-MONO-811 — body of {@code GET /internal/security/metrics/daily}. Counts only. */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    public record SecurityMetricsDaily(String tenantId, String from, String to, List<Day> days) {
+        /** {@code date} = {@code yyyy-MM-dd}, a KST date. */
+        @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+        public record Day(String date, long loginSuccess, long loginFailure, long accountLocked) {}
+    }
 }
