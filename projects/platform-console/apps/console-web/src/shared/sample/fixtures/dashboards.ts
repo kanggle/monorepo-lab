@@ -3,6 +3,7 @@ import { IAM_FIXTURE_HANDLERS } from './iam';
 import { ERP_FIXTURE_HANDLERS } from './erp';
 import { ECOMMERCE_FIXTURE_HANDLERS } from './ecommerce';
 import { LEDGER_FIXTURE_HANDLERS } from './ledger';
+import { FINANCE_FIXTURE_HANDLERS } from './finance';
 import { WMS_FIXTURE_HANDLERS } from './wms';
 import { SCM_FIXTURE_HANDLERS } from './scm';
 
@@ -119,6 +120,63 @@ const ECOMMERCE_TO_SHIP_BODY = (() => {
 })();
 
 /**
+ * TASK-PC-FE-368 — each card's headline metric (ADR-MONO-084 D7) is the answer the
+ * SAME domain fixture gives to the SAME `…/metrics?period=week` request the
+ * composition's headline leg makes — so the landing card and the domain's own
+ * «실적» strip cannot disagree. Not found ⇒ throws at module load (loud, never a
+ * silent «실적을 불러올 수 없음» on the first screen a visitor sees).
+ *
+ * 🔴 This file may import nothing outside `shared/sample/`
+ * (`tests/unit/sample-router-isolation.test.ts`), so the key selection of
+ * `shared/lib/operator-overview-headline.ts` (`HEADLINE_SPECS`) is restated here.
+ * `tests/unit/features/operator-overview/headline-metric.test.tsx` pins the two
+ * to each other: it reduces the same fixture answers with the production
+ * function and requires equality.
+ */
+interface SampleMetric {
+  key: string;
+  unit: string;
+  currency: string | null;
+  current: string;
+  previous: string;
+}
+
+function sampleHeadline(
+  domain: string,
+  matches: (key: string) => boolean,
+  handler: ((path: string) => unknown) | undefined,
+  path: string,
+) {
+  let body = handler?.(path) as { data?: unknown; metrics?: SampleMetric[] } | undefined;
+  // procurement wraps most reads in `{ data, meta }`; the bare form has `metrics`.
+  if (body && !('metrics' in body) && body.data) body = body.data as typeof body;
+  const metrics = (body?.metrics ?? []).filter((m) => matches(m.key));
+  if (metrics.length === 0) {
+    throw new Error(`sample overview: no headline metric for ${domain} from ${path}`);
+  }
+  return {
+    status: 'ok',
+    period: 'week',
+    metrics: metrics.map((m) => ({
+      key: m.key,
+      unit: m.unit,
+      currency: m.currency,
+      current: m.current,
+      previous: m.previous,
+    })),
+  } as const;
+}
+
+const SAMPLE_HEADLINES = {
+  iam: sampleHeadline('iam', (k) => k === 'loginFailure', IAM_FIXTURE_HANDLERS['iam:iam_metrics'], '/api/admin/metrics?period=week&tenantId=sample'),
+  wms: sampleHeadline('wms', (k) => k === 'qtyShipped', WMS_FIXTURE_HANDLERS['wms:wms'], '/api/v1/admin/dashboard/metrics?period=week'),
+  scm: sampleHeadline('scm', (k) => k.startsWith('poAmount:'), SCM_FIXTURE_HANDLERS['flat:scm'], '/api/v1/procurement/po/metrics?period=week'),
+  finance: sampleHeadline('finance', (k) => k.startsWith('transferAmount:'), FINANCE_FIXTURE_HANDLERS['flat:finance'], '/api/finance/accounts/metrics?period=week'),
+  erp: sampleHeadline('erp', (k) => k === 'approved', ERP_FIXTURE_HANDLERS['flat:erp_approval'], '/api/erp/approval/metrics?period=week'),
+  ecommerce: sampleHeadline('ecommerce', (k) => k === 'revenue', ECOMMERCE_FIXTURE_HANDLERS['ecommerce:ecommerce_order'], '/api/admin/orders/metrics?period=week'),
+};
+
+/**
  * Dashboard fixtures (R3ⓐ — the first screens made `ready`): the composed
  * operator overview (§ 2.4.9.1), domain health (§ 2.4.9.2) and the
  * notification aggregator inbox (ADR-MONO-043 §4).
@@ -135,12 +193,12 @@ const ECOMMERCE_TO_SHIP_BODY = (() => {
 export const SAMPLE_OPERATOR_OVERVIEW = {
   asOf: SAMPLE_AS_OF,
   cards: [
-    { domain: 'iam', status: 'ok', data: IAM_LOCKED_BODY },
-    { domain: 'wms', status: 'ok', data: WMS_UNSHIPPED_BODY },
-    { domain: 'scm', status: 'ok', data: SCM_DRAFT_PO_BODY },
-    { domain: 'finance', status: 'ok', data: FINANCE_OPEN_DISCREPANCIES_BODY },
-    { domain: 'erp', status: 'ok', data: ERP_INBOX_BODY },
-    { domain: 'ecommerce', status: 'ok', data: ECOMMERCE_TO_SHIP_BODY },
+    { domain: 'iam', status: 'ok', data: IAM_LOCKED_BODY, headline: SAMPLE_HEADLINES.iam },
+    { domain: 'wms', status: 'ok', data: WMS_UNSHIPPED_BODY, headline: SAMPLE_HEADLINES.wms },
+    { domain: 'scm', status: 'ok', data: SCM_DRAFT_PO_BODY, headline: SAMPLE_HEADLINES.scm },
+    { domain: 'finance', status: 'ok', data: FINANCE_OPEN_DISCREPANCIES_BODY, headline: SAMPLE_HEADLINES.finance },
+    { domain: 'erp', status: 'ok', data: ERP_INBOX_BODY, headline: SAMPLE_HEADLINES.erp },
+    { domain: 'ecommerce', status: 'ok', data: ECOMMERCE_TO_SHIP_BODY, headline: SAMPLE_HEADLINES.ecommerce },
   ],
 } as const;
 

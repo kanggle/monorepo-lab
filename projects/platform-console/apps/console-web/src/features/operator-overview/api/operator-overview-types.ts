@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { HeadlineSchema } from '@/shared/lib/operator-overview-headline';
 
 /**
  * `features/operator-overview` — wire types for the composed cross-domain
@@ -79,22 +80,28 @@ export type ForbiddenReason = (typeof FORBIDDEN_REASONS)[number];
  * the schema only asserts presence + record-ness. The card renderer is
  * the boundary that narrows further.
  */
+// TASK-PC-FE-368 — `headline` (ADR-MONO-084 D7) is OPTIONAL on every status: a card
+// from before the field, or a sample/test envelope without it, still parses. It is the
+// card's headline performance metric and its own outcome — never the card's status.
 const OkCardSchema = z.object({
   domain: DomainKeySchema,
   status: z.literal('ok'),
   data: z.unknown(),
+  headline: HeadlineSchema.optional(),
 });
 
 const DegradedCardSchema = z.object({
   domain: DomainKeySchema,
   status: z.literal('degraded'),
   reason: z.enum(DEGRADED_REASONS),
+  headline: HeadlineSchema.optional(),
 });
 
 const ForbiddenCardSchema = z.object({
   domain: DomainKeySchema,
   status: z.literal('forbidden'),
   reason: z.enum(FORBIDDEN_REASONS),
+  headline: HeadlineSchema.optional(),
 });
 
 /** Discriminated union over `status`. */

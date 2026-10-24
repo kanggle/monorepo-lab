@@ -58,7 +58,10 @@ const fixture = JSON.parse(
     path.resolve(__dirname, '../../../../specs/contracts/fixtures/operator-overview-leg-bodies.json'),
     'utf8',
   ),
-) as { legs: Record<string, { body: unknown }> };
+) as {
+  legs: Record<string, { body: unknown }>;
+  headlineMetrics: Record<string, { body: unknown }>;
+};
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -67,8 +70,18 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// TASK-PC-FE-368 — the six headline-metric legs are `<domain>:metrics`; they are matched FIRST
+// (`/po/metrics` also contains `/procurement/po`).
 function legOf(url: string): string {
   if (url.includes('/actuator/health')) return 'health';
+  if (url.includes('/metrics')) {
+    if (url.includes('/api/admin/metrics')) return 'iam:metrics';
+    if (url.includes('/dashboard/metrics')) return 'wms:metrics';
+    if (url.includes('/po/metrics')) return 'scm:metrics';
+    if (url.includes('/api/finance/accounts/metrics')) return 'finance:metrics';
+    if (url.includes('/approval/metrics')) return 'erp:metrics';
+    if (url.includes('/api/admin/orders/metrics')) return 'ecommerce:metrics';
+  }
   if (url.includes('/api/admin/accounts')) return 'iam';
   if (url.includes('/dashboard/orders')) return 'wms';
   if (url.includes('/procurement/po')) return 'scm';
@@ -79,6 +92,15 @@ function legOf(url: string): string {
 }
 
 let fetchMock: ReturnType<typeof vi.fn>;
+
+function bodyFor(leg: string): unknown {
+  return leg.endsWith(':metrics')
+    ? fixture.headlineMetrics[leg.split(':')[0]].body
+    : fixture.legs[leg].body;
+}
+
+/** The card legs only (the headline-metric legs are asserted in operator-overview-headline-composition.test.ts). */
+const cardCalls = () => fetchMock.mock.calls.map(([u]) => legOf(String(u))).filter((l) => !l.endsWith(':metrics'));
 
 function fullSession(tenant = 'acme') {
   cookieJar.set(ACCESS_COOKIE, 'GAP-ACCESS');
@@ -95,7 +117,7 @@ beforeEach(() => {
   vi.mocked(getFinanceDefaultAccountId).mockResolvedValue('acc-7');
   fetchMock = vi.fn(async (url: string) => {
     const leg = legOf(String(url));
-    return leg === 'health' ? json({ status: 'UP' }) : json(fixture.legs[leg].body);
+    return leg === 'health' ? json({ status: 'UP' }) : json(bodyFor(leg));
   });
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -105,13 +127,14 @@ afterEach(() => {
 });
 
 describe('operator overview route', () => {
-  it('200 — the composed envelope parses with the production card schema; six legs called', async () => {
+  it('200 — the composed envelope parses with the production card schema; six card legs + six headline-metric legs called', async () => {
     fullSession();
     const res = await overviewGET();
     expect(res.status).toBe(200);
     const body = OperatorOverviewSchema.parse(await res.json());
     expect(body.cards.map((c) => c.domain)).toEqual(['iam', 'wms', 'scm', 'finance', 'erp', 'ecommerce']);
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(cardCalls()).toHaveLength(6);
+    expect(fetchMock).toHaveBeenCalledTimes(12);
   });
 
   it('🔴 no active tenant → 400 NO_ACTIVE_TENANT and ZERO leg calls (AC-4)', async () => {
@@ -135,7 +158,7 @@ describe('operator overview route', () => {
     fullSession();
     fetchMock.mockImplementation(async (url: string) => {
       const leg = legOf(String(url));
-      return leg === 'wms' ? json({ code: 'TOKEN_INVALID' }, 401) : json(fixture.legs[leg].body);
+      return leg === 'wms' ? json({ code: 'TOKEN_INVALID' }, 401) : json(bodyFor(leg));
     });
     const res = await overviewGET();
     expect(res.status).toBe(401);
@@ -147,7 +170,7 @@ describe('operator overview route', () => {
     fetchMock.mockImplementation(async (url: string) => {
       const leg = legOf(String(url));
       if (leg === 'erp') throw new TypeError('fetch failed');
-      return json(fixture.legs[leg].body);
+      return json(bodyFor(leg));
     });
     const res = await overviewGET();
     expect(res.status).toBe(200);
@@ -158,14 +181,14 @@ describe('operator overview route', () => {
     });
   });
 
-  it('TASK-PC-FE-364 — no finance default account → the finance card is still called and ok; six calls', async () => {
+  it('TASK-PC-FE-364 — no finance default account → the finance card is still called and ok; six card calls', async () => {
     fullSession();
     vi.mocked(getFinanceDefaultAccountId).mockResolvedValue(null);
     const res = await overviewGET();
     const body = OperatorOverviewSchema.parse(await res.json());
     expect(body.cards.find((c) => c.domain === 'finance')).toMatchObject({ status: 'ok' });
     expect(body.cards.some((c) => c.status === 'forbidden')).toBe(false);
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(cardCalls()).toHaveLength(6);
     // The overview does not read the default account at all any more.
     expect(getFinanceDefaultAccountId).not.toHaveBeenCalled();
   });
@@ -173,7 +196,7 @@ describe('operator overview route', () => {
   it('TASK-PC-FE-364 — one call per card through the route (each leg exactly once)', async () => {
     fullSession();
     await overviewGET();
-    const legs = fetchMock.mock.calls.map(([u]) => legOf(String(u)));
+    const legs = cardCalls();
     expect(legs.sort()).toEqual(['ecommerce', 'erp', 'finance', 'iam', 'scm', 'wms']);
   });
 
@@ -183,7 +206,7 @@ describe('operator overview route', () => {
       const leg = legOf(String(url));
       return leg === 'erp'
         ? json({ code: 'PERMISSION_DENIED', message: 'required role not present' }, 403)
-        : json(fixture.legs[leg].body);
+        : json(bodyFor(leg));
     });
     const res = await overviewGET();
     expect(res.status).toBe(200);

@@ -94,7 +94,10 @@ const fixture = JSON.parse(
     path.resolve(__dirname, '../../../../specs/contracts/fixtures/operator-overview-leg-bodies.json'),
     'utf8',
   ),
-) as { legs: Record<string, { body: unknown }> };
+) as {
+  legs: Record<string, { body: unknown }>;
+  headlineMetrics: Record<string, { body: unknown }>;
+};
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -116,8 +119,15 @@ function isSelf(url: string): boolean {
   return url.startsWith(SELF) || url.startsWith('/');
 }
 
+// TASK-PC-FE-368 — the six headline-metric legs are `<domain>:metrics`, matched FIRST.
 function legOf(url: string): string {
   if (url.includes('/actuator/health')) return 'health';
+  if (url.includes('/api/admin/metrics')) return 'iam:metrics';
+  if (url.includes('/dashboard/metrics')) return 'wms:metrics';
+  if (url.includes('/po/metrics')) return 'scm:metrics';
+  if (url.includes('/api/finance/accounts/metrics')) return 'finance:metrics';
+  if (url.includes('/approval/metrics')) return 'erp:metrics';
+  if (url.includes('/api/admin/orders/metrics')) return 'ecommerce:metrics';
   if (url.includes('/api/admin/accounts')) return 'iam';
   if (url.includes('/dashboard/orders')) return 'wms';
   if (url.includes('/procurement/po')) return 'scm';
@@ -125,6 +135,12 @@ function legOf(url: string): string {
   if (url.includes('/approval/inbox')) return 'erp';
   if (url.includes('/api/admin/orders')) return 'ecommerce';
   return 'unknown';
+}
+
+function bodyFor(leg: string): unknown {
+  return leg.endsWith(':metrics')
+    ? fixture.headlineMetrics[leg.split(':')[0]].body
+    : fixture.legs[leg].body;
 }
 
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -153,7 +169,7 @@ beforeEach(() => {
     const leg = legOf(url);
     if (leg === 'health') return json({ status: 'UP' });
     if (leg === 'unknown') throw new Error(`unexpected url ${url}`);
-    return json(fixture.legs[leg].body);
+    return json(bodyFor(leg));
   };
   fetchMock = vi.fn(async (input: unknown) => {
     const url = String(input);
@@ -176,8 +192,8 @@ describe('🔴 TASK-PC-FE-350 — SSR makes ZERO fetch calls to this app’s own
     fullSession();
     const state = await getOperatorOverviewState();
     expect(selfFetches()).toEqual([]);
-    // 🔵 non-vacuity — the composition really ran here, in-process (six legs incl. finance).
-    expect(legFetches()).toHaveLength(6);
+    // 🔵 non-vacuity — the composition really ran here, in-process (six card legs incl. finance + six headline-metric legs).
+    expect(legFetches()).toHaveLength(12);
     expect(state.bffUnavailable).toBe(false);
     expect(state.overview?.cards.map((c) => c.domain)).toEqual([
       'iam',
@@ -251,7 +267,7 @@ describe('getOperatorOverviewState — every SSR outcome via the direct path', (
     fullSession();
     legImpl = async (url) => {
       const leg = legOf(url);
-      return leg === 'wms' ? json({ code: 'TOKEN_INVALID' }, 401) : json(fixture.legs[leg].body);
+      return leg === 'wms' ? json({ code: 'TOKEN_INVALID' }, 401) : json(bodyFor(leg));
     };
     const state = await getOperatorOverviewState();
     expect(state.unauthorized).toBe(true);
@@ -264,7 +280,7 @@ describe('getOperatorOverviewState — every SSR outcome via the direct path', (
     legImpl = async (url) => {
       const leg = legOf(url);
       if (leg === 'erp') throw new TypeError('fetch failed');
-      return json(fixture.legs[leg].body);
+      return json(bodyFor(leg));
     };
     const state = await getOperatorOverviewState();
     expect(state.bffUnavailable).toBe(false);
