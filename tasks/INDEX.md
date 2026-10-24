@@ -186,6 +186,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 **`ADR-MONO-084` 실행 시리즈 (ACCEPTED 2026-10-23 — 갈래 없음 · OD 기본값)** — 도메인 개요 맨 위에 실적 줄(이번 주 · 이번 달 · 직전 대비 · 일별). 🔴 **P1 이 먼저** — P2~P7 은 P1 의 DTO · 경계 · 콘솔 컴포넌트를 쓴다. P2~P7 은 서로 독립이지만 콘솔 공유 파일을 건드리므로 **직렬 머지**. P8 = `projects/platform-console` `TASK-PC-FE-368`.
 
 - `TASK-MONO-815-wms-throughput-card-kst-window-with-bake.md` — **WMS 처리량 카드 KST 창 · 문구** (READY, 2026-10-24 UTC): 🔴 `TASK-MONO-808` admin V6 를 싣는 **굽기와 같은 창에** 머지(콘솔은 Vercel 즉시 배포 — 먼저 나가면 화면이 데이터보다 앞서 «한국 시간» 이라 말한다). 선행 808 + 굽기. 분석=Opus 5.5 / 구현 권장=Sonnet.
+- `TASK-MONO-817-performance-metrics-wildcard-tenant-reads-as-zero.md` — **와일드카드 테넌트(`*`)로 부른 실적 지표가 전부 0 이고, 콘솔이 그것을 «0» 으로 보여 준다** (READY, 2026-10-24 UTC): `TASK-MONO-812` AC-4 에서 나왔다. ADR-084 시리즈 공통 사안이다. AC-0 = 도메인 엔드포인트 여섯이 `*` 에 각각 무엇을 답하나 + 그 경로에 닿는 운영자가 실제로 있나 → 소유자 결정(전 테넌트 합 / 400·403 / 도메인별) → 공용 계약 `performance-metrics-contract.md` 에 규칙. 분석=Opus 5.5 / 구현 권장=Opus.
 
 
 
