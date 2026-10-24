@@ -6,7 +6,7 @@ import type { CellStatus } from './overview-state';
 import {
   activeWarehouseOptions,
   sumThroughput,
-  utcThroughputWindow,
+  kstThroughputWindow,
   zeroFillThroughput,
   type ThroughputCardStatus,
   type WarehouseOption,
@@ -26,8 +26,8 @@ import {
  *      `activeWarehouseOptions` (ACTIVE, code ascending). 0 → `no-warehouses`
  *      and NO throughput read; ≥1 → the first is the default.
  *   2. op #3 `GET /dashboard/throughput` for the default warehouse over the
- *      14-day window ending at the **UTC** date of `now` (see `lib/throughput`
- *      for why UTC), zero-filled from..to.
+ *      14-day window ending at the **KST** date of `now` (see `lib/throughput`
+ *      for why KST), zero-filled from..to.
  *
  * Resilience — same rule as the overview `cell()`: 403 → `forbidden`;
  * 503/timeout/network/parse/other → `degraded`; a `401` from EITHER read →
@@ -54,13 +54,13 @@ function isUnauthorized(err: unknown): boolean {
  * @param eligible whether the operator is wms-eligible (resolved by the page
  *   from the data-driven registry). `false` ⇒ no reads (§ 2.4.5 — never
  *   fabricate a cross-tenant wms call).
- * @param now the reference instant for the UTC window (injectable for tests).
+ * @param now the reference instant for the KST window (injectable for tests).
  */
 export async function getWmsThroughputState(
   eligible: boolean,
   now: Date = new Date(),
 ): Promise<WmsThroughputState> {
-  const { from, to } = utcThroughputWindow(now);
+  const { from, to } = kstThroughputWindow(now);
   const base: WmsThroughputState = {
     notEligible: false,
     status: 'degraded',

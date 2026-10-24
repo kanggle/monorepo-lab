@@ -13,9 +13,9 @@ import { barPercent, type ThroughputDay } from '../lib/throughput';
  *
  * Self-contained under `features/wms-ops/` on purpose (TASK-PC-FE-357 is
  * adding a shared bar primitive concurrently; this chart does not depend on
- * it). Dates are the producer's **UTC** day buckets — rendered straight from
- * the ISO string, never through a timezone conversion (a KST conversion would
- * shift every label by up to a day).
+ * it). Dates are the producer's **KST** day buckets (TASK-MONO-808) — rendered
+ * straight from the ISO string, never through a timezone conversion (a
+ * conversion would shift every label by up to a day).
  */
 
 /** `2026-10-22` → `10/22` (no Date, no timezone). */

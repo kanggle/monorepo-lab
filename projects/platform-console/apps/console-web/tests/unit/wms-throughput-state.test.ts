@@ -23,7 +23,7 @@ vi.mock('@/features/wms-ops/api/wms-inventory-api', () => ({
 
 import { getWmsThroughputState } from '@/features/wms-ops/api/throughput-state';
 
-const NOW = new Date('2026-10-22T23:30:00Z');
+const NOW = new Date('2026-10-22T12:00:00Z'); // 21:00 KST — same KST and UTC date
 const WH1 = '01910000-0000-7000-8000-000000000001';
 const WH2 = '01910000-0000-7000-8000-000000000002';
 
@@ -69,7 +69,7 @@ describe('getWmsThroughputState', () => {
     expect(m.getThroughput).not.toHaveBeenCalled();
   });
 
-  it('asks for ACTIVE warehouses and the 14-day UTC window ending on the UTC date', async () => {
+  it('asks for ACTIVE warehouses and the 14-day KST window ending on the KST date', async () => {
     m.listRefs.mockResolvedValue(refs([{ id: WH1, code: 'WH01', status: 'ACTIVE' }]));
     m.getThroughput.mockResolvedValue(throughput([]));
     const s = await getWmsThroughputState(true, NOW);
@@ -86,12 +86,12 @@ describe('getWmsThroughputState', () => {
     expect(s.to).toBe('2026-10-22');
   });
 
-  it('KST early morning (00:30 KST = 15:30Z the day before) → window ends on the UTC date', async () => {
+  it('KST early morning (00:30 KST 10-25 = 15:30Z 10-24) → window ends on the KST date (TASK-MONO-815)', async () => {
     m.listRefs.mockResolvedValue(refs([{ id: WH1, code: 'WH01' }]));
     m.getThroughput.mockResolvedValue(throughput([]));
-    await getWmsThroughputState(true, new Date('2026-10-22T00:30:00+09:00'));
+    await getWmsThroughputState(true, new Date('2026-10-24T15:30:00Z'));
     expect(m.getThroughput).toHaveBeenCalledWith(
-      expect.objectContaining({ from: '2026-10-08', to: '2026-10-21' }),
+      expect.objectContaining({ from: '2026-10-12', to: '2026-10-25' }),
     );
   });
 

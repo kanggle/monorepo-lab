@@ -96,7 +96,7 @@ describe('WmsPage — ?period= (TASK-MONO-808)', () => {
     render(await WmsPage({}));
     expect(m.getWmsOverviewState).toHaveBeenCalledWith(true, 'month');
     expect(screen.getByTestId('wms-overview')).toBeInTheDocument();
-    // The throughput card still renders alongside (its UTC window is untouched).
+    // The throughput card still renders alongside (its KST window is untouched by this test).
     expect(screen.getByTestId('wms-throughput-card')).toBeInTheDocument();
   });
 

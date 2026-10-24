@@ -1,4 +1,5 @@
 import type { OverviewCellStatus } from '@/shared/lib/overview-cell';
+import { kstDateOf } from '@/shared/lib/kst-period';
 import type { GenericRow, Throughput } from '../api/types';
 
 /**
@@ -8,13 +9,13 @@ import type { GenericRow, Throughput } from '../api/types';
  * same-origin `/api/wms/throughput` proxy (validation) and the client card
  * (zero-fill after a warehouse switch).
  *
- * ── WHY UTC, NOT KST ──
- * wms admin-service buckets every throughput event with
- * `effectiveAt.atZone(ZoneOffset.UTC).toLocalDate()` (`InboundProjectionService`
- * :246, `OutboundProjectionService` :228). A § 1.2 `from`/`to` therefore names
- * **UTC calendar days**. Using `kstPeriodBounds()` here would, between 00:00
- * and 09:00 KST, ask for a "today" the producer has not started yet. The card
- * labels its window «UTC 기준» instead of pretending the day is KST.
+ * ── WHY KST ──
+ * Since TASK-MONO-808 (wms admin-service V6) admin-service buckets every
+ * throughput event by its **KST calendar day** (admin-service-api § 1.2 «Day
+ * boundary = KST»). A § 1.2 `from`/`to` therefore names KST days, and the
+ * window ends at the KST date of `now` (`kstDateOf`, `shared/lib/kst-period`),
+ * so between 00:00 and 09:00 KST the newest day is not dropped. The card
+ * labels its window «한국 시간 기준» (TASK-MONO-815).
  *
  * ── WHY ZERO-FILL ──
  * § 1.2 lists only days that HAVE a row (`ThroughputDashboardController` :69-92
@@ -26,7 +27,7 @@ import type { GenericRow, Throughput } from '../api/types';
 /** § 1.2 — "max 90-day range" (inclusive span, `ChronoUnit.DAYS.between + 1`). */
 export const MAX_THROUGHPUT_RANGE_DAYS = 90;
 
-/** Owner decision (b), 2026-10-22: the last 14 UTC days ending today. */
+/** Owner decision (b), 2026-10-22: the last 14 KST days ending today (KST since TASK-MONO-815). */
 export const DEFAULT_THROUGHPUT_WINDOW_DAYS = 14;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -67,18 +68,14 @@ export function isUuid(s: string): boolean {
 }
 
 /**
- * The `days`-long window ending at the **UTC** calendar date of `now`
+ * The `days`-long window ending at the **KST** calendar date of `now`
  * (inclusive both ends). `now` is injectable for tests.
  */
-export function utcThroughputWindow(
+export function kstThroughputWindow(
   now: Date = new Date(),
   days: number = DEFAULT_THROUGHPUT_WINDOW_DAYS,
 ): { from: string; to: string } {
-  const toMs = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate(),
-  );
+  const toMs = isoDateToUtcMs(kstDateOf(now)) as number;
   const span = Math.max(1, Math.floor(days));
   return {
     from: utcMsToIsoDate(toMs - (span - 1) * DAY_MS),
@@ -198,7 +195,7 @@ export interface WmsThroughputState {
   warehouses: WarehouseOption[];
   /** The warehouse whose window `days` describes (`null` = none). */
   selectedWarehouseId: string | null;
-  /** UTC window, inclusive both ends. */
+  /** KST-day window, inclusive both ends. */
   from: string;
   to: string;
   /** Zero-filled `from..to` days, or `null` when the read did not resolve. */

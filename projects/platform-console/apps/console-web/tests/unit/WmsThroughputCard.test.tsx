@@ -113,11 +113,13 @@ describe('WmsThroughputChart', () => {
 });
 
 describe('WmsThroughputCard', () => {
-  it('renders the UTC window label, the chart and the totals text', () => {
-    wrap(<WmsThroughputCard state={stateWith()} />);
+  it('renders the KST window label (no «UTC» on screen), the chart and the totals text', () => {
+    const { container } = wrap(<WmsThroughputCard state={stateWith()} />);
     expect(screen.getByTestId('wms-throughput-window').textContent).toBe(
-      '최근 14일 · UTC 기준 (2026-10-09 ~ 2026-10-22)',
+      '최근 14일 · 한국 시간 기준 (2026-10-09 ~ 2026-10-22)',
     );
+    expect(screen.getByTestId('wms-throughput-window').textContent).toContain('한국 시간 기준');
+    expect((container.textContent ?? '').split('UTC')).toHaveLength(1); // 0 occurrences
     expect(screen.getByTestId('wms-throughput-chart')).toBeTruthy();
     expect(screen.getByTestId('wms-throughput-totals').textContent).toBe(
       '합계 — 입고 11건 (수량 440) · 출고 5건 (수량 150)',

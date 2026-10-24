@@ -3,12 +3,12 @@ import { sampleResponse } from '@/shared/sample/router';
 import { ThroughputSchema, RefPageSchema } from '@/features/wms-ops/api/types';
 import {
   activeWarehouseOptions,
-  utcThroughputWindow,
+  kstThroughputWindow,
   zeroFillThroughput,
 } from '@/features/wms-ops/lib/throughput';
 
 /**
- * TASK-PC-FE-358 — the anonymous sample `/wms` 개요 asks for the 14 UTC days
+ * TASK-PC-FE-358 — the anonymous sample `/wms` 개요 asks for the 14 KST days
  * ending today; the fixture must answer THAT window (a fixed September answer
  * would draw an empty chart forever), deterministically, with some days
  * ABSENT so the console's zero-fill is exercised, not hidden. Goes through
@@ -29,7 +29,7 @@ async function throughputAt(from: string, to: string, warehouseId = 'wh-sample-0
 }
 
 describe('sample throughput fixture honours from/to (TASK-PC-FE-358)', () => {
-  const { from, to } = utcThroughputWindow(new Date('2026-10-22T12:00:00Z'));
+  const { from, to } = kstThroughputWindow(new Date('2026-10-22T12:00:00Z'));
 
   it('answers the requested window, only dates inside it, some days absent', async () => {
     const t = await throughputAt(from, to);
