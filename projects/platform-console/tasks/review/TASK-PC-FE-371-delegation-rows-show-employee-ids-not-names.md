@@ -8,7 +8,7 @@ ERP delegation screens draw the raw employee id (`01a16eaa-980d-…`) where the 
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -54,10 +54,10 @@ An operator reading «내가 위임한» / «나에게 위임된» and the 위�
 
 # Acceptance Criteria
 
-- [ ] **AC-1** — «내가 위임한» shows the delegate's `employeeNumber · name`, «나에게 위임된» shows the delegator's, and the raw id is not in the row text (only in `title`). Red before the change.
-- [ ] **AC-2** — the 위임 현황 table's 위임자 / 대행자 cells show `employeeNumber · name`. Red before the change.
-- [ ] **AC-3** — an id with no employee (lookup 404) shows `이름 확인 불가`, never the id (control: the masterRefLabel contract).
-- [ ] **AC-4** — existing delegation suites stay green (revoke button, status badges, empty-list text, create dialog). Run with `--maxWorkers=2 --minWorkers=1`.
+- [x] **AC-1** — «내가 위임한» shows the delegate's `employeeNumber · name`, «나에게 위임된» shows the delegator's, and the raw id is not in the row text (only in `title`). Red before the change.
+- [x] **AC-2** — the 위임 현황 table's 위임자 / 대행자 cells show `employeeNumber · name`. Red before the change.
+- [x] **AC-3** — an id with no employee (lookup 404) shows `이름 확인 불가`, never the id (control: the masterRefLabel contract).
+- [x] **AC-4** — existing delegation suites stay green (revoke button, status badges, empty-list text, create dialog). Run with `--maxWorkers=2 --minWorkers=1`.
 - [ ] **AC-5** — Vercel Production deploy of `kanggle-console` after merge, and the live screen at the next demo window (⚪ with the reason if not reached).
 
 # Related Specs
@@ -78,3 +78,21 @@ An operator reading «내가 위임한» / «나에게 위임된» and the 위�
 
 1. Only «내가 위임한» is fixed and the read-model table keeps the ids — AC-2.
 2. A failed lookup falls back to drawing the id, which looks like a name to nobody but is not «honest unresolved» either — AC-3.
+
+---
+
+# Implementation — 2026-10-25 UTC
+
+- `features/erp-ops/components/DelegationGrantList.tsx` — the row's person (`g[idField]`) through `ApprovalEmployeeRef` (`data-master-ref="approval.delegation.<idField>"`).
+- `features/erp-ops/components/DelegationFactCard.tsx` — 위임자 / 대행자 cells through `ApprovalEmployeeRef` (`approval.delegationFact.*`).
+- No new hook, API or contract: the component and `useEmployee` already serve the approval screens.
+
+# Tests
+
+- `DelegationScreen.test.tsx`: the fetch mock now answers `GET /api/erp/masterdata/employees/{id}` (known id → employee, unknown → 404). Two existing assertions that pinned the raw id in the row text (`toContain('emp-delegate')` / `('emp-boss')`) now pin the name. New: AC-1 (both lists named, id only in `title`) · AC-3 (unknown id → «이름 확인 불가», id absent).
+- `DelegationFactCard.test.tsx`: new AC-2 (cells `EMP-0201 · 정위임` / `EMP-0301 · 한대행`, an orphan row → «이름 확인 불가» in both cells).
+- **Red before the change:** with the fix reverted (the two component files only), the five tests above are red and the other 54 green. 🔴 The first red run did not count: my employee mock lacked the required `effectivePeriod`, so the lookup failed for a reason unrelated to the fix and «이름 확인 불가» passed for the wrong reason. Re-measured with the corrected mock: still 5 red / 54 green on the old code, 59/59 green on the fix.
+- Full console: `vitest run --maxWorkers=2 --minWorkers=1` 447 files · 5544 tests · 0 failed; `tsc --noEmit` rc=0; `next lint` rc=0 (warnings only, pre-existing).
+- e2e grep: no console e2e spec reads delegation row text (`overview-consolidation.spec.ts` only checks the `nav-erp-delegation` link); `tests/federation-hardening-e2e` «delegation» is IAM tenant-admin delegation, a different screen.
+
+Open: AC-5 (Vercel Production after merge · live screen at the next demo window).

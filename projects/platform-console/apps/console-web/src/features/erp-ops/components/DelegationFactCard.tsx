@@ -12,6 +12,7 @@ import { useDelegationFacts, useEmployeePicker } from '../hooks/use-erp-ops';
 import { formatDateTime } from '@/shared/lib/datetime';
 import { statusToneClass } from '@/shared/ui/StatusBadge';
 import { ErpEmployeeSelect, employeePickerView } from './ErpEmployeeSelect';
+import { ApprovalEmployeeRef } from './approval-refs';
 import {
   EMPLOYEE_PICKER_SCOPED_NOTICE,
   employeeListFallbackText,
@@ -247,8 +248,13 @@ export function DelegationFactCard({ initial }: DelegationFactCardProps) {
                   <td className="p-2">
                     <DelegationFactStatusBadge status={fact.status} index={i} />
                   </td>
-                  <td className="p-2 text-sm">{fact.delegatorId}</td>
-                  <td className="p-2 text-sm">{fact.delegateId}</td>
+                  {/* TASK-PC-FE-371: employee ids (approval v2.4) — `번호 · 이름`, the id only in `title`. */}
+                  <td className="p-2 text-sm">
+                    <ApprovalEmployeeRef employeeId={fact.delegatorId} field="delegationFact.delegatorId" />
+                  </td>
+                  <td className="p-2 text-sm">
+                    <ApprovalEmployeeRef employeeId={fact.delegateId} field="delegationFact.delegateId" />
+                  </td>
                   {/* scope: NON_NULL-absent → graceful "—" (BE-018) */}
                   <td className="p-2 text-sm" data-testid={`delegation-fact-scope-${i}`}>
                     <ScopeCell scope={fact.scope} scopeRequestId={fact.scopeRequestId} />

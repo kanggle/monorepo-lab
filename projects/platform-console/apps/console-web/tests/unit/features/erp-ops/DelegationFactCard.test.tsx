@@ -655,3 +655,55 @@ describe('<DelegationFactCard> — filter selectors (TASK-PC-FE-335)', () => {
     expect(retiredOpt.disabled).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// TASK-PC-FE-371 — the people in a delegation are employee ids (approval v2.4);
+// the row resolves each through `GET /api/erp/masterdata/employees/{id}`
+// (`ApprovalEmployeeRef` → `useEmployee`). An id with no employee → 404.
+// ---------------------------------------------------------------------------
+const EMPLOYEE_DETAIL_PREFIX = '/api/erp/masterdata/employees/';
+const EMPLOYEES_BY_ID: Record<string, { employeeNumber: string; name: string }> = {
+  'emp-delegate': { employeeNumber: 'EMP-0101', name: '김대행' },
+  'emp-delegate-2': { employeeNumber: 'EMP-0102', name: '박대행' },
+  'emp-boss': { employeeNumber: 'EMP-0001', name: '최위임' },
+  'emp-me': { employeeNumber: 'EMP-0002', name: '이운영' },
+  'emp-A-001': { employeeNumber: 'EMP-0201', name: '정위임' },
+  'emp-D-001': { employeeNumber: 'EMP-0301', name: '한대행' },
+};
+/** The detail GET for a known id → that employee; unknown → 404. `null` = not a detail URL. */
+function employeeDetailResponse(url: string): Response | null {
+  const u = String(url);
+  if (!u.startsWith(EMPLOYEE_DETAIL_PREFIX) || u.startsWith(EMPLOYEE_DETAIL_PREFIX + 'picker')) return null;
+  const id = decodeURIComponent(u.slice(EMPLOYEE_DETAIL_PREFIX.length).split(/[?/]/)[0]);
+  const e = EMPLOYEES_BY_ID[id];
+  if (!e) return errorResponse('MASTERDATA_NOT_FOUND', 404);
+  return jsonResponse({
+    id, employeeNumber: e.employeeNumber, name: e.name, status: 'ACTIVE',
+    effectivePeriod: { effectiveFrom: '2020-01-01', effectiveTo: null },
+  });
+}
+
+describe('<DelegationFactCard> — TASK-PC-FE-371 people are named, not ids', () => {
+  it('🔴 AC-2 — 위임자 / 대행자 cells show employeeNumber · name; an unknown id reads «이름 확인 불가»', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        const employee = employeeDetailResponse(url);
+        if (employee) return Promise.resolve(employee);
+        if (String(url).startsWith(PICKER_PATH)) {
+          return Promise.resolve(jsonResponse(FILTER_EMPLOYEES_PAGE));
+        }
+        return Promise.resolve(errorResponse('MASTERDATA_NOT_FOUND', 404));
+      }),
+    );
+    const orphan = { ...REVOKED_FACT, delegatorId: 'emp-gone-A', delegateId: 'emp-gone-D' };
+    render(<DelegationFactCard initial={makeListResp([ACTIVE_FACT, orphan])} />, { wrapper: wrapper() });
+
+    const cells = (i: number) => screen.getByTestId(`delegation-fact-row-${i}`).querySelectorAll('td');
+    await waitFor(() => expect(cells(0)[2].textContent).toBe('EMP-0201 · 정위임'));
+    await waitFor(() => expect(cells(0)[3].textContent).toBe('EMP-0301 · 한대행'));
+    await waitFor(() => expect(cells(1)[2].textContent).toBe('이름 확인 불가'));
+    expect(cells(1)[3].textContent).toBe('이름 확인 불가');
+    expect(cells(0)[2].querySelector('[title="emp-A-001"]')).not.toBeNull();
+  });
+});
