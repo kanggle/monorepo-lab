@@ -2,7 +2,6 @@ package com.wms.inbound.config;
 
 import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,27 +45,10 @@ public class KafkaConsumerConfig {
                                           @Value("${inbound.kafka.dlt-suffix:.DLT}") String dltSuffix) {
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
                 kafkaOperations,
-                (record, exception) -> new org.apache.kafka.common.TopicPartition(
-                        record.topic() + dltSuffix, record.partition() < 0 ? 0 : record.partition())
-        ) {
-            @Override
-            protected ProducerRecord<Object, Object> createProducerRecord(
-                    org.apache.kafka.clients.consumer.ConsumerRecord<?, ?> record,
-                    org.apache.kafka.common.TopicPartition topicPartition,
-                    org.apache.kafka.common.header.Headers headers,
-                    byte[] key,
-                    byte[] value) {
-                // Drop the partition hint so the producer chooses by key. With
-                // only one partition (default), this routes to partition 0;
-                // multi-partition DLTs distribute by key for load balance.
-                return new ProducerRecord<>(
-                        topicPartition.topic(),
-                        null,
-                        record.key(),
-                        record.value(),
-                        headers);
-            }
-        };
+                // TASK-BE-657: partition -1 — the producer picks by key (event-driven-policy.md § DLQ Policy).
+                // The pre-created .DLT has 1 partition and the source 3; naming the source partition made
+                // spring-kafka look the topic up and warn «non-existent partition» for records from p1/p2.
+                (record, exception) -> new org.apache.kafka.common.TopicPartition(record.topic() + dltSuffix, -1));
 
         ExponentialBackOff backOff = new ExponentialBackOff();
         backOff.setInitialInterval(Duration.ofSeconds(1).toMillis());
