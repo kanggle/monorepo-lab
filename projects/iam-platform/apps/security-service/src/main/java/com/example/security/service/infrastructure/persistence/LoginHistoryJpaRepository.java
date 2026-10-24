@@ -30,7 +30,7 @@ public interface LoginHistoryJpaRepository extends JpaRepository<LoginHistoryJpa
      * account's logins to X (owner decision 2026-10-25 «그 사이트 것만»).
      */
     @Query("SELECT h FROM LoginHistoryJpaEntity h " +
-            "WHERE (h.tenantId = :tenantId OR h.siteTenantId = :tenantId) " +
+            "WHERE (h.tenantId = :tenantId) " +
             "AND h.accountId = :accountId " +
             "AND (:from IS NULL OR h.occurredAt >= :from) " +
             "AND (:to IS NULL OR h.occurredAt <= :to) " +
