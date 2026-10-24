@@ -8,7 +8,7 @@ Kafka consumers that drop the failure cause, and one consumer with no dead lette
 
 # Status
 
-review
+done
 
 # Owner
 
