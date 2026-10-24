@@ -8,7 +8,7 @@ security-service login-history and suspicious-event reads filter by a hard-coded
 
 # Status
 
-review
+done
 
 # Owner
 
