@@ -120,11 +120,11 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-- `TASK-PC-FE-368-home-overview-domain-headline-metric.md` — **IN-PROGRESS (2026-10-24 UTC) — ADR-MONO-084 P8 (D7).** 전체 홈 도메인 카드에 대표 실적 지표 하나(이번 주 값 · 직전 대비). 합성은 콘솔 서버(ADR-081) · 응답 모양 · 카드 순서 · 실패 격리 불변, 칸만 추가. 선행 = 루트 `TASK-MONO-807`~`812`(P2~P7) 의 `…/metrics`. 🔴 nightly e2e grep. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-369-operator-overview-wms-scm-cards-downstream-error.md` — **IN-PROGRESS (2026-10-24 UTC) — `TASK-PC-FE-364` AC-3 라이브(33차 창)에서 발견.** 운영자 통합 개요의 «WMS 출고» · «SCM 발주» 카드 `DOWNSTREAM_ERROR` · 도메인 상태 «WMS 점검 불가» — 서비스엔 요청이 안 닿음, 같은 `WMS_ADMIN_BASE_URL` 의 `/wms` 화면은 정상. 🔵 AC-0(코드 판독): 의심 (a)~(d) 전부 배제 · 남는 기전 = 다리마다 따로 도는 데모 주소 해석(`/status`) — **원인으로 증명 안 됨** ⇒ 수선 보류, 다음 측정 제안. 구현 권장 Opus.
 
 ## review
 
+- `TASK-PC-FE-368-home-overview-domain-headline-metric.md` — **ADR-MONO-084 P8 — 홈 도메인 카드에 대표 실적 지표** (REVIEW, 2026-10-24 UTC · AC-0~3 닫힘 · AC-4 = 머지 뒤 첫 nightly · AC-5 = 배포 상태). 콘솔 서버 합성에 지표 레그 6개를 별도 패스로 더했다(병렬 · 자기 시한 · 카드 숫자 불변). 대표 지표는 소유자 확인(«기본안 + finance=이체 금액»). 실패는 0 이 아니라 칸만 degraded / «권한 없음». 🔴 기록된 위험: 홈 합성이 도메인 지표 경로를 다시 적었고, fetcher 와의 대조 시험이 없다. 분석=Opus 5.5 / 구현=Sonnet 5.5 + diff 대조.
 - `TASK-PC-FE-364-operator-overview-business-kpis.md` — **운영자 통합 개요 카드 여섯을 업무 지표로 — 잠긴 계정 · 미출고 주문 · 제출 대기 발주 · 미해소 대사 차이 · 내 결재 대기 · 출고 대기 주문** — 카드당 호출 1개 그대로(1:1 교체) · 서버 변경 없음 · 계약 § 2.4.9.1 먼저 · 소유자 결정 2026-10-22 KST (REVIEW, 2026-10-22 UTC · 문구 · 권한 표 소유자 승인 · 콘솔 nightly · federation e2e success · AC-3 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ❌ — WMS 출고 · SCM 발주 카드 `DOWNSTREAM_ERROR` · «WMS 점검 불가» → `TASK-PC-FE-369`.
 
 - `TASK-PC-FE-358-wms-daily-throughput-chart.md` — **WMS 개요 일별 입고 · 출고 처리량 그래프** — 계약 § 1.2 `GET /dashboard/throughput` 를 BFF · SSR · 화면으로 잇는다 · AC-0 닫힘 · 소유자 결정(창고 선택 · UTC 14일 · 건수 막대) · 새 문구 13 소유자 승인 · 브랜치 nightly success (REVIEW, 2026-10-22 UTC · AC-4 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-4 🟡 — 14일 창 그래프 ✅ · 빈 창 문구는 데이터상 못 잼.
