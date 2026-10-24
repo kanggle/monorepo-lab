@@ -531,8 +531,11 @@ function evaluateAuditRead(operator, permissionSet, request):
     # source에 따라 security.event.read 추가 요구 (교집합이 아닌 조건부 확장 = AND)
     if source == "login_history" or source == "suspicious":
         required.add("security.event.read")
-    # source == "admin_actions" 또는 null(전체 통합 조회이되 admin_actions 기본 소스로 제한):
+    # source == "admin"(계약 값; admin_actions 소스) 또는 null:
     #   → audit.read만 요구
+    # null 인데 security.event.read 가 없으면 → 실효 source = "admin" 으로 좁힌다
+    #   (TASK-BE-655: 이전엔 null + accountId 가 이 검사 없이 보안 소스를 섞었다. 403 이 아니라 좁힘 —
+    #    개요는 source 없이 부른다). security.event.read 가 있으면 null = 세 소스 통합.
 
     # 평가
     missing = required - permissionSet
