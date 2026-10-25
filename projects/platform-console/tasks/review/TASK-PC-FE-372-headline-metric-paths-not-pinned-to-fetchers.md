@@ -8,7 +8,7 @@ The home headline composition restates each domain's metrics path, and the comme
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -49,9 +49,9 @@ If a domain's «실적» fetcher and the home headline leg ever disagree on the 
 
 # Acceptance Criteria
 
-- [ ] **AC-1** — four new exported path constants; each fetcher builds its URL from its constant (no behaviour change — the existing fetcher tests stay green).
-- [ ] **AC-2** — the contrast test covers all six domains; changing one fetcher constant turns it red (shown by mutation).
-- [ ] **AC-3** — console `vitest run --maxWorkers=2 --minWorkers=1` · `tsc --noEmit` · lint green.
+- [x] **AC-1** — four new exported path constants; each fetcher builds its URL from its constant (no behaviour change — the existing fetcher tests stay green).
+- [x] **AC-2** — the contrast test covers all six domains; changing one fetcher constant turns it red (shown by mutation).
+- [x] **AC-3** — console `vitest run --maxWorkers=2 --minWorkers=1` · `tsc --noEmit` · lint green.
 
 # Related Specs
 
@@ -69,3 +69,17 @@ If a domain's «실적» fetcher and the home headline leg ever disagree on the 
 # Failure Scenarios
 
 1. The test compares two copies written in the test itself (a third copy) instead of importing the fetchers' constants — it would stay green on a fetcher change. AC-2's mutation proves it reads the fetcher.
+
+---
+
+# Implementation — 2026-10-25 UTC
+
+- Exported `WMS_METRICS_PATH` · `PO_METRICS_PATH` · `APPROVAL_METRICS_PATH` · `ORDER_METRICS_PATH`; each fetcher builds its URL from it (iam `IAM_METRICS_PATH` · finance `FINANCE_METRICS_PATH` already existed).
+- `tests/unit/operator-overview-headline-paths.test.ts`: env mocked with a distinct base per domain; for each of the six legs, `origin + pathname` must equal `ENV[base] + <fetcher constant>` and `period=week`; every leg must be a data leg. A second cell rejects a vacuous constant.
+- 🔵 Honest limit: the **base** half is a table in the test (each row names the fetcher client's base line), i.e. a third copy — the domains' bases live inside their client helpers, not as constants. The **path** half reads the fetchers.
+- The composition comment now names this test.
+
+# Verification
+
+- Contrast test 2/2 on the fix. Mutation 1 — scm fetcher constant changed: red, `scm (base from shared/api/scm-gateway.ts:73-75)`. Mutation 2 — the composition's ecommerce path changed: red, `ecommerce`. Files restored after each.
+- Console: `tsc --noEmit` rc=0 · `next lint` rc=0 · `vitest run --maxWorkers=2 --minWorkers=1` 5545/5546 — the one failure was `SeedConfigScreen — a11y › the confirm dialog is axe-clean and Escape cancels it` at 5111 ms (the 5 s timeout) in a file this change does not touch; that file alone: 17/17 twice. Recorded as a load timeout in the full local run; the CI `Frontend unit tests` run is the verdict.
