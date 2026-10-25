@@ -38,6 +38,12 @@ public class AuditController {
     /** The source value {@link AuditQueryUseCase} reads as «admin_actions only». */
     private static final String ADMIN_SOURCE = "admin";
 
+    /**
+     * TASK-BE-660 — the contract's {@code source} values (admin-api.md § GET /api/admin/audit). Exact match, as
+     * {@link AuditQueryUseCase} reads them: any other value used to match no source and answer an empty 200.
+     */
+    private static final java.util.Set<String> SOURCES = java.util.Set.of(ADMIN_SOURCE, "login_history", "suspicious");
+
     private final AuditQueryUseCase useCase;
     private final PermissionEvaluator permissionEvaluator;
     private final AdminActionAuditor auditor;
@@ -74,6 +80,15 @@ public class AuditController {
             HttpServletRequest request) {
 
         OperatorContext op = OperatorContextHolder.require();
+
+        // TASK-BE-660 — blank is «no source»; anything outside the three values is a 400 (IllegalArgumentException
+        // → AdminExceptionHandler VALIDATION_ERROR, the TASK-BE-475 precedent), before any read or permission check.
+        if (source != null && source.isBlank()) {
+            source = null;
+        }
+        if (source != null && !SOURCES.contains(source)) {
+            throw new IllegalArgumentException("source must be one of " + SOURCES + " (was: " + source + ")");
+        }
 
         // Cross-permission check: source values targeting security-service data
         // require the AND of audit.read + security.event.read (rbac.md

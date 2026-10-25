@@ -489,7 +489,7 @@ base path: `/api/admin`
 | `actionCode` | string (optional) | ACCOUNT_LOCK, SESSION_REVOKE 등 |
 | `from` | ISO 8601 datetime | 시작 시각 |
 | `to` | ISO 8601 datetime | 종료 시각 |
-| `source` | string (optional) | `admin` / `login_history` / `suspicious`. **생략 시**(TASK-BE-655): `security.event.read` 가 있으면 세 소스 통합(보안 소스는 `accountId` 가 있을 때만) · 없으면 **`admin` 하나로 좁힌다**(200, 403 아님 — security-service 를 부르지 않는다). 이전엔 생략 + `accountId` 가 권한 검사 없이 보안 소스를 섞었다 |
+| `source` | string (optional) | `admin` / `login_history` / `suspicious`. **생략 시**(TASK-BE-655): `security.event.read` 가 있으면 세 소스 통합(보안 소스는 `accountId` 가 있을 때만) · 없으면 **`admin` 하나로 좁힌다**(200, 403 아님 — security-service 를 부르지 않는다). 이전엔 생략 + `accountId` 가 권한 검사 없이 보안 소스를 섞었다. **TASK-BE-660**: 세 값 밖(대소문자 구분 — `LOGIN_HISTORY` 도 밖)은 `400 VALIDATION_ERROR`, 아무것도 읽지 않는다. 빈 `source=` 는 생략과 같다. 이전엔 모르는 값이 아무 소스에도 맞지 않아 **빈 200** 이었다 — 오타가 «기록 없음» 으로 읽혔다 |
 | `tenantId` | string (optional) | **TASK-BE-249** — 조회할 테넌트. 생략 시 운영자 자신의 테넌트. `*`는 SUPER_ADMIN 전용 (크로스 테넌트). 일반 운영자가 자신의 테넌트가 아닌 값을 지정하면 `403 TENANT_SCOPE_DENIED`. **TASK-MONO-784 S3 부터**: § 행동 테넌트 — grant scope(`audit.read`) + 생략 규칙(생략 · 구체 테넌트 둘 이상 → `400 VALIDATION_ERROR`). 배정만 있는 회사의 감사는 `403`(AC-1). 결과는 `admin_actions.tenant_id` = 그 테넌트인 행 — 784 부터 그 칸은 행동 테넌트라(D-13) 홈이 다른 운영자가 이 테넌트에서 한 행위도 여기 보인다. **TASK-BE-656**: 보안 소스(`login_history` · `suspicious`)도 **같은 게이트 값**으로 걸러진다 — admin-service 가 그 값을 security-service 에 `tenantId` 로 넘긴다(`*` = 필터 없음). 로그인 이력은 `tenant_id` 또는 `site_tenant_id` 가 그 테넌트인 행, 의심 이벤트는 `tenant_id` 가 그 테넌트인 행. 소비자 풀 계정은 사이트 운영자에게 **그 사이트에 로그인한 행만** 보이고 의심 이벤트는 안 보인다(소유자 결정 «그 사이트 것만» — [security-query-api.md § login-history «테넌트»](security-query-api.md)). 그 전엔 `fan-platform` 으로 고정돼 다른 테넌트 계정의 보안 소스가 늘 비었다 |
 | `page` | int (default 0) | — |
 | `size` | int (default 20, max 100) | — |
@@ -540,6 +540,7 @@ base path: `/api/admin`
 | 401 | `TOKEN_INVALID` | — |
 | 403 | `PERMISSION_DENIED` | `audit.read` 또는 source별 추가 권한(`security.event.read`) 부족 |
 | 403 | `TENANT_SCOPE_DENIED` | **TASK-BE-249** — 일반 운영자가 자신의 테넌트가 아닌 `tenantId`를 지정한 경우 |
+| 400 | `VALIDATION_ERROR` | **TASK-BE-660** — `source` 가 `admin` · `login_history` · `suspicious` 밖 |
 | 422 | `VALIDATION_ERROR` | from > to, size > 100 등 |
 
 **Side Effects** (TASK-BE-262): `403 TENANT_SCOPE_DENIED` 응답 시 `admin_actions` 테이블에 `outcome=DENIED`, `tenant_id=operator's`, `target_tenant_id=operator's`, `downstream_detail`에 시도한 대상 테넌트 기록 — best-effort 쓰기. 실패해도 403 자체는 정상 반환되며 `admin.audit.cross_tenant_deny_failure` 메트릭이 증가한다.
