@@ -71,7 +71,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-661-inventory-seed-lacks-wh01-warehouse-snapshot.md` — **READY (2026-10-26 UTC · 굽기 대상 · 35차 창 발견).** inventory-service dev 시드에 WH01 `warehouse_snapshot` 이 없다(WH-MAIN 만) → SKU-APPLE-001 저재고 경보의 `warehouseCode` null → scm 제안에 `warehouseCode` 없음 → 그 발주는 wms 입고 예정을 안 낸다. 형제 outbound · inbound · admin 시드는 WH01 을 가진다. 시드 한 줄 + 로케이션→창고 폐포 parity 셀. `warehouseId`=로케이션 id 는 ADR-050 D9 설계(범위 밖). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 <details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 done/)</summary>
 
