@@ -24,6 +24,7 @@
 //   node scripts/capture-portfolio.mjs --out <경로>    # 출력 위치 (기본: portfolio-captures/)
 //   node scripts/capture-portfolio.mjs --no-auth       # 로그인 건너뜀 (공개 경로만 · 파이프라인 시험용)
 //   node scripts/capture-portfolio.mjs --self-test     # 거부 판정기를 창 없이 브라우저 픽스처로 잰다
+//     (CI: `frontend-e2e-smoke` 가 돌린다 — 이 파일만 고친 PR 에서도, TASK-MONO-819)
 //
 // 종료코드 — 🔴 «미설치» 와 «고장» 은 다른 상태다(TASK-MONO-643 과 같은 규약):
 //   0  정상 (실패한 페이지가 있어도, 그것이 «보고된» 상태면 0)
