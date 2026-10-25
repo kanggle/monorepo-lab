@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-372-headline-metric-paths-not-pinned-to-fetchers.md` — **홈 대표 지표 합성이 도메인 실적 경로를 다시 적고 «단위 시험이 fetcher 와 대조한다» 고 주석에 썼지만, 그런 시험이 없다** (READY, 2026-10-25 UTC): 기존 시험은 부분 문자열로만 분류한다. fetcher 넷에 경로 상수 + 여섯 도메인 대조 시험. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 
 
@@ -120,7 +120,7 @@ _(직전 완료)_ **SCM 콘솔 메뉴 재구성 완료** (PC-FE-220 DONE, 2026-0
 
 ## in-progress
 
-_(없음)_
+- `TASK-PC-FE-372-headline-metric-paths-not-pinned-to-fetchers.md` — **홈 대표 지표 합성이 도메인 실적 경로를 다시 적고 «단위 시험이 fetcher 와 대조한다» 고 주석에 썼지만, 그런 시험이 없다** (IN-PROGRESS, 2026-10-25 UTC): 기존 시험은 부분 문자열로만 분류한다. fetcher 넷에 경로 상수 + 여섯 도메인 대조 시험. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 ## review
 

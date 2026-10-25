@@ -8,7 +8,7 @@ The home headline composition restates each domain's metrics path, and the comme
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
