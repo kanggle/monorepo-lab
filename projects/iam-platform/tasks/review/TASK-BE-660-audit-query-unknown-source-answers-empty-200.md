@@ -8,7 +8,7 @@ TASK-BE-660
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -53,9 +53,9 @@ A typo in `source` is an error the caller sees, not an audit trail that silently
 
 # Acceptance Criteria
 
-- [ ] **AC-1** — contract first.
-- [ ] **AC-2** — `source=admin_actions` → 400 `VALIDATION_ERROR`, use case not called; red before the change.
-- [ ] **AC-3** — control: `admin` · `login_history` · `suspicious` and no `source` behave exactly as before (existing `AuditControllerSliceTest` cells green).
+- [x] **AC-1** — contract first.
+- [x] **AC-2** — `source=admin_actions` → 400 `VALIDATION_ERROR`, use case not called; red before the change.
+- [x] **AC-3** — control: `admin` · `login_history` · `suspicious` and no `source` behave exactly as before (existing `AuditControllerSliceTest` cells green).
 
 # Related Specs
 
@@ -74,3 +74,17 @@ A typo in `source` is an error the caller sees, not an audit trail that silently
 # Failure Scenarios
 
 1. The check sits after the permission aspect, so an unknown value from an operator without `security.event.read` still returns 200/403 inconsistently — the check runs first. AC-2.
+
+---
+
+# Implementation — 2026-10-25 UTC
+
+- Contract: `admin-api.md` § GET /api/admin/audit — `source` row (outside the three values, case-sensitive → 400; blank = omitted) and an Errors row `400 VALIDATION_ERROR`.
+- `AuditController`: blank `source` → `null`; a value outside `{admin, login_history, suspicious}` → `IllegalArgumentException` → `AdminExceptionHandler` 400 `VALIDATION_ERROR` (the TASK-BE-475 path), before the composite-permission check and before the use case. Case-sensitive, matching `AuditQueryUseCase`'s exact `equals`.
+- Meta-audit: the refusal throws before the use case, so no `AUDIT_QUERY` row is written — same as any other 400 parameter refusal on this endpoint (TASK-BE-654 writes rows for gated queries only).
+
+# Verification
+
+- Red before (new tests on the old controller): `audit_query_unknown_source_is_400_and_reads_nothing` · `audit_query_source_in_wrong_case_is_400` · `audit_query_blank_source_is_no_source` — 3 `FAILED`.
+- After: `AuditControllerSliceTest` 13 · `AuditQueryUseCaseTest` 17 · `AuditDeniedCrossPermissionTest` 2 — 0 failures (`--rerun`).
+- Census: every other test and the console send only the three values (`AUDIT_SOURCES`, integration tests use `admin`).

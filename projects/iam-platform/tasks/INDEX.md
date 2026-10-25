@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-660-audit-query-unknown-source-answers-empty-200.md` — **감사 조회가 모르는 `source` 에 빈 200 → 경계에서 400 `VALIDATION_ERROR`** (READY, 2026-10-25 UTC): 소유자 결정. 선례 `BE-475`(허용 목록 밖 `status` → 400). 출처 `BE-658`. 분석=Opus 5.5 / 구현 권장=Sonnet.
+(empty)
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
@@ -120,6 +120,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
 ## review
+
+- `TASK-BE-660-audit-query-unknown-source-answers-empty-200.md` — **감사 조회가 모르는 `source` 에 빈 200 → 경계에서 400 `VALIDATION_ERROR`** (REVIEW 2026-10-25 UTC · AC 전부 닫힘): 소유자 결정. 선례 `BE-475`(허용 목록 밖 `status` → 400). 출처 `BE-658`. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 - `TASK-BE-641-end-session-endpoint-answers-401.md` — **IdP 의 `end_session_endpoint`(`/connect/logout`) 오류 경로가 401 «Missing or invalid internal credentials»** (REVIEW 2026-10-21 UTC · PR #4440 · 미머지). 소유자 결정 D1=(a): logout `errorResponseHandler` 가 400 `{error, error_description}` 을 직접 쓴다(Order 2 · `/error` 그대로). 실제 Tomcat 시험 CI 빨강 2/5(401) → 초록 5/5. 🔴 AC-1 의 소유자 브라우저 사례 · AC-3(굽기 · 라이브) 열림. 후속 = `TASK-BE-642`(authorize 오류의 같은 401). 분석=Opus 5.5 / 구현=Opus 5.5. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ✅(로그아웃 → 콘솔 `/login` 착지 · 잘못된 hint → 400 `invalid_token`) · AC-1 소유자 hint 사례 ⚪ — 티켓 § 라이브 확인.

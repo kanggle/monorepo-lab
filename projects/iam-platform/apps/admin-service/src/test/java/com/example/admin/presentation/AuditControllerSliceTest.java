@@ -151,6 +151,49 @@ class AuditControllerSliceTest {
     }
 
     /**
+     * 🔴 TASK-BE-660 — a `source` outside the contract's three values (`admin` · `login_history` · `suspicious`)
+     * is refused at the boundary with 400 VALIDATION_ERROR. Before, it reached the use case, matched no source
+     * and answered an empty 200 — a typo read as «no records».
+     */
+    @Test
+    void audit_query_unknown_source_is_400_and_reads_nothing() throws Exception {
+        mockMvc.perform(get("/api/admin/audit")
+                        .param("source", "admin_actions")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        verify(useCase, never()).query(any());
+    }
+
+    /** TASK-BE-660 — the check is case-sensitive, matching what the use case reads (`LOGIN_HISTORY` read nothing). */
+    @Test
+    void audit_query_source_in_wrong_case_is_400() throws Exception {
+        mockMvc.perform(get("/api/admin/audit")
+                        .param("source", "LOGIN_HISTORY")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        verify(useCase, never()).query(any());
+    }
+
+    /** TASK-BE-660 — a blank `source=` is «no source», not an unknown value. */
+    @Test
+    void audit_query_blank_source_is_no_source() throws Exception {
+        when(permissionEvaluator.hasAllPermissions(anyString(), any(Collection.class))).thenReturn(true);
+
+        mockMvc.perform(get("/api/admin/audit")
+                        .param("source", "")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<QueryAuditCommand> cmd = ArgumentCaptor.forClass(QueryAuditCommand.class);
+        verify(useCase).query(cmd.capture());
+        assertThat(cmd.getValue().source()).isNull();
+    }
+
+    /**
      * TASK-BE-655 — no source + accountId + no security.event.read: the use-case would have mixed in the
      * security-service sources (it does for source=null). The controller narrows to the admin source instead;
      * AuditQueryUseCaseTest#query_sourceAdmin_securityClientNotCalled pins that "admin" never calls
