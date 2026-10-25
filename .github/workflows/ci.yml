@@ -965,6 +965,11 @@ jobs:
               - 'projects/fan-platform/web/fan-platform-web/src/app/**'
               - 'scripts/capture-portfolio.mjs'
               - 'scripts/check-capture-route-staleness.mjs'
+              # TASK-MONO-819: 이 출력은 `frontend-e2e-smoke` 의 `if:` 도 읽는다 — 그래야
+              # `capture-portfolio.mjs` 만 고친 PR 에서 그 잡의 `--self-test` 가 돈다(#4526 은
+              # 머지 전 0회였다). ci.yml 줄은 그 배선을 지우는 편집에서도 판정자
+              # (`check-capture-route-staleness.mjs` 모드 A 의 배선 단언)가 돌게 한다.
+              - '.github/workflows/ci.yml'
             # TASK-MONO-655: 다단계 Dockerfile 의 스테이지 대칭. 도착 경로는 둘 —
             # Dockerfile 자신, 그리고 판정자.
             stage-contexts:
@@ -3528,7 +3533,8 @@ jobs:
       needs.changes.outputs.ecommerce == 'true' ||
       needs.changes.outputs.fan == 'true' ||
       needs.changes.outputs.platform-console == 'true' ||
-      needs.changes.outputs.contracts == 'true'
+      needs.changes.outputs.contracts == 'true' ||
+      needs.changes.outputs.capture-route-staleness == 'true'
 
     steps:
       - name: Checkout

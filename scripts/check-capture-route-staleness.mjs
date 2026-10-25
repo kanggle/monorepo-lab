@@ -272,6 +272,59 @@ function buildFixtureApp(root) {
   writeFileSync(join(api, 'route.ts'), 'export async function GET() {}\n', 'utf8');
 }
 
+// =============================================================================
+// TASK-MONO-819 — `capture-portfolio.mjs --self-test` 가 PR 에서 실제로 도는가 (배선)
+// =============================================================================
+// 🔴 self-test 는 chromium 을 설치하는 `frontend-e2e-smoke` 잡 안에 있다. 그 잡의 `if:` 가
+//    이 스크립트를 담은 필터를 안 읽으면, **스크립트만 고친 PR 에서 잡이 SKIPPED** 이고
+//    GitHub 은 SKIPPED 를 통과로 센다 — #4526 이 그랬다(머지 전 self-test 0회).
+//    그래서 세 고리를 텍스트로 단언한다: ① 필터가 스크립트를 담는다 ② 잡의 `if:` 가 그
+//    필터의 출력을 읽는다 ③ 그 잡에 `--self-test` 단계가 있다. 하나라도 끊기면 빨강.
+// 🔵 YAML 파서를 쓰지 않는다(의존성 0 — 이 파일은 node 만으로 돈다). 들여쓰기로 블록을 자른다.
+export const WIRING_FILTER = 'capture-route-staleness';
+export const WIRING_JOB = 'frontend-e2e-smoke';
+const indentOf = (line) => line.length - line.trimStart().length;
+
+/** `key:` 줄 아래, 그보다 깊게 들여쓴 줄들(빈 줄 · 주석 포함)을 돌려준다. 없으면 null. */
+function blockUnder(lines, keyRe) {
+  const i = lines.findIndex((l) => keyRe.test(l));
+  if (i === -1) return null;
+  const base = indentOf(lines[i]);
+  const out = [];
+  for (let j = i + 1; j < lines.length; j++) {
+    const l = lines[j];
+    if (l.trim() !== '' && !l.trim().startsWith('#') && indentOf(l) <= base) break;
+    out.push(l);
+  }
+  return out;
+}
+
+export function checkSelfTestWiring(ciText) {
+  const problems = [];
+  const lines = ciText.replace(/\r\n/g, '\n').split('\n');
+  const filter = blockUnder(lines, new RegExp(`^\\s+${WIRING_FILTER}:\\s*$`));
+  if (!filter) {
+    problems.push(`ci.yml 에 필터 \`${WIRING_FILTER}\` 가 없습니다`);
+  } else if (!filter.some((l) => /^\s*-\s*['"]?scripts\/capture-portfolio\.mjs['"]?\s*$/.test(l))) {
+    problems.push(`필터 \`${WIRING_FILTER}\` 가 \`scripts/capture-portfolio.mjs\` 를 담지 않습니다`);
+  }
+  const job = blockUnder(lines, new RegExp(`^  ${WIRING_JOB}:\\s*$`));
+  if (!job) {
+    problems.push(`ci.yml 에 잡 \`${WIRING_JOB}\` 가 없습니다`);
+    return problems;
+  }
+  const ifBlock = blockUnder(job, /^    if:/);
+  const ifLine = job.find((l) => /^    if:/.test(l)) || '';
+  const ifText = [ifLine, ...(ifBlock || [])].join('\n');
+  if (!ifText.includes(`needs.changes.outputs.${WIRING_FILTER} == 'true'`)) {
+    problems.push(`잡 \`${WIRING_JOB}\` 의 \`if:\` 가 \`needs.changes.outputs.${WIRING_FILTER}\` 를 읽지 않습니다 — 스크립트만 고친 PR 에서 self-test 가 SKIPPED 가 됩니다`);
+  }
+  if (!job.some((l) => l.includes('capture-portfolio.mjs --self-test'))) {
+    problems.push(`잡 \`${WIRING_JOB}\` 에 \`capture-portfolio.mjs --self-test\` 단계가 없습니다`);
+  }
+  return problems;
+}
+
 function selfTest() {
   const tmp = mkdtempSync(join(tmpdir(), 'capture-staleness-'));
   const cells = [];
@@ -396,6 +449,21 @@ function selfTest() {
     }
     cell('W2 cli-still-does-its-work', '대조군', true, cliRc === 0 && cliOut.includes('[portfolio]') && cliOut.includes('라우트 유도'), `rc=${cliRc}`);
 
+    // ── 배선 (TASK-MONO-819) — 실제 ci.yml 에서 고리를 하나씩 끊는다 ─────────────
+    const ciText = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8').replace(/\r\n/g, '\n');
+    const cut = (text, re) => {
+      const out = text.split('\n').filter((l) => !re.test(l)).join('\n');
+      return out === text ? null : out;   // 아무것도 안 지워졌으면 그 칸은 공허하다
+    };
+    const wired = checkSelfTestWiring(ciText);
+    cell('C1 wiring-intact', '대조군', 0, wired.length, wired[0] ? '← ' + wired[0].slice(0, 60) : '');
+    const noIf = cut(ciText, new RegExp(`needs\\.changes\\.outputs\\.${WIRING_FILTER} == 'true'`));
+    cell('C2 if-drops-the-filter-output', 'bite', true, noIf !== null && checkSelfTestWiring(noIf).length > 0, noIf === null ? '(지울 줄 없음 — 공허)' : '');
+    const noLine = cut(ciText, /^\s*-\s*['"]?scripts\/capture-portfolio\.mjs['"]?\s*$/);
+    cell('C3 filter-drops-the-script', 'bite', true, noLine !== null && checkSelfTestWiring(noLine).length > 0, noLine === null ? '(지울 줄 없음 — 공허)' : '');
+    const noStep = cut(ciText, /capture-portfolio\.mjs --self-test/);
+    cell('C4 job-drops-the-self-test', 'bite', true, noStep !== null && checkSelfTestWiring(noStep).length > 0, noStep === null ? '(지울 줄 없음 — 공허)' : '');
+
     // ── 공허성 하한 ──────────────────────────────────────────────────────────
     const bites = cells.filter((c) => c.kind === 'bite').length;
     const controls = cells.filter((c) => c.kind === '대조군').length;
@@ -465,6 +533,15 @@ function main() {
     process.exit(1);
   }
   console.log(`[staleness] OK — 앱 ${rows.length}개의 라우트 표면이 살아 있고 probe ${probesDeclared}개가 실재합니다.`);
+
+  // TASK-MONO-819 — 촬영 판정기의 self-test 가 PR 에서 실제로 도는 배선인가.
+  const wiring = checkSelfTestWiring(readFileSync(join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8'));
+  if (wiring.length) {
+    console.error('[staleness] ✗ capture-portfolio self-test 배선이 끊겼습니다:');
+    for (const m of wiring) console.error(`  · ${m}`);
+    process.exit(1);
+  }
+  console.log(`[staleness] OK — \`capture-portfolio.mjs --self-test\` 는 \`${WIRING_JOB}\` 에 있고, 그 잡의 if 가 \`${WIRING_FILTER}\` 필터(스크립트 포함)를 읽습니다.`);
 }
 
 if (!process.argv[1] || resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
