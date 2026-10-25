@@ -121,11 +121,10 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-
-
-- `TASK-BE-641-end-session-endpoint-answers-401.md` — **IdP 의 `end_session_endpoint`(`/connect/logout`) 오류 경로가 401 «Missing or invalid internal credentials»** (REVIEW 2026-10-21 UTC · PR #4440 · 미머지). 소유자 결정 D1=(a): logout `errorResponseHandler` 가 400 `{error, error_description}` 을 직접 쓴다(Order 2 · `/error` 그대로). 실제 Tomcat 시험 CI 빨강 2/5(401) → 초록 5/5. 🔴 AC-1 의 소유자 브라우저 사례 · AC-3(굽기 · 라이브) 열림. 후속 = `TASK-BE-642`(authorize 오류의 같은 401). 분석=Opus 5.5 / 구현=Opus 5.5. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ✅(로그아웃 → 콘솔 `/login` 착지 · 잘못된 hint → 400 `invalid_token`) · AC-1 소유자 hint 사례 ⚪ — 티켓 § 라이브 확인.
+(empty)
 
 ## done
+- ✅ `TASK-BE-641-end-session-endpoint-answers-401.md` — **DONE 2026-10-25 UTC (4-dim verified)** — impl PR #4440(`c118382d8`, 실패 0) · AC-1 35차 창 ✅ — 정상 `/connect/logout` 302 → `/login` · 재로그인 시 비밀번호 요구(IdP 세션 종료) · AC-3 = 34차. 기록 = 티켓 끝 `## CORRECTION — 35차 창` · `TASK-MONO-672` § 35th.
 - ✅ `TASK-BE-660-audit-query-unknown-source-answers-empty-200.md` — **DONE 2026-10-25 UTC (4-dim verified)** — #4554(`890e53bc7`, 실패 0 · `Integration (iam A/B)` SUCCESS). 감사 조회가 모르는 `source` 를 경계에서 400 `VALIDATION_ERROR`(대소문자 구분, 빈 값=생략). 수정 전 빨강 3. AC 전부 닫힘.
 - ✅ `TASK-BE-658-audit-slice-test-sends-a-source-the-api-ignores.md` — **DONE 2026-10-25 UTC (4-dim verified)** — #4549(`5c894e5d2`, 실패 0 · `Integration (iam A/B)` SUCCESS). 감사 슬라이스 시험이 계약 값 `source=admin` 을 보내고 받은 명령을 단언(변이 빨강). 🔵 모르는 `source` → 빈 200 은 소유자 결정 거리로 남김. AC 전부 닫힘.
 - ✅ `TASK-BE-656-security-query-tenant-hardcoded-fan-platform.md` — **DONE 2026-10-25 UTC (4-dim verified)** — #4537(`7ee4dae0a`, 실패 0 · `Integration (iam A/B)` SUCCESS, security integrationTest 42 · 0 fail · 0 skip). security 의 로그인 이력 · 의심 이벤트 조회가 `fan-platform` 고정 → 게이트된 테넌트(필수 `tenantId`, `*`=필터 없음, 기본값 없음). 소유자 결정: 풀 계정 «그 사이트 것만»(로그인 `tenant_id=X ∨ site_tenant_id=X`, 의심 이벤트 `tenant_id=X`) · admin 의심 이벤트 DTO 를 계약 모양으로(이전엔 전부 null). 수정 전 빨강 = 변이(로컬 L1~L5 · CI IT A/B/C draft #4538~4540 닫음). AC-0~3 닫힘. 다음 굽기에 실릴 것: iam security-service · admin-service.

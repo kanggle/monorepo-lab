@@ -8,7 +8,7 @@ WMS 개요에 일별 입고 · 출고 처리량 그래프 — 계약에 있고 A
 
 # Status
 
-review
+done
 
 # Owner
 

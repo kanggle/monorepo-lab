@@ -8,7 +8,7 @@ inventory-service 의 저재고 기본 임계값 설정(`inventory.alert.low-sto
 
 # Status
 
-review
+done
 
 # Owner
 

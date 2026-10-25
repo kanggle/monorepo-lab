@@ -220,9 +220,9 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 ## review
 
 - `TASK-MONO-819-capture-self-test-skipped-on-script-only-prs.md` — **`capture-portfolio.mjs --self-test` 가 그 스크립트만 고친 PR 에서 한 번도 안 돈다** (REVIEW 2026-10-25 UTC · AC-2 = 이 PR 의 CI): 호스트 잡 `frontend-e2e-smoke` 의 `if:` 가 그 스크립트를 담은 필터(`capture-route-staleness`)를 안 읽는다(#4526). `if:` 한 줄 + 배선 가드. 분석=Opus 5.5 / 구현 권장=Sonnet.
-- `TASK-MONO-818-demo-seed-ships-ecommerce-orders-through-wms.md` — **데모 시드: 출고된 ecommerce 주문 둘이 ecommerce 에서만 손으로 배송되고 wms 출고는 `PICKING` 에 남는다** (REVIEW 2026-10-25 UTC · AC-1·3·4 = 굽기 · 창): 33·34차 창 발견. 소유자 결정 «wms 가 출고를 밀고 이벤트로 따라오게». `deductWmsInventory` 만으로는 안 된다(`ManualShipConfirmConsumer` 는 `PICKING` 에서 no-op). 공용 pick→pack→ship 함수 + ecommerce 슬롯 4·5 가 wms 로 출고 → 이벤트로 `SHIPPED`, wms 가 없으면 지금 경로로 폴백. 🔴 굽기 전 머지. 분석=Opus 5.5 / 구현 권장=Opus.
 
 ## done
+- ✅ `TASK-MONO-818-demo-seed-ships-ecommerce-orders-through-wms.md` — **DONE 2026-10-25 UTC (4-dim verified)** — impl PR #4547(`53a9227fb`, 실패 0) · AC-1 · AC-3 35차 창 라이브 ✅(슬롯 4·5 wms SHIPPED · 송장 = wms shipmentNo · 슬롯 5 DELIVERED) · AC-2 `Demo wrapper smoke` SUCCESS · AC-4 ⚪(wms 없는 부팅 미도달 — AC 가 사유 있는 ⚪ 허용). 기록 = 티켓 끝 `## CORRECTION — 35차 창` · `TASK-MONO-672` § 35th.
 - ✅ `TASK-MONO-815-wms-throughput-card-kst-window-with-bake.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4534(`3cea93ad0`, 실패 0) · WMS 처리량 카드를 한국 시간 창 · «한국 시간 기준» 문구로 · 소유자 화면 `/wms` 카드 «최근 14일 · 한국 시간 기준 (2026-10-12 ~ 2026-10-25)», 마지막 날 = KST 오늘.
 - ✅ `TASK-MONO-814-demo-backend-resolver-single-flight.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4508(`45fa46428`, 실패 0) · 데모 주소 해석기가 동시 조회를 한 번으로 묶고 실패가 좋은 스냅샷을 안 덮는다 · 34차 창 로그인 직후 첫 개요에서 여섯 카드가 값을 그렸고 «정상 6 · 점검 불가 0» · 람다 `Throttles` 17:01Z = 0(33차 4–12) · Vercel Production 넷 success.
 - ✅ `TASK-MONO-813-dead-letter-topic-suffix-split-dlq-vs-dlt.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4517(`c50dd3d67`, 실패 0) · 데드레터 토픽 이름을 `<topic>.DLT` 하나로(`ADR-MONO-085`) · 34차 창 오염 레코드 1건이 10초 안에 `wms.admin.settings.v1.DLT` p0 에 떨어졌다. 🔴 inventory resolver 가 아직 원본 파티션을 돌려줘 «non-existent partition …DLT-1» 경고(레코드는 전달됨) — 티켓에 기록.

@@ -8,7 +8,7 @@ wms dead-letter resolvers still return the source partition — a record from so
 
 # Status
 
-review
+done
 
 # Owner
 
