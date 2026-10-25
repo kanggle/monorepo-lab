@@ -155,3 +155,16 @@ IdP 가 모르는 hint 이면 `{"error":"invalid_token","error_description":"Ope
 - **AC-3 — 닫힘.** 34차 창(2026-10-24 UTC): ✅ 소유자가 콘솔에서 로그아웃하자 `console.hubwang.com/login` 에 착지했다.
 - **AC-1 — 34차 창 결과 (열린 채 유지).** «소유자 브라우저 사례(hint 있음)» 절반은 이 측정으로 따로 판정하지 않았으므로 AC-1 은 열어 둔다 — 티켓은 `review` 에 남는다.
 - (원문 체크박스는 동결 규칙(HARDSTOP-05)상 바꾸지 않았다 — 이 절이 AC-3 의 닫힘 기록이다.)
+
+---
+
+## CORRECTION — 35차 창 라이브 결과 (2026-10-25 UTC)
+
+- **AC-1 ✅ — «소유자 브라우저 사례(hint 있음)» 절반이 닫힘.** 35차 창(굽기 `54b79233c`, 신선 볼륨): 콘솔에서 로그아웃.
+  - edge 로그 08:34:37Z: `GET /connect/logout?id_token_hint=…&post_logout_redirect_uri=https%3A%2F%2Fconsole.hubwang.com%2Flogin&client_id=platform-console-web` → **302** (8 ms). 브라우저는 `console.hubwang.com/login` 에 착지했다.
+  - 다시 «로그인» 을 누르자 비밀번호 폼이 나왔다 — 콘솔 코드에는 `prompt`/`max_age` 가 없으므로 IdP 세션이 실제로 끝난 것이다.
+  - 호출은 서버 쪽에서 나갔다(source `13.217.225.232`, UA «-»).
+  - AC-1 의 나머지 절반(잘못된 요청 → OIDC 오류)은 CI 실제 Tomcat(5/5)과 33차 창(`id_token_hint=garbage…` → 400 `invalid_token`)에서 이미 닫혀 있다.
+- AC-3 은 34차 창에서 닫혔다(위 CORRECTION). AC-0 · AC-2 는 처음부터 닫혀 있었다.
+
+⇒ 판정: 모든 AC 닫힘 — 닫기 chore 대상

@@ -238,3 +238,16 @@ The 34th window's setting write answered 403: `PUT /api/v1/admin/settings/...` n
 
 Owner decision 2026-10-25 UTC («창에서 DB 행 직접 갱신»): AC-3 is measured by updating the `admin_setting` row on the demo host (`dbexec --why …`, threshold `10 → 25`), checking that the console `lowStockOnly` filter follows it, and restoring `10`. That measures what AC-3 asks — the filter follows the setting row — and **not** the write API or its permission, which AC-3 does not ask about. A SKU has to sit between 10 and 24 first (the 34th window's minimum available was 85). Procedure: `TASK-MONO-672` § 35th window — preparation, steps 1–2.
 
+---
+
+## CORRECTION — 35차 창 라이브 결과 (2026-10-25 UTC)
+
+- **AC-3 ✅ — 읽기 경로 한정.** 35차 창(굽기 `54b79233c`, 신선 볼륨). 바로 위 CORRECTION 의 소유자 결정대로 `admin_setting` 행을 호스트에서 직접 갱신해 쟀다.
+  - 기준선: `SKU-APPLE-001` available 85. 재고 조정 −70 → 15 (201).
+  - 임계 10 에서: `GET /api/v1/admin/dashboard/inventory?lowStockOnly=true` 0행, 알림 0건 (15 는 `< 10` 이 아니다).
+  - 행 쓰기 10 → 25 (`dbexec --why`, version 0 → 1) 뒤: 같은 읽기가 그 행(available 15)을 `lowStockFlag:true` 로 돌려준다 — 필터가 설정 행을 따른다 (경계 `<`, 소유자 결정 (i)).
+  - 복원: 행 값 10, version 2, `updated_by = demo-window`.
+- **측정하지 않은 것 (정직하게).** 쓰기 API(`PUT /settings/{key}`)와 그 권한(`WMS_ADMIN`)은 소유자 결정대로 재지 않았다. 또 원장이 적은 것은 콘솔이 부르는 admin-service 읽기 API 의 응답이며, 콘솔 화면의 «저재고만» 필터를 눈으로 본 기록은 없다. AC-3 문구(«콘솔 저재고 필터 결과가 따라 바뀌는가»)를 이 한정으로 닫는 것은 위 소유자 결정이 정한 측정 방식이다.
+
+⇒ 판정: 모든 AC 닫힘 — 닫기 chore 대상 (AC-3 은 읽기 경로 한정 판정이다. 닫기 chore 의 (d) 가 이 한정을 읽고 확인할 것)
+

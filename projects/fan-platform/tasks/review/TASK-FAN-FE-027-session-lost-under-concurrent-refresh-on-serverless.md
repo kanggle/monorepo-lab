@@ -218,3 +218,11 @@ fan-platform-web 의 세션 refresh 가 다중 서버리스 인스턴스 경합�
 | `next build` (`NEXTAUTH_SECRET` 더미) | rc=0 — Middleware 45.5 kB |
 | `check-client-graph-backend-origins` · `check-client-graph-server-only` · `check-fetch-resolution` | rc=0 · 0 · 0 |
 | **bite** — 스크래치 사본으로 ② 패자 표지 1줄 끔 + `session.ts`·`middleware.ts` 를 HEAD 로 + keeper 주기 60s | rc=1 — **정확히 9셀 실패**: auth-callbacks «경합 패자 표지» · race «loser converges» · «winner not landed» · «dead refresh token» · middleware «만료·refresh 가능 통과, IAM·auth() 0» · «로그인 상태 통과(음성 대조군)» · decode-only 2칸 · keeper 부등식. 🔵 대조군 2칸은 그대로 초록. 복원 후 `cmp` 4파일 일치, 전체 재실행 초록 |
+
+---
+
+## CORRECTION — 35차 창 라이브 결과 (2026-10-25 UTC)
+
+- **AC-1 — 라이브 ⚪ 측정 안 함 (열린 채 유지).** 35차 창: 소유자가 35 분 유휴 대기를 건너뛰기로 했다(`TASK-FE-106` 과 같은 결정). 로컬 단위 하네스의 재현(대조군 2칸)은 이미 닫혀 있고, 라이브 재현(로그인 → 액세스 토큰 만료까지 유휴 → 페이지 로드 → auth-service 의 `SAS_REFRESH: replay …` 또는 `reuse detected` 유무)이 남았다. 유휴 대기는 다른 측정과 함께 흘려보낼 수 있다.
+
+⇒ review 유지 — 남은 것: AC-1 의 라이브 재현 (유휴 뒤 복귀)

@@ -99,3 +99,21 @@ After a fresh seed, the ecommerce order that sits at `SHIPPED` and the one that 
 - 🔴 Unverified assumption that AC-3 will decide: the `ecommerce` assume token carries the wms outbound write roles (`OUTBOUND_WRITE`). The ecommerce tenant subscribes wms (`seed-ecommerce.sh` operator-block comment), but I did not read the derived role set for it. If it does not, the fallback fires and the log says «테넌트·역할을 의심하라».
 
 Open: AC-1 · AC-3 · AC-4 (bake / window).
+
+---
+
+## CORRECTION — 35차 창 라이브 결과 (2026-10-25 UTC)
+
+35th window: bake `bake-54b79233c` (AMI `ami-068ae07b2b3ac7797`, pin PR #4558), fresh volume, all nine bundles started. Evidence is the boot journal and host reads from that window; the raw outputs are in the session scratchpad, not in the repo.
+
+- **Boot gate.** Journal `[seed:` lines «주문 4: wms 출하 확정 → 이벤트로 배송 SHIPPED (wms created)» and «주문 5: … (wms created)». «wms 경로로 출고하지 못했습니다» count = 0. Seed ✗ lines = 0 (the only ⚠ is the known minio image-seed warning). 100 containers, none unhealthy or exited except `ecommerce-minio-init` Exited (0), which is normal.
+- **AC-1 ✅** — the shared pick → pack → ship path ran: the slot 4 and slot 5 lines above, and on the second `seed-wms` run «존재 출고 SO-DEMO-0001 이미 SHIPPED» (one of the two log lines the AC names).
+- **AC-2** — not re-measured in this window. Its record stays § Verification (static `bash -n` and the `verify-demo-wrapper.sh` seed cell). The live boot adds only that the three scripts ran with 0 ✗ lines.
+- **AC-3 ✅** — fresh volume.
+  - Slot 4, order `c76625ca…`: ecommerce `SHIPPED`; wms outbound `SHIPPED`, saga `COMPLETED`; shipping `trackingNumber` `SHP-20261025-5153` = the wms `shipment_no`; `wmsRouted: true`.
+  - Slot 5, order `9d05ca68…`: ecommerce `DELIVERED`; wms `SHIPPED` / `COMPLETED`; tracking `SHP-20261025-2800` = the wms `shipment_no`; `statusHistory` PREPARING → SHIPPED → IN_TRANSIT → DELIVERED.
+  - The seed log names the path each slot took (event path, not the hand path).
+- **AC-4 ⚪** — needs a boot with ecommerce started and wms not started. This window started every bundle, so the fallback was not reachable. The AC text says «⚪ with the reason if not reached», so this ⚪ with its reason is the closure the AC asks for.
+- 🔵 A side effect of the window, not part of this ticket: with ≥1 wms alert row the console `/wms` overview degrades. Recorded in `TASK-MONO-672` § 35th window — results.
+
+⇒ 판정: 모든 AC 닫힘 — 닫기 chore 대상 (AC-4 is closed by its own «⚪ with the reason» clause; AC-2 rests on § Verification, which the close chore's dimension (d) must open and read)
