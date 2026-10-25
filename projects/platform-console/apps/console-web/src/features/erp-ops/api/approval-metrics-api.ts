@@ -10,6 +10,9 @@ import { callApproval } from './approval-call';
 // TASK-MONO-809)
 // ---------------------------------------------------------------------------
 
+/** TASK-PC-FE-372 — exported so the home headline leg (`shared/composition/operator-overview-headline.ts`) is pinned to it by a unit test. */
+export const APPROVAL_METRICS_PATH = '/api/erp/approval/metrics';
+
 /**
  * 상신 (`submitted`) · 승인 (`approved` — final approval only) · 반려
  * (`rejected`), current vs the same-length previous KST window, with a daily
@@ -26,8 +29,8 @@ export async function getApprovalMetrics(
   const qs = new URLSearchParams({ period });
   return callApproval(
     {
-      path: `/api/erp/approval/metrics?${qs.toString()}`,
-      logPath: '/api/erp/approval/metrics',
+      path: `${APPROVAL_METRICS_PATH}?${qs.toString()}`,
+      logPath: APPROVAL_METRICS_PATH,
     },
     (json) => PerformanceMetricsSchema.parse(json),
   );

@@ -31,7 +31,8 @@ import {
  * The addresses and credentials are the ones each domain's own «실적» strip uses
  * (`features/{…}/api/*-metrics-api.ts`) — those modules sit in `features/` and
  * `shared/` may not import them (architecture.md § Forbidden Dependencies), so
- * the paths are restated here and pinned against them by a unit test. The parse
+ * the paths are restated here and pinned against the fetchers' exported constants by
+ * `tests/unit/operator-overview-headline-paths.test.ts` (TASK-PC-FE-372 — before it, no test did). The parse
  * is NOT restated: `shared/api/performance-metrics.ts` is the one schema.
  *
  * `period=week` — «이번 주 값 · 직전 대비 증감» (ADR-084 D7): the response's
