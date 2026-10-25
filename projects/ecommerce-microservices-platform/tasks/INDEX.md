@@ -86,7 +86,6 @@ _(없음)_
 
 ## review
 
-- `TASK-BE-659-order-operator-reads-wildcard-tenant-silent-empty.md` — **주문 운영자 읽기 넷(`/summary` · `/insights` · 목록 · 상세)이 `*` 테넌트에 빈 200 — 계약의 «`*` 조회 유지» 는 미구현 → `/metrics` 처럼 403** (REVIEW 2026-10-25 UTC · AC 전부 닫힘): 소유자 결정(교차 테넌트 읽기를 새로 만들지 않음). `requireConcreteTenant` 재사용 + 계약 정정. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 - `TASK-BE-645-operator-confirm-backordered-skips-reservation.md` — **REVIEW (2026-10-22 UTC · #4474 머지 · AC-2 = 굽기 뒤 라이브) — 서버 변경 = 굽기.** 운영자 상태 변경 API 가 `BACKORDERED → CONFIRMED` 를 받아 준다(`AdminOrderStatusService.java:34` → `Order.confirm` `:214` 는 재입고 재예약 사가용 갈래) — 재고 예약 없이 확정. 운영자 경로에서는 거부 · 사가 경로는 그대로. 콘솔은 `TASK-PC-FE-365` 부터 취소만 낸다. 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-2 ⚪ — `BACKORDERED` 0 건.
 
@@ -96,6 +95,7 @@ _(없음)_
 - `TASK-BE-624-profile-email-name-still-null-despite-be-575-be-577.md` — **IAM 가입 계정의 마이페이지 「기본 정보」가 여전히 빈칸** (REVIEW, 2026-10-06 UTC · 출처 `TASK-MONO-764` 23차 창). 원인은 세 후보(ⓐ배포 미반영·ⓑ클레임 없음·ⓒ소셜 가입)가 아니라 **ⓓ** — `TASK-BE-575` 의 pull-through 프로비저닝과 `TASK-MONO-511`(이후 완료)이 살린 `account.created` 이벤트 소비자가 서로 레이스하고, 이벤트 쪽이 거의 항상 먼저 도착해 `email=null` 로 행을 선점한다(`AccountCreatedHandler.java:28` 이 항상 `null` 전달, `UserProfileProvisioner` 의 기존 no-op 이 뒤따르는 pull-through 의 실 이메일을 버림). `UserProfile.assignEmail` + `UserProfileProvisioner.backfillEmailIfMissing` 로 1회 백필 추가, 단위 테스트 추가(`./gradlew :…:user-service:test` BUILD SUCCESSFUL). 라이브 재확인은 AMI 재굽기 이후(AC-4 ⚪ 미체크). impl PR **#4184**. 분석=Opus 5.5 / 구현 권장=Sonnet(실제: Opus 5.5 — 레이스 조건 진단은 복잡 도메인 작업).
 
 ## done
+- ✅ `TASK-BE-659-order-operator-reads-wildcard-tenant-silent-empty.md` — **DONE 2026-10-25 UTC (4-dim verified)** — #4556(`75f1a8e9c`, 실패 0 · `Integration (ecommerce A/B/C)` SUCCESS). 주문 운영자 읽기 넷이 `*` 에 403(`requireRead` 가 역할과 무관하게 거절 — `/metrics` 와 합침). 계약의 «`*` 유지» 는 미구현이었다. 수정 전 빨강 2. AC 전부 닫힘.
 - ✅ `TASK-BE-649-shipping-service-ignores-order-cancelled.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4490(`8de95f2c7`, 실패 0) · 주문이 취소되면 출고 전 배송도 취소하고 WMS 에 출고 취소를 요청한다 · 34차 창 배송 `PREPARING→CANCELLED` · `FulfillmentCancelRequested` 1행 · 메아리 ALERT 억제(`ALERT wms outbound cancelled` 0줄).
 - ✅ `TASK-BE-646-admin-status-cancel-publishes-no-order-cancelled.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4480(`ab7f5d26c`, 실패 0) · 관리자 상태 변경의 취소가 `OrderCancelled` 를 낸다 — 환불 · 재고 해제 · 34차 창 콘솔 경로 취소 200 → outbox `OrderCancelled` · payment `REFUNDED` 3,490,000 · 상품 예약 `RESERVED→RELEASED`.
 - ✅ `TASK-FE-110-store-shipping-tracker-cancelled-status.md` — **DONE 2026-10-23 UTC (4-dim verified)** — impl PR **#4491**, 스쿼시 **`e5fb1e715`** (머지 시점 실패 0 — SUCCESS 19 · SKIPPED 50). 웹스토어 배송 추적이 «취소됨» 을 안다 — «주문이 취소되어 배송이 취소되었습니다.»(문구 승인). 33차 창 라이브(AC-3): 데모 구매자 `/my/orders/49eae2f6…` 에 빨간 문구 · 단계/택배사/운송장 없음. 🔵 AC-0 체크 칸 누락 = § CORRECTION.
