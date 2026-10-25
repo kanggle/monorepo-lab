@@ -71,7 +71,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-661-inventory-seed-lacks-wh01-warehouse-snapshot.md` — **READY (2026-10-26 UTC · 굽기 대상 · 35차 창 발견).** inventory-service dev 시드에 WH01 `warehouse_snapshot` 이 없다(WH-MAIN 만) → SKU-APPLE-001 저재고 경보의 `warehouseCode` null → scm 제안에 `warehouseCode` 없음 → 그 발주는 wms 입고 예정을 안 낸다. 형제 outbound · inbound · admin 시드는 WH01 을 가진다. 시드 한 줄 + 로케이션→창고 폐포 parity 셀. `warehouseId`=로케이션 id 는 ADR-050 D9 설계(범위 밖). 분석=Opus 5.5 / 구현 권장=Sonnet.
+(empty)
 
 <details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 done/)</summary>
 
@@ -89,6 +89,7 @@ _(없음)_
 
 ## review
 
+- `TASK-BE-661-inventory-seed-lacks-wh01-warehouse-snapshot.md` — **REVIEW (2026-10-26 UTC · AC-4 = 굽기 뒤 라이브).** inventory 시드에 WH01 `warehouse_snapshot` 행 추가(`ON CONFLICT (id) DO NOTHING`) + 로케이션→창고 폐포 parity 셀(`EcommerceSeedParityTest`) — 수정 전 빨강 · 수정 후 초록. 구현 권장 Sonnet.
 - `TASK-BE-652-admin-settings-list-without-filters-500.md` — **REVIEW (2026-10-24 UTC · CI 빨강 → 초록 · AC-2 = 굽기 뒤 라이브) — `TASK-BE-644` AC-3 시도 중 발견.** admin-service 조건 없는 `GET /settings` → 500(`AdminSettingJpaRepository.java:13-18`, PostgreSQL `character varying ~~ bytea`) — 콘솔 WMS 운영설정 화면이 설정을 못 읽는다. 구현 권장 Sonnet.
 
 ## done
