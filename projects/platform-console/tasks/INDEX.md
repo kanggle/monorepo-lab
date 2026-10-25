@@ -124,7 +124,6 @@ _(없음)_
 
 ## review
 
-- `TASK-PC-FE-372-headline-metric-paths-not-pinned-to-fetchers.md` — **홈 대표 지표 합성이 도메인 실적 경로를 다시 적고 «단위 시험이 fetcher 와 대조한다» 고 주석에 썼지만, 그런 시험이 없다** (REVIEW 2026-10-25 UTC · AC 전부 닫힘): 기존 시험은 부분 문자열로만 분류한다. fetcher 넷에 경로 상수 + 여섯 도메인 대조 시험. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 - `TASK-PC-FE-371-delegation-rows-show-employee-ids-not-names.md` — **ERP 위임 화면(«내가 위임한» · «나에게 위임된» · 위임 현황 표)이 직원 이름 대신 내부 id 를 그린다** (REVIEW 2026-10-25 UTC · AC-5 = Vercel · 데모 창 라이브): 34차 창 발견 · `PC-FE-355` Out of Scope. 위임의 사람 칸은 직원 id(approval v2.4)이고, 결재 화면의 `ApprovalEmployeeRef` 로 그대로 풀린다 — 콘솔만, 굽기 무관. 분석=Opus 5.5 / 구현 권장=Sonnet. 구현: 두 렌더 자리에 `ApprovalEmployeeRef`. 수정 전 빨강 5 · console 전체 5544 초록.
 
@@ -135,6 +134,7 @@ _(없음)_
 - `TASK-PC-FE-310-fold-catalog-into-overview.md` — **사이드바 «카탈로그» 를 개요 안으로 접는다** (REVIEW, 2026-10-06 UTC · 소유자 결정). 테넌트 없음 → 개요가 카탈로그 그리드 직접 노출(그리드 빈 경우만 옛 `NoTenantNotice` 추가) · 성공 → «제품·테넌트 전체» 접힘 섹션(상태점은 공용 `deriveHealthByDomain`) · BFF 불가 → 같은 섹션 펼침 · `/console` = `/dashboards/overview` 리다이렉트 · «카탈로그로 이동» 34곳 → «개요로 이동» · `permission-map.ts`/`console-nav-matching.ts` 의 orphan 행·특례 삭제. AC-0~AC-10 전부 닫힘(AC-10 의 nightly 확인만 라이브 ⚪) · AC-11 라이브 ⚪. tsc/lint/vitest(338/338·3807/3807) rc=0 · AC-9 bite 둘 다 정확한 칸만 적중. 분석=Opus 5.5 / 구현 권장=Sonnet. · 🔵 **33차 창(2026-10-23 UTC)**: AC-11 미착수.
 
 ## done
+- ✅ `TASK-PC-FE-372-headline-metric-paths-not-pinned-to-fetchers.md` — **DONE 2026-10-25 UTC (4-dim verified)** — #4551(`676c14975`, 실패 0 · `Frontend unit tests` SUCCESS). 홈 대표 지표 leg 경로를 fetcher 상수에 고정(변이 2개 빨강). base 는 시험 안 표(세 번째 사본 — 약한 쪽). AC 전부 닫힘.
 - ✅ `TASK-PC-FE-369-operator-overview-wms-scm-cards-downstream-error.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4508(`45fa46428`, 실패 0) · 운영자 통합 개요의 «WMS 출고» · «SCM 발주» 카드 `DOWNSTREAM_ERROR` — 원인은 데모 주소 해석기의 동시 `/status`(수선 = `TASK-MONO-814`) · 34차 창 로그인 직후 첫 개요에서 여섯 카드가 값을 그렸고 도메인 상태 «정상 6 · 주의 0 · 점검 불가 0».
 - ✅ `TASK-PC-FE-368-home-overview-domain-headline-metric.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4524(`540dccd88`, 실패 0) · `ADR-MONO-084` P8 — 홈 도메인 카드에 대표 실적 지표 · 머지 뒤 첫 nightly `40087927639` success · 34차 창 홈 카드 여섯 도메인 모두 대표 지표 표시.
 - ✅ `TASK-PC-FE-355-erp-approval-console-submit-and-delegator-panel-errors.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4442(`dd643f54a`, 실패 0) · ERP 결재 화면의 콘솔 오류 둘 — 상신 응답 감싸기 · 위임 목록 오류 문구 · 34차 창 콘솔 상신 → `SUBMITTED` · «내가 위임한» 오류 문구 0. 🔵 위임 행이 직원 이름 대신 원시 id 를 그림(기록만).
