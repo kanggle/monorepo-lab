@@ -79,11 +79,14 @@ describe('AC-1 — procurement PO (surface `scm`) parses with production schemas
     expect(res.status).toBe(200);
     const envelope = (await json(res)) as { data: unknown };
     const page = PoPageSchema.parse(envelope.data);
-    expect(page.content.length).toBe(4);
+    expect(page.content.length).toBe(10); // 4 original + 6 added by TASK-PC-FE-374
   });
 
   it('GET /po/{poId} (detail) for every PO', async () => {
-    for (const id of ['po-sample-0001', 'po-sample-0002', 'po-sample-0003', 'po-sample-0004']) {
+    for (const id of [
+      'po-sample-0001', 'po-sample-0002', 'po-sample-0003', 'po-sample-0004', 'po-sample-0005',
+      'po-sample-0006', 'po-sample-0007', 'po-sample-0008', 'po-sample-0009', 'po-sample-0010',
+    ]) {
       const res = scm(`/api/v1/procurement/po/${id}`);
       expect(res.status, id).toBe(200);
       const envelope = (await json(res)) as { data: unknown };
@@ -274,8 +277,11 @@ describe('AC-3 — supplier reference resolves per procurement-api.md rule (thro
     const res = scm(`/api/v1/procurement/po?supplierId=${SUP_SAMPLE_01_ID}&page=0&size=20`);
     const envelope = (await json(res)) as { data: unknown };
     const page = PoPageSchema.parse(envelope.data);
-    // po-sample-0001 AND po-sample-0004 both store this exact id.
-    expect(page.content.map((p) => p.id).sort()).toEqual(['po-sample-0001', 'po-sample-0004']);
+    // po-sample-0001, -0004, -0005, -0007 and -0009 store this exact id (the supplier
+    // master id; -0002/-0006/-0008/-0010 store the other supplier's id or code).
+    expect(page.content.map((p) => p.id).sort()).toEqual([
+      'po-sample-0001', 'po-sample-0004', 'po-sample-0005', 'po-sample-0007', 'po-sample-0009',
+    ]);
   });
 });
 

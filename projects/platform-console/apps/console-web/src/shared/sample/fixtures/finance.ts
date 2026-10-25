@@ -183,6 +183,71 @@ export const SAMPLE_FINANCE_TRANSACTIONS = [
     createdAt: '2026-09-09T00:00:00Z',
     settledAt: null,
   },
+  // TASK-PC-FE-374 — six more COMPLETED rows spread over Sept 3..15 (KST) so the
+  // 충전/이체 bars read across the month and the week window (09-14..15) is
+  // non-empty. Added top-ups (50000 + 30000 + 20000) and added transfers
+  // (40000 + 25000 + 35000) net to zero, so the typed balance above is left
+  // untouched. Kinds the strip counts only: TOPUP / TRANSFER.
+  {
+    transactionId: 'txn-sample-0004',
+    type: 'TOPUP',
+    status: 'COMPLETED',
+    money: { amount: '50000', currency: 'KRW' },
+    counterpartyAccountId: null,
+    reversalOfTransactionId: null,
+    createdAt: '2026-09-03T01:00:00Z',
+    settledAt: '2026-09-03T01:05:00Z', // KST 09-03
+  },
+  {
+    transactionId: 'txn-sample-0005',
+    type: 'TRANSFER',
+    status: 'COMPLETED',
+    money: { amount: '40000', currency: 'KRW' },
+    counterpartyAccountId: 'sample-account-0002',
+    reversalOfTransactionId: null,
+    createdAt: '2026-09-06T03:00:00Z',
+    settledAt: '2026-09-06T03:02:00Z', // KST 09-06
+  },
+  {
+    transactionId: 'txn-sample-0006',
+    type: 'TOPUP',
+    status: 'COMPLETED',
+    money: { amount: '30000', currency: 'KRW' },
+    counterpartyAccountId: null,
+    reversalOfTransactionId: null,
+    createdAt: '2026-09-07T05:00:00Z',
+    settledAt: '2026-09-07T05:03:00Z', // KST 09-07
+  },
+  {
+    transactionId: 'txn-sample-0007',
+    type: 'TRANSFER',
+    status: 'COMPLETED',
+    money: { amount: '25000', currency: 'KRW' },
+    counterpartyAccountId: 'sample-account-0002',
+    reversalOfTransactionId: null,
+    createdAt: '2026-09-10T02:00:00Z',
+    settledAt: '2026-09-10T02:01:00Z', // KST 09-10
+  },
+  {
+    transactionId: 'txn-sample-0008',
+    type: 'TRANSFER',
+    status: 'COMPLETED',
+    money: { amount: '35000', currency: 'KRW' },
+    counterpartyAccountId: 'sample-account-0002',
+    reversalOfTransactionId: null,
+    createdAt: '2026-09-14T04:00:00Z',
+    settledAt: '2026-09-14T04:02:00Z', // KST 09-14 (week window)
+  },
+  {
+    transactionId: 'txn-sample-0009',
+    type: 'TOPUP',
+    status: 'COMPLETED',
+    money: { amount: '20000', currency: 'KRW' },
+    counterpartyAccountId: null,
+    reversalOfTransactionId: null,
+    createdAt: '2026-09-15T01:00:00Z',
+    settledAt: '2026-09-15T01:04:00Z', // KST 09-15 (week window)
+  },
 ] as const;
 
 function transactionsFixture(path: string): unknown {

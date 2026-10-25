@@ -288,6 +288,161 @@ const SCM_POS: readonly PoSeed[] = [
       },
     ],
   },
+  // TASK-PC-FE-374 — six more submitted POs spread over Sept 3..15 (KST) so the
+  // 실적 bars read across the month and the week window (09-14..15) is non-empty.
+  // All are inside the CURRENT windows only: the previous-month window still holds
+  // just the CANCELED po-sample-0004 (its control-group role is unchanged).
+  // Each totalAmount = Σ(quantity × unitPrice) of its one line.
+  {
+    id: 'po-sample-0005',
+    poNumber: 'PO-SAMPLE-0005',
+    supplierId: SUPPLIERS[0].id,
+    status: 'SUBMITTED',
+    totalAmount: '50000.00',
+    currency: 'KRW',
+    submittedAt: '2026-09-03T02:00:00Z', // KST 09-03 11:00
+    acknowledgedAt: null,
+    confirmedAt: null,
+    canceledAt: null,
+    createdAt: '2026-09-03T01:00:00Z',
+    updatedAt: '2026-09-03T02:00:00Z',
+    lines: [
+      {
+        id: 'poln-sample-0005-1',
+        lineNo: 1,
+        sku: 'SKU-SAMPLE-001',
+        supplierSku: 'SUP01-SKU-001',
+        quantity: '4.0000',
+        unitPrice: '12500.00',
+        receivedQuantity: '0.0000',
+      },
+    ],
+  },
+  {
+    id: 'po-sample-0006',
+    poNumber: 'PO-SAMPLE-0006',
+    supplierId: SUPPLIERS[1].id,
+    status: 'ACKNOWLEDGED',
+    totalAmount: '87500.00',
+    currency: 'KRW',
+    submittedAt: '2026-09-08T01:00:00Z', // KST 09-08 10:00
+    acknowledgedAt: '2026-09-08T06:00:00Z',
+    confirmedAt: null,
+    canceledAt: null,
+    createdAt: '2026-09-08T00:30:00Z',
+    updatedAt: '2026-09-08T06:00:00Z',
+    lines: [
+      {
+        id: 'poln-sample-0006-1',
+        lineNo: 1,
+        sku: 'SKU-SAMPLE-001',
+        supplierSku: 'SUP02-SKU-001',
+        quantity: '7.0000',
+        unitPrice: '12500.00',
+        receivedQuantity: '0.0000',
+      },
+    ],
+  },
+  {
+    id: 'po-sample-0007',
+    poNumber: 'PO-SAMPLE-0007',
+    supplierId: SUPPLIERS[0].id,
+    status: 'CONFIRMED',
+    totalAmount: '30000.00',
+    currency: 'KRW',
+    submittedAt: '2026-09-09T05:00:00Z', // KST 09-09 14:00
+    acknowledgedAt: '2026-09-09T08:00:00Z',
+    confirmedAt: '2026-09-10T00:00:00Z',
+    canceledAt: null,
+    createdAt: '2026-09-09T04:00:00Z',
+    updatedAt: '2026-09-10T00:00:00Z',
+    lines: [
+      {
+        id: 'poln-sample-0007-1',
+        lineNo: 1,
+        sku: 'SKU-SAMPLE-002',
+        supplierSku: 'SUP01-SKU-002',
+        quantity: '6.0000',
+        unitPrice: '5000.00',
+        receivedQuantity: '0.0000',
+      },
+    ],
+  },
+  {
+    id: 'po-sample-0008',
+    poNumber: 'PO-SAMPLE-0008',
+    supplierId: SUPPLIERS[1].id,
+    status: 'SUBMITTED',
+    totalAmount: '75000.00',
+    currency: 'KRW',
+    submittedAt: '2026-09-13T03:00:00Z', // KST 09-13 12:00
+    acknowledgedAt: null,
+    confirmedAt: null,
+    canceledAt: null,
+    createdAt: '2026-09-13T02:00:00Z',
+    updatedAt: '2026-09-13T03:00:00Z',
+    lines: [
+      {
+        id: 'poln-sample-0008-1',
+        lineNo: 1,
+        sku: 'SKU-SAMPLE-002',
+        supplierSku: 'SUP02-SKU-002',
+        quantity: '15.0000',
+        unitPrice: '5000.00',
+        receivedQuantity: '0.0000',
+      },
+    ],
+  },
+  {
+    id: 'po-sample-0009',
+    poNumber: 'PO-SAMPLE-0009',
+    supplierId: SUPPLIERS[0].id,
+    status: 'CONFIRMED',
+    totalAmount: '37500.00',
+    currency: 'KRW',
+    submittedAt: '2026-09-14T01:00:00Z', // KST 09-14 10:00 (week window)
+    acknowledgedAt: '2026-09-14T03:00:00Z',
+    confirmedAt: '2026-09-14T06:00:00Z',
+    canceledAt: null,
+    createdAt: '2026-09-14T00:30:00Z',
+    updatedAt: '2026-09-14T06:00:00Z',
+    lines: [
+      {
+        id: 'poln-sample-0009-1',
+        lineNo: 1,
+        sku: 'SKU-SAMPLE-001',
+        supplierSku: 'SUP01-SKU-001',
+        quantity: '3.0000',
+        unitPrice: '12500.00',
+        receivedQuantity: '0.0000',
+      },
+    ],
+  },
+  {
+    id: 'po-sample-0010',
+    poNumber: 'PO-SAMPLE-0010',
+    supplierId: SUPPLIERS[1].id,
+    status: 'SUBMITTED',
+    totalAmount: '40000.00',
+    currency: 'KRW',
+    submittedAt: '2026-09-15T00:30:00Z', // KST 09-15 09:30 (week window)
+    acknowledgedAt: null,
+    confirmedAt: null,
+    canceledAt: null,
+    createdAt: '2026-09-15T00:00:00Z',
+    updatedAt: '2026-09-15T00:30:00Z',
+    lines: [
+      {
+        id: 'poln-sample-0010-1',
+        lineNo: 1,
+        sku: 'SKU-SAMPLE-002',
+        supplierSku: 'SUP02-SKU-002',
+        quantity: '8.0000',
+        unitPrice: '5000.00',
+        receivedQuantity: '0.0000',
+      },
+    ],
+  },
 ];
 
 /** The wire view of one PO — `supplierCode`/`supplierName` are COMPUTED here

@@ -132,9 +132,18 @@ export const ECOMMERCE_SELLERS = [
     createdAt: '2026-03-10T00:00:00Z',
     updatedAt: '2026-07-15T00:00:00Z',
   },
+  {
+    // TASK-PC-FE-374 — a third SELLING seller (0001 and 0002 sell; 0003 is suspended),
+    // so the month seller ranking has three entries.
+    sellerId: 'seller-sample-0004',
+    displayName: `데일리웨어 셀러${SUFFIX}`,
+    status: 'ACTIVE',
+    createdAt: '2026-08-28T00:00:00Z',
+    updatedAt: null,
+  },
 ] as const;
 
-const SELLERS_SUMMARY = { today: 0, week: 1, month: 2, total: 3 };
+const SELLERS_SUMMARY = { today: 0, week: 1, month: 3, total: 4 };
 
 /** TASK-MONO-752 — one linked person + one pending invitation on the ACTIVE sample seller. */
 const ECOMMERCE_SELLER_MEMBERS = {
@@ -260,9 +269,24 @@ export const ECOMMERCE_PRODUCTS: readonly ProductSeed[] = [
     images: [],
     variants: [],
   },
+  {
+    // TASK-PC-FE-374 — the product of the third selling seller (seller-sample-0004).
+    id: 'prod-sample-0004',
+    name: `와이드 조거 팬츠${SUFFIX}`,
+    description: null,
+    status: 'ON_SALE',
+    price: 28000,
+    categoryId: 'cat-sample-0002',
+    thumbnailUrl: null,
+    sellerId: 'seller-sample-0004',
+    images: [],
+    variants: [
+      { id: 'variant-sample-0004', optionName: `M${SUFFIX}`, stock: 40, additionalPrice: 0 },
+    ],
+  },
 ];
 
-const PRODUCTS_SUMMARY = { today: 1, week: 2, month: 3, total: 3 };
+const PRODUCTS_SUMMARY = { today: 1, week: 2, month: 4, total: 4 };
 
 /** List-row projection — `ProductSummarySchema` (no `description`/`images`/`variants`). */
 function productSummary(p: (typeof ECOMMERCE_PRODUCTS)[number]) {
@@ -353,6 +377,94 @@ interface OrderSeed {
 function orderTotal(items: OrderItemSeed[]): number {
   return items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
 }
+
+// ---------------------------------------------------------------------------
+// TASK-PC-FE-374 — eleven more orders spread over Sept 3..15 (KST) so the «실적»
+// revenue bars read across the month and the week window (09-14..15) is
+// non-empty, and the month rankings hold three sellers. Paid time = `updatedAt`
+// (see `samplePaidAt`); only CONFIRMED / SHIPPED count as realised. No order here
+// is DELIVERED, so «status=DELIVERED» keeps answering the empty result the schema
+// test pins. Unit prices follow the product: prod-0001 19000 (L: 20000), prod-0002
+// 45000, prod-0003 12000, prod-0004 28000.
+// ---------------------------------------------------------------------------
+
+const ADDRESS_HANA: OrderSeed['shippingAddress'] = {
+  recipient: `김하나${SUFFIX}`,
+  phone: '010-2222-3333',
+  zipCode: '06134',
+  address1: `서울특별시 강남구 테헤란로 123${SUFFIX}`,
+  address2: null,
+};
+const ADDRESS_MINJUN: OrderSeed['shippingAddress'] = {
+  recipient: `이민준${SUFFIX}`,
+  phone: '010-3333-4444',
+  zipCode: '03187',
+  address1: `서울특별시 종로구 세종대로 1${SUFFIX}`,
+  address2: null,
+};
+const ADDRESS_WITHDRAWN: OrderSeed['shippingAddress'] = {
+  recipient: `탈퇴 회원${SUFFIX}`,
+  phone: '010-0000-0000',
+  zipCode: '12345',
+  address1: `주소 비공개${SUFFIX}`,
+  address2: null,
+};
+
+function orderItem(
+  productId: string,
+  variantId: string | null,
+  productName: string,
+  optionName: string | null,
+  quantity: number,
+  unitPrice: number,
+  sellerId: string,
+): OrderItemSeed {
+  return {
+    productId,
+    variantId,
+    productName: `${productName}${SUFFIX}`,
+    optionName: optionName === null ? null : `${optionName}${SUFFIX}`,
+    quantity,
+    unitPrice,
+    sellerId,
+  };
+}
+
+const TSHIRT_M = (qty: number) =>
+  orderItem('prod-sample-0001', 'variant-sample-0001', '베이직 반팔 티셔츠', 'M', qty, 19000, 'seller-sample-0001');
+const TSHIRT_L = (qty: number) =>
+  orderItem('prod-sample-0001', 'variant-sample-0002', '베이직 반팔 티셔츠', 'L', qty, 20000, 'seller-sample-0001');
+const HOODIE = (qty: number) =>
+  orderItem('prod-sample-0002', 'variant-sample-0003', '코튼 후드 집업', 'Free', qty, 45000, 'seller-sample-0001');
+const ECOBAG = (qty: number) =>
+  orderItem('prod-sample-0003', null, '캔버스 에코백', null, qty, 12000, 'seller-sample-0002');
+const JOGGER = (qty: number) =>
+  orderItem('prod-sample-0004', 'variant-sample-0004', '와이드 조거 팬츠', 'M', qty, 28000, 'seller-sample-0004');
+
+const EXTRA_ORDERS: readonly OrderSeed[] = [
+  // CONFIRMED, paid 09-03 KST 10:00 — 2 x 19000 = 38000 (seller 1)
+  { orderId: 'order-sample-0007', userId: 'user-sample-0001', status: 'CONFIRMED', items: [TSHIRT_M(2)], shippingAddress: ADDRESS_HANA, createdAt: '2026-09-03T00:30:00Z', updatedAt: '2026-09-03T01:00:00Z' },
+  // SHIPPED, paid 09-04 KST 14:00 — 28000 (seller 4)
+  { orderId: 'order-sample-0008', userId: 'user-sample-0002', status: 'SHIPPED', items: [JOGGER(1)], shippingAddress: ADDRESS_MINJUN, createdAt: '2026-09-04T04:00:00Z', updatedAt: '2026-09-04T05:00:00Z' },
+  // CONFIRMED, paid 09-06 KST 12:00 — 2 x 12000 = 24000 (seller 2)
+  { orderId: 'order-sample-0009', userId: 'user-sample-0003', status: 'CONFIRMED', items: [ECOBAG(2)], shippingAddress: ADDRESS_WITHDRAWN, createdAt: '2026-09-06T02:30:00Z', updatedAt: '2026-09-06T03:00:00Z' },
+  // SHIPPED, paid 09-09 KST 13:00 — 45000 (seller 1)
+  { orderId: 'order-sample-0010', userId: 'user-sample-0001', status: 'SHIPPED', items: [HOODIE(1)], shippingAddress: ADDRESS_HANA, createdAt: '2026-09-09T03:30:00Z', updatedAt: '2026-09-09T04:00:00Z' },
+  // CONFIRMED, paid 09-10 KST 15:00 — 2 x 28000 = 56000 (seller 4)
+  { orderId: 'order-sample-0011', userId: 'user-sample-0002', status: 'CONFIRMED', items: [JOGGER(2)], shippingAddress: ADDRESS_MINJUN, createdAt: '2026-09-10T05:30:00Z', updatedAt: '2026-09-10T06:00:00Z' },
+  // SHIPPED, paid 09-12 KST 11:00 — multi-seller: 19000 (seller 1) + 12000 (seller 2) = 31000
+  { orderId: 'order-sample-0012', userId: 'user-sample-0001', status: 'SHIPPED', items: [TSHIRT_M(1), ECOBAG(1)], shippingAddress: ADDRESS_HANA, createdAt: '2026-09-12T01:30:00Z', updatedAt: '2026-09-12T02:00:00Z' },
+  // CONFIRMED, paid 09-13 KST 17:00 — 28000 (seller 4)
+  { orderId: 'order-sample-0013', userId: 'user-sample-0003', status: 'CONFIRMED', items: [JOGGER(1)], shippingAddress: ADDRESS_WITHDRAWN, createdAt: '2026-09-13T07:30:00Z', updatedAt: '2026-09-13T08:00:00Z' },
+  // CONFIRMED, paid 09-14 KST 12:00 (week window) — L size 20000 (seller 1)
+  { orderId: 'order-sample-0014', userId: 'user-sample-0002', status: 'CONFIRMED', items: [TSHIRT_L(1)], shippingAddress: ADDRESS_MINJUN, createdAt: '2026-09-14T02:30:00Z', updatedAt: '2026-09-14T03:00:00Z' },
+  // SHIPPED, paid 09-15 KST 10:00 (week window) — 28000 (seller 4)
+  { orderId: 'order-sample-0015', userId: 'user-sample-0001', status: 'SHIPPED', items: [JOGGER(1)], shippingAddress: ADDRESS_HANA, createdAt: '2026-09-15T00:30:00Z', updatedAt: '2026-09-15T01:00:00Z' },
+  // PENDING (unpaid) — never counted
+  { orderId: 'order-sample-0016', userId: 'user-sample-0002', status: 'PENDING', items: [ECOBAG(1)], shippingAddress: ADDRESS_MINJUN, createdAt: '2026-09-14T02:00:00Z', updatedAt: null },
+  // CANCELLED — never counted
+  { orderId: 'order-sample-0017', userId: 'user-sample-0001', status: 'CANCELLED', items: [ECOBAG(2)], shippingAddress: ADDRESS_HANA, createdAt: '2026-09-11T01:00:00Z', updatedAt: '2026-09-11T03:00:00Z' },
+];
 
 export const ECOMMERCE_ORDERS: readonly OrderSeed[] = [
   {
@@ -523,9 +635,30 @@ export const ECOMMERCE_ORDERS: readonly OrderSeed[] = [
     createdAt: '2026-08-28T06:00:00Z',
     updatedAt: '2026-08-28T06:01:00Z',
   },
+  ...EXTRA_ORDERS,
 ];
 
-const ORDERS_SUMMARY = { today: 0, week: 1, month: 6, total: 6 };
+/**
+ * «오늘 / 이번 주 / 이번 달 / 전체» tiles, derived from the rows' `createdAt`
+ * (today = same KST date as SAMPLE_AS_OF; week = last 7x24h; month = last 30x24h)
+ * so they cannot drift from the list the tiles summarise.
+ */
+function areaSummary(createdAts: readonly string[]) {
+  const asOf = Date.parse(SAMPLE_AS_OF);
+  const DAY = 24 * 60 * 60 * 1000;
+  const within = (iso: string, ms: number) => {
+    const t = Date.parse(iso);
+    return t <= asOf && asOf - t < ms;
+  };
+  return {
+    today: createdAts.filter((c) => kstDate(c) === kstDate(SAMPLE_AS_OF)).length,
+    week: createdAts.filter((c) => within(c, 7 * DAY)).length,
+    month: createdAts.filter((c) => within(c, 30 * DAY)).length,
+    total: createdAts.length,
+  };
+}
+
+const ORDERS_SUMMARY = areaSummary(ECOMMERCE_ORDERS.map((o) => o.createdAt));
 
 function orderDetail(o: OrderSeed) {
   return { ...o, totalPrice: orderTotal(o.items) };
@@ -921,9 +1054,70 @@ export const ECOMMERCE_SHIPPINGS = [
     createdAt: '2026-08-20T05:30:00Z',
     updatedAt: '2026-08-22T09:00:00Z',
   },
+  // TASK-PC-FE-374 — one SHIPPED shipment per extra SHIPPED order (8 / 10 / 12 / 15).
+  {
+    shippingId: 'shipping-sample-0004',
+    orderId: 'order-sample-0008',
+    userId: 'user-sample-0002',
+    status: 'SHIPPED',
+    trackingNumber: '1234567890456',
+    carrier: 'CJ대한통운',
+    wmsRouted: true,
+    statusHistory: [
+      { status: 'PREPARING', changedAt: '2026-09-04T05:30:00Z' },
+      { status: 'SHIPPED', changedAt: '2026-09-05T00:00:00Z' },
+    ],
+    createdAt: '2026-09-04T05:30:00Z',
+    updatedAt: '2026-09-05T00:00:00Z',
+  },
+  {
+    shippingId: 'shipping-sample-0005',
+    orderId: 'order-sample-0010',
+    userId: 'user-sample-0001',
+    status: 'SHIPPED',
+    trackingNumber: '9876543210321',
+    carrier: '한진택배',
+    wmsRouted: false,
+    statusHistory: [
+      { status: 'PREPARING', changedAt: '2026-09-09T04:30:00Z' },
+      { status: 'SHIPPED', changedAt: '2026-09-10T00:00:00Z' },
+    ],
+    createdAt: '2026-09-09T04:30:00Z',
+    updatedAt: '2026-09-10T00:00:00Z',
+  },
+  {
+    shippingId: 'shipping-sample-0006',
+    orderId: 'order-sample-0012',
+    userId: 'user-sample-0001',
+    status: 'SHIPPED',
+    trackingNumber: '1234567890789',
+    carrier: 'CJ대한통운',
+    wmsRouted: true,
+    statusHistory: [
+      { status: 'PREPARING', changedAt: '2026-09-12T02:30:00Z' },
+      { status: 'SHIPPED', changedAt: '2026-09-13T00:00:00Z' },
+    ],
+    createdAt: '2026-09-12T02:30:00Z',
+    updatedAt: '2026-09-13T00:00:00Z',
+  },
+  {
+    shippingId: 'shipping-sample-0007',
+    orderId: 'order-sample-0015',
+    userId: 'user-sample-0001',
+    status: 'SHIPPED',
+    trackingNumber: '9876543210654',
+    carrier: '한진택배',
+    wmsRouted: false,
+    statusHistory: [
+      { status: 'PREPARING', changedAt: '2026-09-15T01:30:00Z' },
+      { status: 'SHIPPED', changedAt: '2026-09-15T02:30:00Z' },
+    ],
+    createdAt: '2026-09-15T01:30:00Z',
+    updatedAt: '2026-09-15T02:30:00Z',
+  },
 ] as const;
 
-const SHIPPINGS_SUMMARY = { today: 0, week: 1, month: 3, total: 3 };
+const SHIPPINGS_SUMMARY = areaSummary(ECOMMERCE_SHIPPINGS.map((s) => s.createdAt));
 
 function shippingsFixture(path: string): unknown {
   const { pathname, query } = splitPath(path);
@@ -1016,6 +1210,7 @@ const ECOMMERCE_COMMISSION_RATES = [
   { sellerId: 'seller-sample-0001', rateBps: 1000, source: 'PLATFORM_DEFAULT' },
   { sellerId: 'seller-sample-0002', rateBps: 1200, source: 'SELLER_OVERRIDE' },
   { sellerId: 'seller-sample-0003', rateBps: 1000, source: 'PLATFORM_DEFAULT' },
+  { sellerId: 'seller-sample-0004', rateBps: 1000, source: 'PLATFORM_DEFAULT' },
 ] as const;
 
 /**
@@ -1050,6 +1245,15 @@ const ECOMMERCE_SELLER_BALANCES = [
   },
   {
     sellerId: 'seller-sample-0003',
+    grossMinor: 0,
+    platformCommissionMinor: 0,
+    accruedNetMinor: 0,
+    accrualCount: 0,
+  },
+  {
+    // TASK-PC-FE-374 — the new seller has no accrual line in the sample ledger
+    // (the September settlement period is the deliberately OPEN/empty one).
+    sellerId: 'seller-sample-0004',
     grossMinor: 0,
     platformCommissionMinor: 0,
     accruedNetMinor: 0,

@@ -196,6 +196,28 @@ const IAM_AUDIT_ADMIN_ROWS = [
     outcome: 'SUCCESS',
     occurredAt: '2026-09-11T06:20:00Z',
   },
+  // TASK-PC-FE-374 — two more lock events (09-07 and 09-14 KST) so 계정 잠금
+  // has a bar in the week window as well. Targets are the two LOCKED accounts.
+  {
+    source: 'admin',
+    auditId: 'audit-sample-0003',
+    actionCode: 'ACCOUNT_LOCK',
+    operatorId: 'op-sample-0001',
+    targetId: 'acc-sample-0004',
+    reason: '비밀번호 반복 실패',
+    outcome: 'SUCCESS',
+    occurredAt: '2026-09-07T04:00:00Z',
+  },
+  {
+    source: 'admin',
+    auditId: 'audit-sample-0004',
+    actionCode: 'ACCOUNT_LOCK',
+    operatorId: 'op-sample-0002',
+    targetId: 'acc-sample-0003',
+    reason: '해외 IP 접속 시도',
+    outcome: 'SUCCESS',
+    occurredAt: '2026-09-14T06:00:00Z',
+  },
 ] as const;
 
 const IAM_AUDIT_LOGIN_ROWS = [
@@ -216,6 +238,99 @@ const IAM_AUDIT_LOGIN_ROWS = [
     ipMasked: '198.51.***.**',
     geoCountry: 'KR',
     occurredAt: '2026-09-12T02:10:00Z',
+  },
+  // TASK-PC-FE-374 — ten more login events spread over Sept 2..15 (KST). Each
+  // KST date is noted; login-sample-0010 sits at UTC 15:30, i.e. already the
+  // NEXT KST day (09-15), on purpose.
+  {
+    source: 'login_history',
+    eventId: 'login-sample-0003',
+    accountId: 'acc-sample-0001',
+    outcome: 'SUCCESS',
+    ipMasked: '203.0.***.**',
+    geoCountry: 'KR',
+    occurredAt: '2026-09-01T23:30:00Z', // KST 09-02
+  },
+  {
+    source: 'login_history',
+    eventId: 'login-sample-0004',
+    accountId: 'acc-sample-0002',
+    outcome: 'SUCCESS',
+    ipMasked: '198.51.***.**',
+    geoCountry: 'KR',
+    occurredAt: '2026-09-03T02:00:00Z', // KST 09-03
+  },
+  {
+    source: 'login_history',
+    eventId: 'login-sample-0005',
+    accountId: 'acc-sample-0003',
+    outcome: 'FAILURE',
+    ipMasked: '45.33.***.**',
+    geoCountry: 'US',
+    occurredAt: '2026-09-04T14:00:00Z', // KST 09-04 23:00
+  },
+  {
+    source: 'login_history',
+    eventId: 'login-sample-0006',
+    accountId: 'acc-sample-0001',
+    outcome: 'SUCCESS',
+    ipMasked: '203.0.***.**',
+    geoCountry: 'KR',
+    occurredAt: '2026-09-06T00:30:00Z', // KST 09-06
+  },
+  {
+    source: 'login_history',
+    eventId: 'login-sample-0007',
+    accountId: 'acc-sample-0004',
+    outcome: 'FAILURE',
+    ipMasked: '198.51.***.**',
+    geoCountry: 'KR',
+    occurredAt: '2026-09-08T10:00:00Z', // KST 09-08 19:00
+  },
+  {
+    source: 'login_history',
+    eventId: 'login-sample-0008',
+    accountId: 'acc-sample-0002',
+    outcome: 'SUCCESS',
+    ipMasked: '198.51.***.**',
+    geoCountry: 'KR',
+    occurredAt: '2026-09-09T03:00:00Z', // KST 09-09
+  },
+  {
+    source: 'login_history',
+    eventId: 'login-sample-0009',
+    accountId: 'acc-sample-0001',
+    outcome: 'SUCCESS',
+    ipMasked: '203.0.***.**',
+    geoCountry: 'KR',
+    occurredAt: '2026-09-10T01:30:00Z', // KST 09-10
+  },
+  {
+    source: 'login_history',
+    eventId: 'login-sample-0010',
+    accountId: 'acc-sample-0002',
+    outcome: 'FAILURE',
+    ipMasked: '198.51.***.**',
+    geoCountry: 'KR',
+    occurredAt: '2026-09-14T15:30:00Z', // KST 09-15 00:30 (week window)
+  },
+  {
+    source: 'login_history',
+    eventId: 'login-sample-0011',
+    accountId: 'acc-sample-0001',
+    outcome: 'SUCCESS',
+    ipMasked: '203.0.***.**',
+    geoCountry: 'KR',
+    occurredAt: '2026-09-14T01:00:00Z', // KST 09-14 (week window)
+  },
+  {
+    source: 'login_history',
+    eventId: 'login-sample-0012',
+    accountId: 'acc-sample-0002',
+    outcome: 'SUCCESS',
+    ipMasked: '198.51.***.**',
+    geoCountry: 'KR',
+    occurredAt: '2026-09-15T00:20:00Z', // KST 09-15 (week window)
   },
 ] as const;
 

@@ -823,6 +823,134 @@ export const ERP_APPROVAL_REQUESTS: readonly ApprovalRequestSeed[] = [
       },
     ],
   },
+  // TASK-PC-FE-374 — seven more requests spread over Sept 2..15 (KST) so the
+  // 상신/승인/반려 bars read across the month and the week window (09-14..15) is
+  // non-empty. The inbox stays at the two ME rows above: none of these is a
+  // non-terminal request whose current approver is ME.
+  {
+    // Terminal — APPROVED (submitted 09-02 KST, finalized 09-03 KST).
+    id: 'appr-sample-0006',
+    status: 'APPROVED',
+    subjectType: 'DEPARTMENT',
+    subjectId: 'dept-sample-0002',
+    title: `영업1팀 출장비 승인${SUFFIX}`,
+    approverId: 'emp-sample-0002',
+    submitterId: ME,
+    createdAt: '2026-09-02T00:00:00Z',
+    submittedAt: '2026-09-02T01:00:00Z',
+    finalizedAt: '2026-09-03T02:00:00Z',
+    history: [
+      { transition: 'submit', actor: ME, at: '2026-09-02T01:00:00Z' },
+      { transition: 'approve', actor: 'emp-sample-0002', at: '2026-09-03T02:00:00Z' },
+    ],
+  },
+  {
+    // Terminal — APPROVED (submitted 09-04 KST, finalized 09-08 KST).
+    id: 'appr-sample-0007',
+    status: 'APPROVED',
+    subjectType: 'EMPLOYEE',
+    subjectId: 'emp-sample-0004',
+    title: `최수아 직급 승급 승인${SUFFIX}`,
+    approverId: 'emp-sample-0003',
+    submitterId: 'emp-sample-0004',
+    createdAt: '2026-09-04T00:00:00Z',
+    submittedAt: '2026-09-04T02:00:00Z',
+    finalizedAt: '2026-09-08T01:00:00Z',
+    history: [
+      { transition: 'submit', actor: 'emp-sample-0004', at: '2026-09-04T02:00:00Z' },
+      { transition: 'approve', actor: 'emp-sample-0003', at: '2026-09-08T01:00:00Z' },
+    ],
+  },
+  {
+    // Terminal — REJECTED with a reason (submitted 09-08 KST, finalized 09-09 KST).
+    id: 'appr-sample-0008',
+    status: 'REJECTED',
+    subjectType: 'DEPARTMENT',
+    subjectId: 'dept-sample-0003',
+    title: `개발1팀 장비 구매 결재${SUFFIX}`,
+    approverId: 'emp-sample-0002',
+    submitterId: 'emp-sample-0004',
+    reason: '증빙 서류 미비로 반려',
+    createdAt: '2026-09-08T04:00:00Z',
+    submittedAt: '2026-09-08T05:00:00Z',
+    finalizedAt: '2026-09-09T00:00:00Z',
+    history: [
+      { transition: 'submit', actor: 'emp-sample-0004', at: '2026-09-08T05:00:00Z' },
+      {
+        transition: 'reject',
+        actor: 'emp-sample-0002',
+        at: '2026-09-09T00:00:00Z',
+        reason: '증빙 서류 미비로 반려',
+      },
+    ],
+  },
+  {
+    // Terminal — APPROVED (submitted 09-09 KST, finalized 09-14 KST — week window).
+    id: 'appr-sample-0009',
+    status: 'APPROVED',
+    subjectType: 'EMPLOYEE',
+    subjectId: 'emp-sample-0002',
+    title: `이민준 휴직 복귀 승인${SUFFIX}`,
+    approverId: 'emp-sample-0003',
+    submitterId: ME,
+    createdAt: '2026-09-09T00:00:00Z',
+    submittedAt: '2026-09-09T01:00:00Z',
+    finalizedAt: '2026-09-14T02:00:00Z',
+    history: [
+      { transition: 'submit', actor: ME, at: '2026-09-09T01:00:00Z' },
+      { transition: 'approve', actor: 'emp-sample-0003', at: '2026-09-14T02:00:00Z' },
+    ],
+  },
+  {
+    // SUBMITTED, current approver emp-sample-0002 (NOT ME → not in the inbox);
+    // submitted 09-14 KST (week window).
+    id: 'appr-sample-0010',
+    status: 'SUBMITTED',
+    subjectType: 'DEPARTMENT',
+    subjectId: 'dept-sample-0002',
+    title: `영업1팀 교육비 지원 요청${SUFFIX}`,
+    approverId: 'emp-sample-0002',
+    submitterId: ME,
+    createdAt: '2026-09-14T00:00:00Z',
+    submittedAt: '2026-09-14T00:30:00Z',
+    history: [{ transition: 'submit', actor: ME, at: '2026-09-14T00:30:00Z' }],
+  },
+  {
+    // SUBMITTED, current approver emp-sample-0004 (NOT ME); submitted 09-15 KST.
+    id: 'appr-sample-0011',
+    status: 'SUBMITTED',
+    subjectType: 'EMPLOYEE',
+    subjectId: 'emp-sample-0001',
+    title: `김하나 근무지 변경 요청${SUFFIX}`,
+    approverId: 'emp-sample-0004',
+    submitterId: 'emp-sample-0002',
+    createdAt: '2026-09-15T00:00:00Z',
+    submittedAt: '2026-09-15T00:00:00Z',
+    history: [{ transition: 'submit', actor: 'emp-sample-0002', at: '2026-09-15T00:00:00Z' }],
+  },
+  {
+    // Terminal — REJECTED with a reason (submitted 09-11 KST, finalized 09-15 KST).
+    id: 'appr-sample-0012',
+    status: 'REJECTED',
+    subjectType: 'DEPARTMENT',
+    subjectId: 'dept-sample-0004',
+    title: `영업2팀 경비 재배정 결재${SUFFIX}`,
+    approverId: 'emp-sample-0003',
+    submitterId: 'emp-sample-0002',
+    reason: '기존 예산 범위 초과로 반려',
+    createdAt: '2026-09-11T02:00:00Z',
+    submittedAt: '2026-09-11T03:00:00Z',
+    finalizedAt: '2026-09-15T01:00:00Z',
+    history: [
+      { transition: 'submit', actor: 'emp-sample-0002', at: '2026-09-11T03:00:00Z' },
+      {
+        transition: 'reject',
+        actor: 'emp-sample-0003',
+        at: '2026-09-15T01:00:00Z',
+        reason: '기존 예산 범위 초과로 반려',
+      },
+    ],
+  },
 ];
 
 const NON_TERMINAL_STATUSES = new Set(['SUBMITTED', 'IN_REVIEW']);

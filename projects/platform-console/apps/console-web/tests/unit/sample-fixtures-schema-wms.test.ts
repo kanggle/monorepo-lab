@@ -72,6 +72,13 @@ const ORDER_IDS = [
   'ord-sample-0002',
   'ord-sample-0003',
   'ord-sample-0004',
+  // TASK-PC-FE-374 — six more SHIPPED orders.
+  'ord-sample-0005',
+  'ord-sample-0006',
+  'ord-sample-0007',
+  'ord-sample-0008',
+  'ord-sample-0009',
+  'ord-sample-0010',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -150,21 +157,21 @@ describe('AC-1 — wms admin read-model (surface `wms`) parses with production s
     const res = admin('/api/v1/admin/dashboard/orders?page=0&size=20');
     expect(res.status).toBe(200);
     const page = OrderPageSchema.parse(await json(res));
-    expect(page.content.length).toBe(4);
+    expect(page.content.length).toBe(10);
   });
 
   it('GET /dashboard/shipments', async () => {
     const res = admin('/api/v1/admin/dashboard/shipments?page=0&size=20');
     expect(res.status).toBe(200);
     const page = ShipmentPageSchema.parse(await json(res));
-    expect(page.content.length).toBe(1);
+    expect(page.content.length).toBe(7); // ord-0003 + the six TASK-PC-FE-374 SHIPPED orders
   });
 
   it('GET /dashboard/asns (list) + /dashboard/asns/{id}/inspection (both branches)', async () => {
     const listRes = admin('/api/v1/admin/dashboard/asns?page=0&size=20');
     expect(listRes.status).toBe(200);
     const page = AsnPageSchema.parse(await json(listRes));
-    expect(page.content.length).toBe(2);
+    expect(page.content.length).toBe(7); // 1 RECEIVED + 6 CLOSED (TASK-PC-FE-374)
 
     const closedAsn = page.content.find((a) => a.status === 'CLOSED')!;
     const inspectedRes = admin(
@@ -234,7 +241,7 @@ describe('AC-1 — wms outbound-service order lifecycle (surface `wms_outbound`)
     const res = outbound('/api/v1/outbound/orders?page=0&size=20');
     expect(res.status).toBe(200);
     const page = OutboundOrderPageSchema.parse(await json(res));
-    expect(page.content.length).toBe(4);
+    expect(page.content.length).toBe(10);
   });
 
   it('GET /orders/{id} (detail) for every order', async () => {
@@ -534,8 +541,10 @@ describe('Cross-view — admin read-model orders agree with outbound-service ord
   it('the SHIPPED order’s shipment (admin) references the SAME order as the dispatch (logistics)', async () => {
     const shipRes = admin('/api/v1/admin/dashboard/shipments?page=0&size=20');
     const shipPage = ShipmentPageSchema.parse(await json(shipRes));
-    expect(shipPage.content.length).toBe(1);
+    expect(shipPage.content.length).toBe(7);
+    // Newest shipment first (shippedAt,desc) = ord-sample-0003 (09-14 18:00 KST).
     const shipment = shipPage.content[0];
+    expect(shipment.orderId).toBe('ord-sample-0003');
 
     const dispatchRes = logistics(
       `/api/v1/logistics/dispatches/by-shipment/${shipment.shipmentId}`,

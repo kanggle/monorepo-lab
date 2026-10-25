@@ -67,7 +67,7 @@ describe('sample scm /api/v1/procurement/po/metrics (TASK-MONO-810)', () => {
 
   it('발주 건수 / 금액 = POs submitted in the window that are not CANCELED (re-derived from the list)', async () => {
     const { rows } = await list('page=0&size=100');
-    expect(rows.length).toBe(4); // non-vacuous: DRAFT · SUBMITTED · CONFIRMED · CANCELED
+    expect(rows.length).toBe(10); // non-vacuous: DRAFT · SUBMITTED · ACKNOWLEDGED · CONFIRMED · CANCELED
     // The control group really exists: a DRAFT (no submittedAt) and a CANCELED one.
     expect(rows.some((r) => r.status === 'DRAFT' && !r.submittedAt)).toBe(true);
     expect(rows.some((r) => r.status === 'CANCELED' && r.submittedAt)).toBe(true);
@@ -90,11 +90,24 @@ describe('sample scm /api/v1/procurement/po/metrics (TASK-MONO-810)', () => {
       }
     }
     expect(sawNonZero).toBe(true);
-    // The month: SUBMITTED 100,000.00 + CONFIRMED 62,500.00 (the DRAFT and the
-    // August CANCELED one do not count).
+    // The month (hand-summed): 0002 100,000 + 0003 62,500 + 0005 50,000 + 0006 87,500
+    // + 0007 30,000 + 0008 75,000 + 0009 37,500 + 0010 40,000 = 482,500 over 8 POs
+    // (the DRAFT and the August CANCELED one do not count).
     const month = await metrics('month');
-    expect(month.metrics.find((x) => x.key === 'poCount')?.current).toBe('2');
-    expect(month.metrics.find((x) => x.key === 'poAmount:KRW')?.current).toBe('162500');
+    expect(month.metrics.find((x) => x.key === 'poCount')?.current).toBe('8');
+    expect(month.metrics.find((x) => x.key === 'poAmount:KRW')?.current).toBe('482500');
+    // The week window (09-14..15 KST): 0009 37,500 + 0010 40,000.
+    const week = await metrics('week');
+    expect(week.metrics.find((x) => x.key === 'poCount')?.current).toBe('2');
+    expect(week.metrics.find((x) => x.key === 'poAmount:KRW')?.current).toBe('77500');
+    // TASK-PC-FE-374 density: 8 distinct KST days in the month, 2 in the week.
+    expect(month.series.filter((s) => s.values.poCount !== '0').map((s) => s.date)).toEqual([
+      '2026-09-03', '2026-09-05', '2026-09-08', '2026-09-09',
+      '2026-09-11', '2026-09-13', '2026-09-14', '2026-09-15',
+    ]);
+    expect(week.series.filter((s) => s.values.poCount !== '0').map((s) => s.date)).toEqual([
+      '2026-09-14', '2026-09-15',
+    ]);
   });
 
   it('입고 완료 is 0 — the sample has no status history and no RECEIVED PO', async () => {
@@ -158,9 +171,12 @@ describe('sample scm GET /po — submittedFrom / submittedTo (TASK-MONO-810)', (
     const month = await metrics('month');
     const poCount = month.metrics.find((x) => x.key === 'poCount')!;
 
-    // Current window (the card as shown): 2 = 2.
+    // Current window (the card as shown): 8 = 8.
     const cur = await cardList(month);
-    expect(cur.rows.map((r) => r.id).sort()).toEqual(['po-sample-0002', 'po-sample-0003']);
+    expect(cur.rows.map((r) => r.id).sort()).toEqual([
+      'po-sample-0002', 'po-sample-0003', 'po-sample-0005', 'po-sample-0006',
+      'po-sample-0007', 'po-sample-0008', 'po-sample-0009', 'po-sample-0010',
+    ]);
     expect(String(cur.total)).toBe(poCount.current);
 
     // Previous window — the one holding the CANCELED sample (po-sample-0004).
@@ -219,7 +235,7 @@ describe('sample scm GET /po — submittedFrom / submittedTo (TASK-MONO-810)', (
     const { rows } = await list(
       `status=CONFIRMED&submittedFrom=${enc(w.from)}&submittedTo=${enc(w.to)}&page=0&size=100`,
     );
-    expect(rows.map((r) => r.id)).toEqual(['po-sample-0003']);
+    expect(rows.map((r) => r.id)).toEqual(['po-sample-0003', 'po-sample-0007', 'po-sample-0009']);
   });
 
   it('an unparseable bound is not answered (the producer would 400; the console never sends one)', async () => {

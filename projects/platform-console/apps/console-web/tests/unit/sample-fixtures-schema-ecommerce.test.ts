@@ -233,19 +233,22 @@ describe('orders (AC-1 / AC-3 / AC-4 / money)', () => {
       }
     }
     // TASK-MONO-807 — realised sales only (CONFIRMED / SHIPPED / DELIVERED), the
-    // producer's new basis. prod-sample-0001 is now only order-5's 19000 line:
+    // producer's new basis. prod-sample-0001 (all-time, hand-summed) = order-5's 19000
+    // + TASK-PC-FE-374's order-7 38000 + order-12 19000 + order-14 20000 = 96000:
     // the PENDING order-1 (38000 — unpaid) and the CANCELLED order-4 (20000) are
     // out. Before 807 this read 57000 (PENDING was counted) — the correction,
-    // not a regression.
+    // not a regression. (TASK-PC-FE-374 raised it from 19000 with the new orders.)
     const prod1 = insights.topProductsByRevenue.find((r) => r.id === 'prod-sample-0001');
-    expect(prod1?.value).toBe(19000);
+    expect(prod1?.value).toBe(96000);
     // Seller label is already resolved to the seller's own (suffixed)
     // displayName (§ ecommerce.ts doc comment on `computeInsights`).
     const seller1 = insights.topSellersByRevenue.find((r) => r.id === 'seller-sample-0001');
     expect(seller1?.label).toContain('(샘플)');
-    // order-2(45000) + order-5 item-1 subtotal(19000). Was 102000 with the PENDING
-    // order-1; the BACKORDERED order-6 (45000, paid but stock not held) is out too.
-    expect(seller1?.value).toBe(64000);
+    // order-2(45000) + order-5 item-1 subtotal(19000) = 64000 before TASK-PC-FE-374;
+    // + order-7 38000 + order-10 45000 + order-12 item-1 19000 + order-14 20000
+    // = 186000. The PENDING order-1 and the BACKORDERED order-6 (45000, paid but
+    // stock not held) stay out.
+    expect(seller1?.value).toBe(186000);
   });
 });
 

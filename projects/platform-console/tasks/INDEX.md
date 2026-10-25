@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-374-sample-overview-charts-denser-fixtures.md` — **익명 샘플 모드의 도메인 개요 그래프가 거의 비어 있다** (READY 2026-10-26 UTC · 소유자 요청): 표본 시각 고정(9/15)·창 고정(주=9/14~15, 월=9/1~15)인데 픽스처 행이 적어 ecommerce 월간 매출 막대 1개·scm/erp/iam 주간 0·ledger 환율 2점. 픽스처에 9/1~15 분포 행을 더하고 고정 테스트를 손으로 셈한 상수로 갱신. 라이브 시드·창 변경은 범위 밖. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 
 
@@ -126,6 +126,7 @@ _(없음)_
 ## review
 
 
+- `TASK-PC-FE-374-sample-overview-charts-denser-fixtures.md` — **익명 샘플 모드의 도메인 개요 그래프가 거의 비어 있다** (REVIEW 2026-10-26 UTC · 소유자 요청 · AC-1~5 닫음 / AC-6 은 샘플 459건·tsc·lint 초록, 전체 vitest 의 tenants·operators 상호작용 flake 는 main 에서도 재현): 픽스처에 9/1~15 분포 행 추가 — 월 비영 일수 ecommerce 10·scm 8·erp 10·finance 7·iam 8·wms 7, 주간 각 1~2일, 월 랭킹 상품 4·셀러 3, 환율 이력 7·8점. 고정 테스트 9개를 손으로 셈한 상수로 갱신. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-373-wms-alert-row-key-id-vs-alertid-degrades-overview.md` — **로그인 `/wms` 개요가 경보 행 1건만 있어도 통째로 «일시적으로 불러올 수 없습니다»** (REVIEW 2026-10-25 UTC · 35차 창 라이브 발견 · AC-0~7 닫음 / AC-8 라이브 열림): 콘솔 `AlertRowSchema` 는 `alertId` 를 필수로 요구하는데 wms admin-service `AlertLogResponse` 는 `id` 로 내보낸다 → zod 파싱 throw → `wms-state` catch-all 이 개요 전체를 degraded 로 접는다. ack 버튼도 `alertId`(=undefined)로 호출, 생산자는 `acknowledged`·`message` 도 안 보내 확인된 경보가 «미확인» 으로 나온다. 표본 픽스처가 `alertId` 를 써서 익명 화면이 가렸다. 계약 § 1.6 은 필드 이름이 없다 → 필드 목록을 먼저 고정(같은 PR)하고 콘솔이 생산자에 맞춘다(생산자 불변). 경보 목록 한정 행 단위 관용 포함, `wmsPage()` 전면 관용은 범위 밖. 분석=Opus 5.5 / 구현 권장=Sonnet. 🔵 구현: 계약 § 1.6 `AlertLog` 12필드 고정(앞선 커밋) → `AlertRowSchema.id` · 경보 목록 한정 행 단위 `safeParse`(`excludedRows`) · 확인됨=`acknowledgedAt` 파생 · 내용 열=`현재/임계/위치` · 픽스처 생산자 모양.
 - `TASK-PC-FE-364-operator-overview-business-kpis.md` — **운영자 통합 개요 카드 여섯을 업무 지표로 — 잠긴 계정 · 미출고 주문 · 제출 대기 발주 · 미해소 대사 차이 · 내 결재 대기 · 출고 대기 주문** — 카드당 호출 1개 그대로(1:1 교체) · 서버 변경 없음 · 계약 § 2.4.9.1 먼저 · 소유자 결정 2026-10-22 KST (REVIEW, 2026-10-22 UTC · 문구 · 권한 표 소유자 승인 · 콘솔 nightly · federation e2e success · AC-3 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ❌ — WMS 출고 · SCM 발주 카드 `DOWNSTREAM_ERROR` · «WMS 점검 불가» → `TASK-PC-FE-369`.
 

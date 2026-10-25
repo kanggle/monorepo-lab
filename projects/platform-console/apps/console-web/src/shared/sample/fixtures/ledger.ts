@@ -694,9 +694,24 @@ const FX_HISTORY: Readonly<Record<string, readonly { rate: string; asOf: string;
   USD: [
     { rate: '1300.00000000', asOf: '2026-09-15T09:00:00Z', fetchedAt: '2026-09-15T09:00:05Z', source: 'PROVIDER_A' },
     { rate: '1298.50000000', asOf: '2026-09-14T09:00:00Z', fetchedAt: '2026-09-14T09:00:05Z', source: 'PROVIDER_A' },
+    // TASK-PC-FE-374 — newest first, one daily 18:00 KST quote back to 09-08, so the
+    // history sparkline has a line to draw (8 points). Newest = FX_RATES' USD.
+    { rate: '1301.20000000', asOf: '2026-09-13T09:00:00Z', fetchedAt: '2026-09-13T09:00:05Z', source: 'PROVIDER_A' },
+    { rate: '1296.80000000', asOf: '2026-09-12T09:00:00Z', fetchedAt: '2026-09-12T09:00:05Z', source: 'PROVIDER_A' },
+    { rate: '1294.00000000', asOf: '2026-09-11T09:00:00Z', fetchedAt: '2026-09-11T09:00:05Z', source: 'PROVIDER_A' },
+    { rate: '1297.40000000', asOf: '2026-09-10T09:00:00Z', fetchedAt: '2026-09-10T09:00:05Z', source: 'PROVIDER_A' },
+    { rate: '1303.10000000', asOf: '2026-09-09T09:00:00Z', fetchedAt: '2026-09-09T09:00:05Z', source: 'PROVIDER_A' },
+    { rate: '1305.60000000', asOf: '2026-09-08T09:00:00Z', fetchedAt: '2026-09-08T09:00:05Z', source: 'PROVIDER_A' },
   ],
   JPY: [
     { rate: '9.10000000', asOf: '2026-09-14T09:00:00Z', fetchedAt: '2026-09-14T09:00:05Z', source: 'PROVIDER_A' },
+    // TASK-PC-FE-374 — newest first, back to 09-08 (7 points). Newest = FX_RATES' JPY.
+    { rate: '9.07000000', asOf: '2026-09-13T09:00:00Z', fetchedAt: '2026-09-13T09:00:05Z', source: 'PROVIDER_A' },
+    { rate: '9.12000000', asOf: '2026-09-12T09:00:00Z', fetchedAt: '2026-09-12T09:00:05Z', source: 'PROVIDER_A' },
+    { rate: '9.15000000', asOf: '2026-09-11T09:00:00Z', fetchedAt: '2026-09-11T09:00:05Z', source: 'PROVIDER_A' },
+    { rate: '9.08000000', asOf: '2026-09-10T09:00:00Z', fetchedAt: '2026-09-10T09:00:05Z', source: 'PROVIDER_A' },
+    { rate: '9.03000000', asOf: '2026-09-09T09:00:00Z', fetchedAt: '2026-09-09T09:00:05Z', source: 'PROVIDER_A' },
+    { rate: '9.05000000', asOf: '2026-09-08T09:00:00Z', fetchedAt: '2026-09-08T09:00:05Z', source: 'PROVIDER_A' },
   ],
 };
 
