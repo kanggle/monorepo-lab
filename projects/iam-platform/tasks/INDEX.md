@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-660-audit-query-unknown-source-answers-empty-200.md` — **감사 조회가 모르는 `source` 에 빈 200 → 경계에서 400 `VALIDATION_ERROR`** (READY, 2026-10-25 UTC): 소유자 결정. 선례 `BE-475`(허용 목록 밖 `status` → 400). 출처 `BE-658`. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
