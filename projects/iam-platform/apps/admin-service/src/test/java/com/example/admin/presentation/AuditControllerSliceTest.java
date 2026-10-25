@@ -133,12 +133,21 @@ class AuditControllerSliceTest {
                 .andExpect(status().isOk());
     }
 
+    /**
+     * TASK-BE-658 — the contract's value is {@code admin} ({@code admin-api.md} § GET /api/admin/audit). This test used
+     * to send {@code admin_actions}, which no source matches: the use case read nothing and answered an empty 200, so
+     * the test was green for a reason unrelated to its name. The captured command pins what reached the use case.
+     */
     @Test
     void audit_query_admin_source_only_requires_audit_read() throws Exception {
         mockMvc.perform(get("/api/admin/audit")
-                        .param("source", "admin_actions")
+                        .param("source", "admin")
                         .header("Authorization", bearer()))
                 .andExpect(status().isOk());
+
+        ArgumentCaptor<QueryAuditCommand> cmd = ArgumentCaptor.forClass(QueryAuditCommand.class);
+        verify(useCase).query(cmd.capture());
+        assertThat(cmd.getValue().source()).isEqualTo("admin");
     }
 
     /**
