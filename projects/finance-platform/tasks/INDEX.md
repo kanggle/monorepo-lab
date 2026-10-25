@@ -82,7 +82,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-FIN-BE-069-transaction-list-unknown-type-answers-422-amount-invalid.md` — **거래 목록이 모르는 `type` / `status` 필터에 422 `AMOUNT_INVALID` 로 답한다 → 400 `VALIDATION_ERROR`** (READY, 2026-10-25 UTC): 소유자 결정. 실적 `period` 선례(`InvalidQueryParameterException`)를 따르고, 전역 IAE→422 는 그대로. 출처 `PC-FE-370`. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 ## in-progress
 
