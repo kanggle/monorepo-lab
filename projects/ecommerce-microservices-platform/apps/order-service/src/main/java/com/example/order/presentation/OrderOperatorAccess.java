@@ -8,9 +8,12 @@ import com.example.web.security.RoleListHeader;
  * ({@code /api/admin/orders/**}). Canonical table: ecommerce {@code iam-integration.md} § 업무 역할.
  *
  * <ul>
- *   <li>read = {@code ECOMMERCE_ORDER_READ ∨ ECOMMERCE_ORDER_WRITE}, or the platform wildcard read
- *       ({@code X-Tenant-Id = '*'} — the role-less SUPER_ADMIN domain token the console operator overview forwards,
- *       TASK-BE-506; kept exactly as before this ticket);</li>
+ *   <li>read = {@code ECOMMERCE_ORDER_READ ∨ ECOMMERCE_ORDER_WRITE}, and never the wildcard tenant
+ *       ({@code X-Tenant-Id = '*'}). TASK-BE-506 had let {@code '*'} through this gate, but no data path below
+ *       ever read across tenants — {@code '*'} read tenant {@code '*'} (no rows), so every read answered zeros, an
+ *       empty page or 404. TASK-MONO-817 refused it on {@code /metrics}; TASK-BE-659 refuses it on every read
+ *       (owner decision 2026-10-25 UTC — no cross-tenant order read is built). The console does not reach these
+ *       with {@code '*'} (TASK-MONO-817 AC-0).</li>
  *   <li>write = {@code ECOMMERCE_ORDER_WRITE}.</li>
  * </ul>
  * The entry role {@code ECOMMERCE_OPERATOR} opens nothing here — it only gets a token through the gateway. The header
@@ -27,20 +30,12 @@ final class OrderOperatorAccess {
     private OrderOperatorAccess() {
     }
 
-    static void requireRead(String userRole, String tenantId) {
-        if (!RoleListHeader.holdsAny(userRole, ORDER_READ, ORDER_WRITE) && !WILDCARD_TENANT.equals(tenantId)) {
-            throw new AccessDeniedException();
-        }
-    }
-
     /**
-     * TASK-MONO-817 — the overview metrics refuse the wildcard tenant. Tenant {@code *} owns no order, so the
-     * figures would be all {@code "0"}, which a client renders as «nothing happened»
-     * ({@code performance-metrics-contract.md} § Wildcard tenant). Applies whatever the roles; the other reads keep
-     * the wildcard read above.
+     * The wildcard tenant is refused whatever the roles: tenant {@code *} owns no order, so any read would answer
+     * nothing as if that were the truth ({@code performance-metrics-contract.md} § Wildcard tenant — «조용한 0 금지»).
      */
-    static void requireConcreteTenant(String tenantId) {
-        if (WILDCARD_TENANT.equals(tenantId)) {
+    static void requireRead(String userRole, String tenantId) {
+        if (WILDCARD_TENANT.equals(tenantId) || !RoleListHeader.holdsAny(userRole, ORDER_READ, ORDER_WRITE)) {
             throw new AccessDeniedException();
         }
     }

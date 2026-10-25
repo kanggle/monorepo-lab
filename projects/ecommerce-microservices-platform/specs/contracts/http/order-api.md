@@ -1,6 +1,6 @@
 # HTTP Contract: order-service
 
-> 🔴 **업무 인가 — TASK-MONO-795 (ADR-MONO-083 P8 · 2026-10-16 UTC)**: 이 계약의 **운영자** 엔드포인트는 서비스가 영역 업무 역할로 다시 판정한다 — `ECOMMERCE_ORDER_READ` / `ECOMMERCE_ORDER_WRITE`. 조회(`GET`) = READ ∨ WRITE · 변경 = WRITE. `ECOMMERCE_OPERATOR`(진입 역할) 단독 · `CUSTOMER` · 빈 `X-User-Role` → `403`. `'*'` 와일드카드 조회(`X-Tenant-Id = '*'`)는 주문 조회 4 경로에서 **그대로** 열린다(TASK-BE-506). 아래 본문의 «`X-User-Role` ∋ `ECOMMERCE_OPERATOR`» · «gateway `roles ∋ ECOMMERCE_OPERATOR` … Service applies no additional ecommerce-local RBAC» 문장은 운영자 엔드포인트에 한해 이 노트로 **대체**된다(게이트웨이 판정 자체는 그대로). 정본: [`iam-integration.md` § 업무 역할](../../integration/iam-integration.md#업무-역할-adr-mono-083-p8--task-mono-795--정본). 소비자 · 공개 · 워크로드 엔드포인트는 무변경.
+> 🔴 **업무 인가 — TASK-MONO-795 (ADR-MONO-083 P8 · 2026-10-16 UTC)**: 이 계약의 **운영자** 엔드포인트는 서비스가 영역 업무 역할로 다시 판정한다 — `ECOMMERCE_ORDER_READ` / `ECOMMERCE_ORDER_WRITE`. 조회(`GET`) = READ ∨ WRITE · 변경 = WRITE. `ECOMMERCE_OPERATOR`(진입 역할) 단독 · `CUSTOMER` · 빈 `X-User-Role` → `403`. ~~`'*'` 와일드카드 조회(`X-Tenant-Id = '*'`)는 주문 조회 4 경로에서 **그대로** 열린다(TASK-BE-506).~~ → **TASK-BE-659 (2026-10-25 UTC, 소유자 결정): 운영자 주문 읽기 5 경로(`/summary` · `/metrics` · `/insights` · 목록 · 상세) 모두 `'*'` 에 `403 ACCESS_DENIED`** — BE-506 은 역할 게이트만 열었고 데이터 계층에는 `'*'` 분기가 없어서, `'*'` 는 «전 테넌트» 가 아니라 테넌트 `'*'`(행 0)를 읽었다(조용한 0, `performance-metrics-contract.md` § Wildcard tenant). 아래 본문의 «`X-User-Role` ∋ `ECOMMERCE_OPERATOR`» · «gateway `roles ∋ ECOMMERCE_OPERATOR` … Service applies no additional ecommerce-local RBAC» 문장은 운영자 엔드포인트에 한해 이 노트로 **대체**된다(게이트웨이 판정 자체는 그대로). 정본: [`iam-integration.md` § 업무 역할](../../integration/iam-integration.md#업무-역할-adr-mono-083-p8--task-mono-795--정본). 소비자 · 공개 · 워크로드 엔드포인트는 무변경.
 
 ## Overview
 Published HTTP API for order-service.
@@ -288,7 +288,7 @@ Calendar-period-to-date order counts (KST calendar bounds), for the operator ove
 | Status | Code | Reason |
 |---|---|---|
 | 401 | UNAUTHORIZED | Missing or invalid access token |
-| 403 | ACCESS_DENIED | Requires ADMIN role |
+| 403 | ACCESS_DENIED | Requires `ECOMMERCE_ORDER_READ` / `ECOMMERCE_ORDER_WRITE` — **or the tenant is the wildcard `*`, whatever the roles** (TASK-BE-659 — before it, `*` passed the gate and read nothing: zeros / an empty page / 404) |
 
 ---
 
@@ -312,7 +312,7 @@ Performance metrics for the operator overview's «실적» strip (ADR-MONO-084 P
 - **Attributed to:** `paid_at`, bucketed by its **KST** date. Not `created_at`: an order placed on Sunday and paid on Monday is Monday's sale.
 - 🔴 **A past day can still change.** A `BACKORDERED` order that is later confirmed joins the day it was **paid** (ADR-MONO-084 OD-1). And because payment and stock confirmation arrive on separate events, a just-confirmed order whose `paid_at` has not landed yet joins its paid day when it does.
 - Tenant-scoped; a bound seller scope narrows as above, inside the tenant filter.
-- 🔴 **Wildcard tenant (`X-Tenant-Id = '*'`) → `403`, whatever the roles** (TASK-MONO-817 · shared contract § Wildcard tenant). Tenant `*` owns no order, so the figures would all be `"0"`. This is the one operator read that does **not** keep the `'*'` wildcard read in the note at the top; `/summary`, `/insights`, the list and the detail keep it.
+- 🔴 **Wildcard tenant (`X-Tenant-Id = '*'`) → `403`, whatever the roles** (TASK-MONO-817 · shared contract § Wildcard tenant). Tenant `*` owns no order, so the figures would all be `"0"`. Since TASK-BE-659 the same holds for `/summary`, `/insights`, the list and the detail (see the note at the top) — none of them ever read across tenants; `*` answered nothing.
 
 **Error responses**
 | Status | Code | Reason |
@@ -356,7 +356,7 @@ Four tenant-scoped top-5 rankings derived from `order_items`, for the operator o
 |---|---|---|
 | 400 | INVALID_ORDER_REQUEST | `period` not `week` / `month` |
 | 401 | UNAUTHORIZED | Missing or invalid access token |
-| 403 | ACCESS_DENIED | Requires ADMIN role |
+| 403 | ACCESS_DENIED | Requires `ECOMMERCE_ORDER_READ` / `ECOMMERCE_ORDER_WRITE` — **or the tenant is the wildcard `*`, whatever the roles** (TASK-BE-659 — before it, `*` passed the gate and read nothing: zeros / an empty page / 404) |
 
 ---
 
@@ -392,7 +392,7 @@ List all orders (admin view).
 | Status | Code | Reason |
 |---|---|---|
 | 401 | UNAUTHORIZED | Missing or invalid access token |
-| 403 | ACCESS_DENIED | Requires ADMIN role |
+| 403 | ACCESS_DENIED | Requires `ECOMMERCE_ORDER_READ` / `ECOMMERCE_ORDER_WRITE` — **or the tenant is the wildcard `*`, whatever the roles** (TASK-BE-659 — before it, `*` passed the gate and read nothing: zeros / an empty page / 404) |
 
 ---
 
@@ -433,7 +433,7 @@ Get order detail (admin view). Includes order owner userId.
 | Status | Code | Reason |
 |---|---|---|
 | 401 | UNAUTHORIZED | Missing or invalid access token |
-| 403 | ACCESS_DENIED | Requires ADMIN role |
+| 403 | ACCESS_DENIED | Requires `ECOMMERCE_ORDER_READ` / `ECOMMERCE_ORDER_WRITE` — **or the tenant is the wildcard `*`, whatever the roles** (TASK-BE-659 — before it, `*` passed the gate and read nothing: zeros / an empty page / 404) |
 | 404 | ORDER_NOT_FOUND | Order with given ID does not exist |
 
 ---

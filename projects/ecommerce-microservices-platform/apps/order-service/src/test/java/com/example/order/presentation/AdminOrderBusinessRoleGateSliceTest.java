@@ -92,13 +92,18 @@ class AdminOrderBusinessRoleGateSliceTest {
                 Arguments.of("legacy-compat (every business role)", ALL_BUSINESS, "ecommerce", true, true),
                 Arguments.of("lower-case role (comparison ignores case)", "ecommerce_order_read", "ecommerce", true, false),
                 Arguments.of("substring is not membership", "ECOMMERCE_ORDER_READX", "ecommerce", false, false),
-                Arguments.of("'*' wildcard (platform SUPER_ADMIN, no roles) — read only, as today (except metrics)", "", "*", true, false),
-                Arguments.of("🔴 '*' wildcard WITH the order read role — still no metrics", ENTRY + ",ECOMMERCE_ORDER_READ", "*", true, false));
+                // TASK-BE-659 — the wildcard tenant owns no order: every read used to answer 200 with nothing
+                // (zeros / an empty page / 404). Now all reads refuse it, as /metrics already did (TASK-MONO-817).
+                Arguments.of("🔴 '*' wildcard (platform SUPER_ADMIN, no roles) — every read 403", "", "*", false, false),
+                Arguments.of("🔴 '*' wildcard WITH the order read role — every read 403", ENTRY + ",ECOMMERCE_ORDER_READ", "*", false, false));
     }
 
-    /** TASK-MONO-817 — the metrics refuse a wildcard tenant whatever the roles (it would read all zeros). */
-    private static boolean wildcardMetrics(Endpoint e, String tenant) {
-        return "metrics".equals(e.name()) && "*".equals(tenant);
+    /**
+     * TASK-MONO-817 (metrics) · TASK-BE-659 (every other read) — the wildcard tenant is refused whatever the roles
+     * (it would read all zeros / nothing). Kept as its own term so a persona that holds the roles still expects 403.
+     */
+    private static boolean wildcardRefused(Endpoint e, String tenant) {
+        return !e.write() && "*".equals(tenant);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -109,7 +114,7 @@ class AdminOrderBusinessRoleGateSliceTest {
         for (Endpoint e : ENDPOINTS) {
             int status = mockMvc.perform(e.request().header("X-User-Role", roleHeader).header("X-Tenant-Id", tenant))
                     .andReturn().getResponse().getStatus();
-            boolean expectAllowed = (e.write() ? mayWrite : mayRead) && !wildcardMetrics(e, tenant);
+            boolean expectAllowed = (e.write() ? mayWrite : mayRead) && !wildcardRefused(e, tenant);
             if (expectAllowed == (status == 403)) {
                 wrong.add(e.name() + " → " + status + " (expected " + (expectAllowed ? "allowed" : "403") + ")");
             }

@@ -72,15 +72,14 @@ public class AdminOrderController {
      * ({@code handleMissingParam}), which would give one rule two codes.
      *
      * <p>TASK-MONO-817 — a wildcard tenant ({@code X-Tenant-Id = '*'}) is refused with 403, not answered
-     * with zeros ({@link OrderOperatorAccess#requireConcreteTenant}).
+     * with zeros ({@link OrderOperatorAccess#requireRead} — since TASK-BE-659 every operator read refuses it).
      */
     @GetMapping("/metrics")
     public ResponseEntity<PerformanceMetrics> getMetrics(
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @RequestHeader(value = "X-Tenant-Id", required = false) String tenantId,
             @RequestParam(required = false) String period) {
-        OrderOperatorAccess.requireRead(userRole, tenantId);
-        OrderOperatorAccess.requireConcreteTenant(tenantId);
+        OrderOperatorAccess.requireRead(userRole, tenantId);   // refuses '*' too (TASK-MONO-817 · TASK-BE-659)
         return ResponseEntity.ok(orderQueryService.getMetrics(MetricsPeriod.parse(period)));
     }
 
