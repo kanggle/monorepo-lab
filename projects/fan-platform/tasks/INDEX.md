@@ -70,7 +70,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-FAN-FE-033-reaction-cannot-be-removed-active-click-reputs.md` — **팬이 남긴 반응을 취소할 수 없다** (READY 2026-10-25 UTC · 출처 35차 창 소유자 관찰): `ReactionBar.onClick` 이 눌린 반응을 다시 눌러도 같은 타입을 PUT(멱등 no-op)할 뿐이고 `removeReaction`(DELETE)은 호출처가 없다. 눌린 반응 재클릭 → `removeReaction` + 눌림 해제(낙관적, 실패 시 롤백), 다른 타입 → 전환. 프런트만 — 백엔드 DELETE·계약은 이미 있다. 단위 테스트 수정 전 빨강, 라이브는 다음 창(Vercel 만으로 충분). 분석=Opus 5.5 / 구현 권장=Sonnet.
+- `TASK-FAN-BE-053-following-feed-counts-stale-up-to-ttl.md` — **팔로잉 피드의 `commentCount`/`reactionCount` 가 최대 5분 낡는다** (READY 2026-10-25 UTC · 35차 창 라이브: 09:23Z 상세 `reactionCount 1` vs 피드 `0`, Redis `ttl 297`): Redis `FeedItemSnapshot` 페이지 캐시가 수치까지 얼리고 TTL-only 무효화. 소유자 승인 방향 = 페이지 캐시 유지 + 읽는 시점에 `countsByPostIds` 오버레이(권한 오버레이 `TASK-FAN-BE-046` 선례; evict-on-write 는 키가 계정×페이지라 팔로워 전원 팬아웃이 필요해 기각). 계약 § Feed 에 신선도 문장이 없어 계약·아키텍처 먼저. hit 경로가 DB 0회 → 2회 그룹 쿼리가 되는 비용 확인(AC-0)·집계 실패 폴백 결정(AC-5). 굽기 후 창에서 라이브. 분석=Opus 5.5 / 구현 권장=Opus.
 
 ## in-progress
 

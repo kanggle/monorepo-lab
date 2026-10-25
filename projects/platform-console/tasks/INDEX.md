@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-_(없음)_
+- `TASK-PC-FE-373-wms-alert-row-key-id-vs-alertid-degrades-overview.md` — **로그인 `/wms` 개요가 경보 행 1건만 있어도 통째로 «일시적으로 불러올 수 없습니다»** (READY 2026-10-25 UTC · 35차 창 라이브 발견): 콘솔 `AlertRowSchema` 는 `alertId` 를 필수로 요구하는데 wms admin-service `AlertLogResponse` 는 `id` 로 내보낸다 → zod 파싱 throw → `wms-state` catch-all 이 개요 전체를 degraded 로 접는다. ack 버튼도 `alertId`(=undefined)로 호출, 생산자는 `acknowledged`·`message` 도 안 보내 확인된 경보가 «미확인» 으로 나온다. 표본 픽스처가 `alertId` 를 써서 익명 화면이 가렸다. 계약 § 1.6 은 필드 이름이 없다 → 필드 목록을 먼저 고정(같은 PR)하고 콘솔이 생산자에 맞춘다(생산자 불변). 경보 목록 한정 행 단위 관용 포함, `wmsPage()` 전면 관용은 범위 밖. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 
