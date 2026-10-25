@@ -20,8 +20,26 @@
 -- one SKU (LOT-tracked), and one Lot so REST endpoints can be exercised
 -- against a non-empty cache.
 --
+-- TASK-BE-661: the WH01 warehouse_snapshot row is seeded too. LowStockDetectionService
+-- and ReceiveStockService stamp `warehouseCode` from warehouse_snapshot; without this
+-- row the SKU-APPLE-001 low-stock alert left with a null code, so scm's replenishment
+-- suggestion carried no warehouseCode and its PO could not address wms by code.
+-- EcommerceSeedParityTest pins that every warehouse a seeded location points at has a
+-- snapshot row here with master's code.
+--
 -- UUIDs match master-service seeds verbatim — keep these in sync if either
 -- side rotates seed identifiers.
+
+INSERT INTO warehouse_snapshot (
+    id, warehouse_code, status, cached_at, master_version
+) VALUES (
+    '01910000-0000-7000-8000-000000000001',
+    'WH01',
+    'ACTIVE',
+    '2026-04-18T00:00:00Z',
+    0
+)
+ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO location_snapshot (
     id, location_code, warehouse_id, zone_id, location_type, status,

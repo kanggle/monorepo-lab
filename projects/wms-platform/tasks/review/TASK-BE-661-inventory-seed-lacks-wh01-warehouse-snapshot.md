@@ -8,7 +8,7 @@ inventory-service dev seed has no WH01 warehouse snapshot — the SKU-APPLE-001 
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -53,10 +53,10 @@ On the demo stack, a low-stock alert for SKU-APPLE-001 (warehouse WH01) carries 
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — re-read on the starting commit: inventory seed has no WH01 `warehouse_snapshot` row; the SKU-APPLE location `…1001` names warehouse `…0001`; `LowStockDetectionService.java:94-95` and `ReceiveStockService` read `warehouseCode` from `warehouse_snapshot`; scm contract `demand-planning-api.md:96-101` says `warehouseCode` is present only when the raise path learned a code. Record any line that differs.
-- [ ] **AC-1 (수정 전 빨강)** — the parity cell from Scope 2 is red on today's seed (show the failing assertion) and green after the row is added.
-- [ ] **AC-2** — the row's id and code equal master-service and the three sibling snapshots (asserted by the cell, not by inspection).
-- [ ] **AC-3** — `./gradlew :projects:wms-platform:apps:inventory-service:test` (exact path from `settings.gradle`) rc=0; existing `EcommerceSeedParityTest` cells unchanged and green.
+- [x] **AC-0** — re-read on the starting commit: inventory seed has no WH01 `warehouse_snapshot` row; the SKU-APPLE location `…1001` names warehouse `…0001`; `LowStockDetectionService.java:94-95` and `ReceiveStockService` read `warehouseCode` from `warehouse_snapshot`; scm contract `demand-planning-api.md:96-101` says `warehouseCode` is present only when the raise path learned a code. Record any line that differs.
+- [x] **AC-1 (수정 전 빨강)** — the parity cell from Scope 2 is red on today's seed (show the failing assertion) and green after the row is added.
+- [x] **AC-2** — the row's id and code equal master-service and the three sibling snapshots (asserted by the cell, not by inspection).
+- [x] **AC-3** — `./gradlew :projects:wms-platform:apps:inventory-service:test` (exact path from `settings.gradle`) rc=0; existing `EcommerceSeedParityTest` cells unchanged and green.
 - [ ] **AC-4 (라이브, 굽기 뒤 창)** — fresh volume: drop SKU-APPLE-001 below 10 (`TASK-MONO-672` § 35th preparation step 3) → the scm suggestion carries `"warehouseCode":"WH01"`. ⚪ with the reason if the window cannot run step 3. Undo per that section.
 
 # Related Specs
@@ -81,3 +81,12 @@ No contract change.
 1. The row is added with a code differing from master (`WH-01`, `wh01`) — scm addresses the PO by a code wms cannot resolve (`findWarehouseByCode` miss). AC-2 pins equality.
 2. The check pins only `WH01` by literal — the next warehouse added to the seed repeats this defect. Scope 2 asks for the closure predicate.
 3. Fixed in the seed but the live AC is read before a bake — the old jar still lacks the row and the window reports «not fixed». AC-4 is explicitly after the bake.
+
+# Implementation (2026-10-26 UTC)
+
+- AC-0 re-read on `d9cc1ef24`: inventory seed had no WH01 `warehouse_snapshot` row (only WH-MAIN); location `...1001` names warehouse `...0001`; no line differed from the task text.
+- Change: `inventory-service/src/main/resources/db/seed/R__seed_dev_masterref.sql` — added `warehouse_snapshot ('01910000-0000-7000-8000-000000000001', 'WH01', 'ACTIVE', '2026-04-18T00:00:00Z', 0) ON CONFLICT (id) DO NOTHING` + header comment. Test: new cell `everyLocationWarehouseHasSnapshotWithMastersCode` in `EcommerceSeedParityTest` (closure predicate: every `warehouse_id` of inventory's seeded `location_snapshot` rows has a `warehouse_snapshot` row in the same file, code equal to master `warehouses`, and outbound / inbound / admin hold the same id->code). No production Java change.
+- Red before fix (cell run on the seed without the row, gradle rc=1): `location WH01-A-01-01-01 names warehouse 01910000-0000-7000-8000-000000000001 (master code WH01) but inventory's seed has no warehouse_snapshot row for it — Expecting actual: {"01910000-0000-7000-8000-000000000002"="WH-MAIN"} to contain key: "01910000-0000-7000-8000-000000000001"`.
+- Green after: `./gradlew :projects:wms-platform:apps:inventory-service:test --tests '*EcommerceSeedParityTest*'` rc=0; full `./gradlew :projects:wms-platform:apps:inventory-service:test` rc=0.
+- AC-4 (live, after bake) remains open.
+

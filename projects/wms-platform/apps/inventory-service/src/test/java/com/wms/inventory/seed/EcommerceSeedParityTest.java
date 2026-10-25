@@ -146,7 +146,64 @@ class EcommerceSeedParityTest {
                 .as("seed-wms.sh WH_MAIN_LOCATION_ID").isEqualTo(locationId);
     }
 
+    /**
+     * TASK-BE-661 — closure predicate, not a WH01 literal: every warehouse a seeded
+     * {@code location_snapshot} row points at must have a {@code warehouse_snapshot} row in this
+     * same file, with the code master seeds. {@code LowStockDetectionService} /
+     * {@code ReceiveStockService} stamp {@code warehouseCode} from that table; a missing row leaves
+     * it null (scm's suggestion then has no code and its PO emits no inbound-expected).
+     */
+    @Test
+    @DisplayName("every warehouse a seeded inventory location points at has a warehouse_snapshot row with master's code")
+    void everyLocationWarehouseHasSnapshotWithMastersCode() throws IOException {
+        Map<String, String> master = idCodePairs("warehouses", MASTER_WAREHOUSE);
+        Map<String, String> snapshots = idCodePairs("warehouse_snapshot", INVENTORY);
+
+        Matcher loc = Pattern.compile(
+                "INSERT INTO location_snapshot[^;]*?VALUES\\s*\\(\\s*'(" + UUID_RE + ")',\\s*'([^']+)',\\s*'("
+                        + UUID_RE + ")'").matcher(read(INVENTORY));
+        Map<String, String> locationWarehouse = new LinkedHashMap<>();
+        while (loc.find()) {
+            locationWarehouse.put(loc.group(2), loc.group(3));
+        }
+        assertThat(locationWarehouse).as("inventory location_snapshot rows found").isNotEmpty();
+
+        for (Map.Entry<String, String> e : locationWarehouse.entrySet()) {
+            String warehouseId = e.getValue();
+            assertThat(master).as("location %s names warehouse %s, which master does not seed", e.getKey(), warehouseId)
+                    .containsKey(warehouseId);
+            assertThat(snapshots)
+                    .as("location %s names warehouse %s (master code %s) but inventory's seed has no"
+                            + " warehouse_snapshot row for it", e.getKey(), warehouseId, master.get(warehouseId))
+                    .containsKey(warehouseId);
+            assertThat(snapshots.get(warehouseId)).as("inventory warehouse_snapshot code for %s", warehouseId)
+                    .isEqualTo(master.get(warehouseId));
+        }
+
+        // The sibling read-models carry the same (id -> code) for every warehouse inventory seeds.
+        assertThat(idCodePairs("warehouse_snapshot", OUTBOUND)).as("outbound warehouse_snapshot")
+                .containsAllEntriesOf(snapshots);
+        assertThat(idCodePairs("warehouse_snapshot", INBOUND)).as("inbound warehouse_snapshot")
+                .containsAllEntriesOf(snapshots);
+        assertThat(idCodePairs("admin_warehouse_ref", ADMIN)).as("admin_warehouse_ref")
+                .containsAllEntriesOf(snapshots);
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    /** (id → code) for every row of every {@code INSERT INTO <table>} statement; id and code lead each tuple. */
+    private static Map<String, String> idCodePairs(String table, Path file) throws IOException {
+        Matcher statement = Pattern.compile("INSERT INTO " + table + "\\b[^;]*;").matcher(read(file));
+        Map<String, String> pairs = new LinkedHashMap<>();
+        while (statement.find()) {
+            Matcher row = Pattern.compile("\\(\\s*'(" + UUID_RE + ")',\\s*'([^']+)'").matcher(statement.group());
+            while (row.find()) {
+                pairs.put(row.group(1), row.group(2));
+            }
+        }
+        assertThat(pairs).as("%s: %s rows found", file, table).isNotEmpty();
+        return pairs;
+    }
 
     private static Map<String, String> skuPairs(Path file) throws IOException {
         Map<String, String> pairs = new LinkedHashMap<>();
