@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-_(없음)_
+- `TASK-PC-FE-374-sample-overview-charts-denser-fixtures.md` — **익명 샘플 모드의 도메인 개요 그래프가 거의 비어 있다** (READY 2026-10-26 UTC · 소유자 요청): 표본 시각 고정(9/15)·창 고정(주=9/14~15, 월=9/1~15)인데 픽스처 행이 적어 ecommerce 월간 매출 막대 1개·scm/erp/iam 주간 0·ledger 환율 2점. 픽스처에 9/1~15 분포 행을 더하고 고정 테스트를 손으로 셈한 상수로 갱신. 라이브 시드·창 변경은 범위 밖. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 
