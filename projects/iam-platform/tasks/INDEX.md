@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-658-audit-slice-test-sends-a-source-the-api-ignores.md` — **감사 슬라이스 시험이 계약에 없는 `source=admin_actions` 를 보낸다 — 아무 소스도 안 읽고 빈 200 이라 이름과 무관하게 초록** (READY, 2026-10-25 UTC): `admin` 으로 + 받은 명령의 source 단언. 🔵 모르는 `source` 가 400 이 아니라 빈 200 인 것은 소유자 결정 거리(티켓에 기록). 분석=Opus 5.5 / 구현 권장=Haiku/Sonnet.
+(empty)
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
@@ -115,7 +115,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-(empty)
+- `TASK-BE-658-audit-slice-test-sends-a-source-the-api-ignores.md` — **감사 슬라이스 시험이 계약에 없는 `source=admin_actions` 를 보낸다 — 아무 소스도 안 읽고 빈 200 이라 이름과 무관하게 초록** (IN-PROGRESS, 2026-10-25 UTC): `admin` 으로 + 받은 명령의 source 단언. 🔵 모르는 `source` 가 400 이 아니라 빈 200 인 것은 소유자 결정 거리(티켓에 기록). 분석=Opus 5.5 / 구현 권장=Haiku/Sonnet.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
