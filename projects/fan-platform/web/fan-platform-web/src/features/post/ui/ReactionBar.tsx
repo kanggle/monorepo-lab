@@ -1,7 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import type { ReactionType } from '@/entities/post';
-import { setReaction } from '@/features/post/api/reactions';
+import { removeReaction, setReaction } from '@/features/post/api/reactions';
 
 const REACTIONS: Array<{ type: ReactionType; emoji: string; label: string }> = [
   { type: 'LIKE', emoji: '👍', label: '좋아요' },
@@ -28,12 +28,29 @@ export function ReactionBar({
   const [active, setActive] = useState<ReactionType | null>(initialReaction);
   const [isPending, startTransition] = useTransition();
 
+  /**
+   * TASK-FAN-FE-033 — pressing the already-active reaction takes it back
+   * (`removeReaction`, DELETE) instead of re-PUTting the same type (an
+   * idempotent no-op server-side that left the button pressed). A different
+   * type switches (`setReaction`, PUT upsert). Both are optimistic; `previous`
+   * is captured before the flip so a failed server action restores it (same
+   * idiom as `FollowButton`, TASK-FAN-FE-028). The actions revalidate the post
+   * page so the count updates on next render.
+   */
   const onClick = (type: ReactionType) => {
-    setActive(type);
-    startTransition(() => {
-      // Server action — fire-and-forget; the action revalidates the post page
-      // so the count updates on next render.
-      void setReaction(postId, type);
+    const previous = active;
+    const removing = previous === type;
+    setActive(removing ? null : type);
+    startTransition(async () => {
+      try {
+        if (removing) {
+          await removeReaction(postId);
+        } else {
+          await setReaction(postId, type);
+        }
+      } catch {
+        setActive(previous);
+      }
     });
   };
 

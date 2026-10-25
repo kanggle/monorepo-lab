@@ -8,7 +8,7 @@ TASK-FAN-FE-033
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -57,12 +57,12 @@ post 상세 화면에서 팬이 이미 눌러둔 반응을 다시 누르면 반�
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — `ReactionBar.tsx:31-38` · `reactions.ts:21-28` · 백엔드 DELETE(`ReactionController` · 계약 `community-api.md:464-466`)를 착수 시점에 다시 읽어 위 «현재 코드 상태» 와 같은지 확인하고 어긋난 줄을 기록한다.
-- [ ] **AC-1 (취소, 수정 전 빨강)** — 단위 테스트: `initialReaction='LIKE'` 로 렌더한 `ReactionBar` 에서 «좋아요» 를 클릭하면 `removeReaction(postId)` 가 1회 호출되고 `setReaction` 은 호출되지 않으며, 클릭 직후 «좋아요» 의 `aria-pressed` 가 `false`. **수정 전 코드에서 이 테스트가 빨강**임을 확인(되돌려 실패 메시지를 구현 보고에 적는다).
-- [ ] **AC-2 (전환)** — `initialReaction='LIKE'` 에서 «사랑해요» 클릭 → `setReaction(postId,'LOVE')` 1회 · `removeReaction` 미호출 · «사랑해요» 만 `aria-pressed=true`.
-- [ ] **AC-3 (첫 반응, 대조군)** — `initialReaction=null` 에서 클릭 → `setReaction` 1회 · `removeReaction` 미호출 (기존 동작 유지).
-- [ ] **AC-4 (롤백)** — `removeReaction` 이 reject 하면 `aria-pressed` 가 다시 `true` (눌림 복원). 서버 액션 mock 이 실패하도록 한 테스트로 확인.
-- [ ] **AC-5 (회귀)** — 기존 `src/__tests__/reaction-restore.test.tsx` 와 post 관련 스위트 · `tsc --noEmit` · `next lint` 초록.
+- [x] **AC-0** — `ReactionBar.tsx:31-38` · `reactions.ts:21-28` · 백엔드 DELETE(`ReactionController` · 계약 `community-api.md:464-466`)를 착수 시점에 다시 읽어 위 «현재 코드 상태» 와 같은지 확인하고 어긋난 줄을 기록한다.
+- [x] **AC-1 (취소, 수정 전 빨강)** — 단위 테스트: `initialReaction='LIKE'` 로 렌더한 `ReactionBar` 에서 «좋아요» 를 클릭하면 `removeReaction(postId)` 가 1회 호출되고 `setReaction` 은 호출되지 않으며, 클릭 직후 «좋아요» 의 `aria-pressed` 가 `false`. **수정 전 코드에서 이 테스트가 빨강**임을 확인(되돌려 실패 메시지를 구현 보고에 적는다).
+- [x] **AC-2 (전환)** — `initialReaction='LIKE'` 에서 «사랑해요» 클릭 → `setReaction(postId,'LOVE')` 1회 · `removeReaction` 미호출 · «사랑해요» 만 `aria-pressed=true`.
+- [x] **AC-3 (첫 반응, 대조군)** — `initialReaction=null` 에서 클릭 → `setReaction` 1회 · `removeReaction` 미호출 (기존 동작 유지).
+- [x] **AC-4 (롤백)** — `removeReaction` 이 reject 하면 `aria-pressed` 가 다시 `true` (눌림 복원). 서버 액션 mock 이 실패하도록 한 테스트로 확인.
+- [x] **AC-5 (회귀)** — 기존 `src/__tests__/reaction-restore.test.tsx` 와 post 관련 스위트 · `tsc --noEmit` · `next lint` 초록.
 - [ ] **AC-6 (라이브, 다음 데모 창)** — 로그인한 팬이 반응이 눌린 글에서 같은 반응을 다시 눌러 **1초 안에 눌림이 풀리고**, 새로고침 후에도 풀려 있으며 `총 N개` 가 1 줄어든다. 다른 반응을 누르면 바뀐다. 못 재면 ⚪ + 사유. (Vercel 배포만으로 충분 — 굽기 불필요.)
 
 # Related Specs
@@ -85,3 +85,21 @@ post 상세 화면에서 팬이 이미 눌러둔 반응을 다시 누르면 반�
 1. `active` 만 `null` 로 만들고 `removeReaction` 을 부르지 않는다 — 화면은 풀리지만 새로고침하면 다시 눌려 있다(AC-1 이 호출 단언을 요구하는 이유; AC-6 이 새로고침 후 상태를 본다).
 2. 취소 요청이 실패했는데 화면은 풀린 채 남는다 — 서버와 화면이 갈라진다(AC-4).
 3. 취소 후 `총 N개` 가 안 줄어든다 — `removeReaction` 의 `revalidatePath` 누락/무효 (AC-6 에서 숫자를 함께 본다).
+
+
+---
+
+# Implementation Notes (2026-10-25 UTC)
+
+- **AC-0** — `ReactionBar.tsx` onClick, `reactions.ts` `removeReaction`(DELETE, `revalidatePath`) 와 계약 `community-api.md:464-468`(DELETE → 204, 반응 없어도 no-op) 모두 «현재 코드 상태» 와 일치. 어긋난 줄 없음.
+- **구현** — `ReactionBar.onClick`: `previous = active; removing = previous === type`; `setActive(removing ? null : type)`; `startTransition(async)` 안에서 `removing ? removeReaction(postId) : setReaction(postId, type)`; catch 에서 `setActive(previous)`. 기존 PUT 경로도 같은 try/catch 로 맞춰 실패 시 롤백(성공 경로 동작 불변).
+- **수정 전 빨강 (AC-1)** — 새 테스트 `src/__tests__/reaction-remove.test.tsx` 를 수정 전 `ReactionBar` 에 돌림(rc=1, 4 failed | 2 passed):
+  - `AC-1 눌린 LIKE 를 다시 누르면 removeReaction 1회…` → `AssertionError: expected "spy" to be called 1 times, but got 0 times`
+  - `AC-4 롤백: removeReaction 이 reject 하면 눌림이 복원된다` → `expected 'true' to be 'false'`
+  - `롤백 짝: 전환(LIKE→LOVE) 이 실패하면 LIKE 로 되돌아온다` → `expected 'false' to be 'true'`
+  - `회귀: 연타는 … DELETE 가 한 번만 나간다` → removeReaction 미호출로 실패
+  - 통과(대조군): AC-2 전환, AC-3 첫 반응.
+  수정 후 6/6 통과.
+- **검증 (모두 `> log; echo rc=$?`)** — touched vitest(reaction-remove + reaction-restore) rc=0 (12 tests) · `tsc --noEmit` rc=0 · `npm run lint` rc=0 · fan web 전체 `vitest run` rc=0 (49 files / 433 tests).
+- **e2e 셀렉터 grep** — `web/fan-platform-web/e2e-smoke` 에 반응 관련 셀렉터 없음. `tests/e2e` 의 반응 언급은 API(PUT) 레벨뿐 — 영향 없음.
+- **AC-6 (라이브)** — 열어 둠. 다음 데모 창에서 Vercel 배포 후 측정.
