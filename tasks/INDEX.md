@@ -206,7 +206,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-819-capture-self-test-skipped-on-script-only-prs.md` — **`capture-portfolio.mjs --self-test` 가 그 스크립트만 고친 PR 에서 한 번도 안 돈다** (IN-PROGRESS, 2026-10-25 UTC): 호스트 잡 `frontend-e2e-smoke` 의 `if:` 가 그 스크립트를 담은 필터(`capture-route-staleness`)를 안 읽는다(#4526). `if:` 한 줄 + 배선 가드. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 
@@ -220,6 +219,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
+- `TASK-MONO-819-capture-self-test-skipped-on-script-only-prs.md` — **`capture-portfolio.mjs --self-test` 가 그 스크립트만 고친 PR 에서 한 번도 안 돈다** (REVIEW 2026-10-25 UTC · AC-2 = 이 PR 의 CI): 호스트 잡 `frontend-e2e-smoke` 의 `if:` 가 그 스크립트를 담은 필터(`capture-route-staleness`)를 안 읽는다(#4526). `if:` 한 줄 + 배선 가드. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-MONO-818-demo-seed-ships-ecommerce-orders-through-wms.md` — **데모 시드: 출고된 ecommerce 주문 둘이 ecommerce 에서만 손으로 배송되고 wms 출고는 `PICKING` 에 남는다** (REVIEW 2026-10-25 UTC · AC-1·3·4 = 굽기 · 창): 33·34차 창 발견. 소유자 결정 «wms 가 출고를 밀고 이벤트로 따라오게». `deductWmsInventory` 만으로는 안 된다(`ManualShipConfirmConsumer` 는 `PICKING` 에서 no-op). 공용 pick→pack→ship 함수 + ecommerce 슬롯 4·5 가 wms 로 출고 → 이벤트로 `SHIPPED`, wms 가 없으면 지금 경로로 폴백. 🔴 굽기 전 머지. 분석=Opus 5.5 / 구현 권장=Opus.
 
 ## done
