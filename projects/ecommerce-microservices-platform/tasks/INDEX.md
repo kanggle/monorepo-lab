@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-- `TASK-BE-659-order-operator-reads-wildcard-tenant-silent-empty.md` — **주문 운영자 읽기 넷(`/summary` · `/insights` · 목록 · 상세)이 `*` 테넌트에 빈 200 — 계약의 «`*` 조회 유지» 는 미구현 → `/metrics` 처럼 403** (READY, 2026-10-25 UTC): 소유자 결정(교차 테넌트 읽기를 새로 만들지 않음). `requireConcreteTenant` 재사용 + 계약 정정. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
@@ -85,6 +85,8 @@ _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DON
 _(없음)_
 
 ## review
+
+- `TASK-BE-659-order-operator-reads-wildcard-tenant-silent-empty.md` — **주문 운영자 읽기 넷(`/summary` · `/insights` · 목록 · 상세)이 `*` 테넌트에 빈 200 — 계약의 «`*` 조회 유지» 는 미구현 → `/metrics` 처럼 403** (REVIEW 2026-10-25 UTC · AC 전부 닫힘): 소유자 결정(교차 테넌트 읽기를 새로 만들지 않음). `requireConcreteTenant` 재사용 + 계약 정정. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 - `TASK-BE-645-operator-confirm-backordered-skips-reservation.md` — **REVIEW (2026-10-22 UTC · #4474 머지 · AC-2 = 굽기 뒤 라이브) — 서버 변경 = 굽기.** 운영자 상태 변경 API 가 `BACKORDERED → CONFIRMED` 를 받아 준다(`AdminOrderStatusService.java:34` → `Order.confirm` `:214` 는 재입고 재예약 사가용 갈래) — 재고 예약 없이 확정. 운영자 경로에서는 거부 · 사가 경로는 그대로. 콘솔은 `TASK-PC-FE-365` 부터 취소만 낸다. 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-2 ⚪ — `BACKORDERED` 0 건.
 
