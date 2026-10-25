@@ -130,3 +130,16 @@ Each mutant reddens exactly the tests that name its behaviour. On the fix (#4537
 - AC-1 ✅ — `security-query-api.md` § login-history / § suspicious-events: required `tenantId`, `*` = no filter, no default (missing → 400), «테넌트» paragraphs with the pool rule. `admin-api.md` § GET /api/admin/audit `tenantId` row + suspicious example. Service specs' endpoint lines carry `tenantId=`.
 - AC-2 ✅ — security: `loginHistory_nonFanPlatformAccount_returned` · `suspicious_nonFanPlatformAccount_returned` (MySQL; red under A). End to end through admin-service (failure scenario 1): `AuditQueryUseCaseTest.securitySources_receiveGatedTenant` (red under L3) + `SecurityServiceClientUnitTest.queries_sendTenantId` (red under L4). Suspicious rows now carry id · type · time (`querySuspiciousEvents_200_contractShape_returnsList`, red under L5).
 - AC-3 ✅ — isolation `loginHistory_isolation` · `suspicious_isolation` (red under A and B). Control `fanPlatform_control` (green under A — the old behaviour served fan-platform; red under B — no filter leaks the other tenant's row). Pool rule `poolAccount_siteSeesOnlyItsOwnLogins` (red under A, B, C). Platform-scope `allTenants_noFilter`. The existing full-stack `SecurityServiceIntegrationTest` (Kafka → login_history → query as fan-platform) is SUCCESS in the same lane.
+
+---
+
+## CORRECTION — 35차 창 라이브 결과 (2026-10-25 UTC)
+
+Live observation only; nothing here reopens an AC. The AC-0 «observed empty result» was ⚪ (no demo window); this is the live observation, made in the 35th window (bake `54b79233c`, fresh volume).
+
+- **✅ A non-`fan-platform` account's login history is returned.** `demo@` (account `0199de70-…-ad03`) has 44 `login_history` rows, all `tenant_id='iam'`. With the `*` operator: `GET /api/admin/audit?accountId=…ad03&tenantId=iam&source=login_history` → 200 with rows (SUCCESS / ATTEMPTED); `tenantId=*` → the same.
+- **🔴 Finding — the demo-corp operator cannot see its own operators' login history.** For `tenantId=iam`, `*` and `fan-platform` it gets 403 `TENANT_SCOPE_DENIED`; for `tenantId=demo-corp` it gets an empty 200 (the rows carry `tenant_id='iam'`). Whether that should change is not decided here; this ticket's isolation rule (AC-3) is what produces the 403 for a tenant outside the operator's grant.
+- DB at the time: `consumer-pool` 24 rows / 7 accounts, `iam` 56 / 3.
+- Not recorded as measured in this window: the suspicious-events source and the pool-account site rule, live.
+
+⇒ 판정: done 유지 (닫을 것 없음) — 라이브 관측만 기록

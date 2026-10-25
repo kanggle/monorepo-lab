@@ -96,3 +96,15 @@ An operator reading «내가 위임한» / «나에게 위임된» and the 위�
 - e2e grep: no console e2e spec reads delegation row text (`overview-consolidation.spec.ts` only checks the `nav-erp-delegation` link); `tests/federation-hardening-e2e` «delegation» is IAM tenant-admin delegation, a different screen.
 
 Open: AC-5 (Vercel Production after merge · live screen at the next demo window).
+
+---
+
+## CORRECTION — 35차 창 라이브 결과 (2026-10-25 UTC)
+
+- **AC-5 ✅** (owner, Vercel production, 35th window). `/erp/delegation`:
+  - «내가 위임한» row: `EMP-0002 · 이운영`.
+  - 위임 현황 table: delegator `EMP-0001 · 김본부`, delegate `EMP-0002 · 이운영`.
+  - No raw id in the person cells.
+- Deploy: the Vercel deploy-hook run on `main` was `success`.
+
+⇒ 판정: 모든 AC 닫힘 — 닫기 chore 대상

@@ -115,3 +115,15 @@ Fix issue found in TASK-BE-644. 콘솔 `GET /api/wms/settings` → admin-service
 - **AC-2 — 닫힘 (settings 절반).** 34차 창(2026-10-24 UTC): ✅ settings — `GET /api/v1/admin/settings` 를 필터 없이 불러 200, 설정 4행(`inventory.low_stock.default_threshold_qty` = 10 포함). 같은 방식의 `/users` 는 403 `FORBIDDEN`(demo-corp 토큰에 `WMS_ADMIN` 이 없다 — 500 이 아니고, 이 토큰으로는 잴 수 없다). 소유자는 콘솔 «WMS 운영설정» 화면을 따로 확인하지 않았다 — 화면 절반은 ⚪. `TASK-BE-644` AC-3 은 그 티켓에 ⚪ 로 적었다. (증거 o05)
 - **AC-0 — 열린 채 유지.** AC-0 이 열려 있어 티켓은 `review` 에 남는다.
 - (원문 체크박스는 동결 규칙(HARDSTOP-05)상 바꾸지 않았다 — 이 절이 AC-2 settings 절반의 닫힘 기록이다.)
+
+---
+
+## CORRECTION — 35차 창 라이브 결과 (2026-10-25 UTC)
+
+- **AC-2 ✅ — 화면 절반까지 닫힘.**
+  - API 절반(다시): `GET /api/v1/admin/settings` 200, 4행(임계값 행 포함).
+  - 화면 절반(소유자): 콘솔 WMS 운영설정이 «예약 TTL 24» 와 «저재고 기본 임계치 10» 을 오류 없이 나열한다. «프로젝션 상태 = 권한 없음».
+  - 관찰(원인 미측정): 화면은 2행을 보이는데 API 는 4행을 돌려준다. 프로젝션 상태 «권한 없음» 은 `WMS_ADMIN` 없는 토큰 때문일 가능성이 높다 — 추론이다.
+- **AC-0 — 열린 채 유지.** 이번 창에서 건드리지 않았다(① 실 DB IT 출력 · ③ 콘솔 쓰기 경로 부재 측정이 남아 있다).
+
+⇒ review 유지 — 남은 것: AC-0 (①~③ 을 file:line · IT 출력으로 — 특히 ③ «콘솔 쓰기 경로 부재» 미측정). AC-1 · AC-2 는 닫힘.

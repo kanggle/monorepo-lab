@@ -100,3 +100,15 @@ backend
 ## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
 
 - **AC-2 — 34차 창 결과 (열린 채 유지).** 34차 창(2026-10-24 UTC): ⚪ 가용 재고 최소값이 85 이고 10 아래인 SKU 가 없어 알림도 0건이다. 기준(10) 자체는 `TASK-BE-652` AC-2 에서 설정 행으로 확인됐다.
+
+---
+
+## CORRECTION — 35차 창 라이브 결과 (2026-10-25 UTC)
+
+- **AC-2 ✅.** 35차 창(굽기 `54b79233c`, 신선 볼륨 — 막 기동한 인스턴스): `SKU-APPLE-001` 재고 조정 −10 → available 5 (201).
+  - inventory-service 로그: `inventory.low-stock-detected emitted inventoryId=d58d1efa… available=5 threshold=10`.
+  - `GET /api/v1/admin/dashboard/alerts` 에 `LOW_STOCK` 행: `thresholdQty 10` · `actualQty 5`.
+  - 막 기동한 인스턴스가 임계값 10 으로 알림을 냈다 — 이 티켓이 막으려던 «재기동 직후 알림 0건» 이 일어나지 않았다.
+- 볼륨 잔여: 알림 행은 소유자 결정으로 지웠다(`TASK-MONO-672` § 35th 참조). 재고는 +80 으로 되돌렸다(available 85).
+
+⇒ 판정: 모든 AC 닫힘 — 닫기 chore 대상

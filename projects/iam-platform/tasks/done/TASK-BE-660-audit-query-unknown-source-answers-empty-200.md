@@ -88,3 +88,14 @@ A typo in `source` is an error the caller sees, not an audit trail that silently
 - Red before (new tests on the old controller): `audit_query_unknown_source_is_400_and_reads_nothing` · `audit_query_source_in_wrong_case_is_400` · `audit_query_blank_source_is_no_source` — 3 `FAILED`.
 - After: `AuditControllerSliceTest` 13 · `AuditQueryUseCaseTest` 17 · `AuditDeniedCrossPermissionTest` 2 — 0 failures (`--rerun`).
 - Census: every other test and the console send only the three values (`AUDIT_SOURCES`, integration tests use `admin`).
+
+---
+
+## CORRECTION — 35차 창 라이브 결과 (2026-10-25 UTC)
+
+Live confirmation only; nothing here reopens an AC. 35th window (bake `54b79233c`, fresh volume).
+
+- **✅ AC-2 live.** `GET /api/admin/audit?…&source=LOGIN_HISTORY` → 400 `VALIDATION_ERROR` «source must be one of [suspicious, admin, login_history] (was: LOGIN_HISTORY)» (case-sensitive, as decided).
+- Side observation (not this ticket's rule): an omitted `tenantId` by an operator holding `audit.read` in more than one tenant → 400 «tenantId is required».
+
+⇒ 판정: done 유지 (닫을 것 없음) — 라이브 확인만 기록

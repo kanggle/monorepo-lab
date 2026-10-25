@@ -117,3 +117,18 @@ Every domain's metrics endpoint does one defined thing for a wildcard tenant, an
 # Failure Scenarios
 
 1. Only the shared contract text changes and an endpoint keeps returning zeros. AC-2 is per domain for this reason.
+
+---
+
+## CORRECTION — 35차 창 라이브 결과 (2026-10-25 UTC)
+
+Live observation only; nothing here reopens an AC. The 34th window left the `*` live read ⚪ (the `*` operator was not activated). The 35th window (bake `54b79233c`, fresh volume) measured it.
+
+- **Token.** The owner operator was activated (`owner-operator.sh activate`); its token exchange gave `tenant_id '*'`. It was deactivated afterwards (status `SUSPENDED`).
+- **finance — ✅ as the ticket decided.** `GET /api/finance/accounts/metrics?period=month` → 403 `PERMISSION_DENIED` «metrics require a concrete tenant».
+- **ecommerce — 403, but from the generic gate.** `GET /api/admin/orders/metrics?period=month` → 403 `ACCESS_DENIED` «Insufficient permissions to access resource». The status is the one AC-2 specifies, but the body is the generic permission gate's, not a metrics-specific message. So this `*` token was refused before the `requireConcreteTenant` branch (the «role present + `*`» case that AC-2 added) could be the one that answered. That branch is covered by `AdminOrderMetricsControllerSliceTest`, not by this live call. Whether the `*` token carries any ecommerce read role was not read in the window.
+- **Controls.** `demo-corp` finance → 200; the `ecommerce` tenant's ecommerce metrics → 200.
+- A first attempt without `period` answered 400 (invalid request) — not a verdict on `*`; the verdicts above are from the second call.
+- No `*` call answered zeros, which is what AC-3 asked the console never to show.
+
+⇒ 판정: done 유지 (닫을 것 없음) — 라이브 관측만 기록

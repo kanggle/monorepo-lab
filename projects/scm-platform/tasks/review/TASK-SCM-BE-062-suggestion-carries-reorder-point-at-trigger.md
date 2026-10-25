@@ -232,3 +232,16 @@ AC-0 은 `*IT*.java` 로 Glob 했고 0 을 받았다. 이 서비스의 IT 이름
 ## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
 
 - **AC-3 — 34차 창 결과 (열린 채 유지).** 34차 창(2026-10-24 UTC): ⚪ `reorder_suggestion` 행이 0건이다(칼럼은 존재한다). 발동된 제안이 없어 응답을 못 봤다.
+
+---
+
+## CORRECTION — 35차 창 라이브 결과 (2026-10-25 UTC)
+
+- **AC-3 — 새 행 절반 ✅.** 35차 창(굽기 `54b79233c`, 신선 볼륨): wms 재고 조정으로 `SKU-APPLE-001` available 5 → 알림이 relay 를 지나 5 초 안에 제안이 생겼다.
+  - 제안 `4d55514c…` · `SUGGESTED` · source `ALERT` · `reorderPointAtTrigger: 10` · `triggerAvailableQty: 5` · `suggestedQty: 50`.
+- **AC-3 — «옛 제안은 null» 절반 ⚪.** 신선 볼륨에는 V4 이전에 만들어진 제안 행이 없어 잴 대상이 없다. AC 문구는 ⚪ 를 닫힘으로 받는다고 적지 않았다.
+- **새 발견 — `warehouseId` 는 location id 다.** 제안의 `warehouseId` 에 LOCATION id(`01910000-…-000000001001`)가 들어 있다. wms 알림은 `warehouseId: null` + `locationId` 를 싣는다. 이 티켓의 범위(`reorderPointAtTrigger`)는 아니다 — 별도 PR 로 기안되는 새 결함 목록에 둔다.
+- **콘솔 후속 티켓 기안 (AC-3 마지막 절) — 이 PR 에서 하지 않았다.** AC 가 «닫을 때 콘솔 후속 티켓 기안» 을 요구하므로 소유자/오케스트레이터 후속이다.
+- 볼륨 잔여: 제안 `4d55514c…` 는 `DISMISSED` 로 정리했다.
+
+⇒ review 유지 — 남은 것: AC-3 의 «옛 제안은 null» 절반 (신선 볼륨에선 만들 수 없다 — ⚪ 로 닫을지는 소유자 결정) · 콘솔 후속 티켓 기안 (소유자/오케스트레이터)

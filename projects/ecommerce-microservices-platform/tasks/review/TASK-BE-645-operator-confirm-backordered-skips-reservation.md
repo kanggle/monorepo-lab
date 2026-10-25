@@ -134,3 +134,14 @@ backend
 ## CORRECTION — 34차 창 라이브 결과 (2026-10-24 UTC)
 
 - **AC-2 — 34차 창 결과 (열린 채 유지).** 34차 창(2026-10-24 UTC): ⚪ 볼륨에 `BACKORDERED` 주문이 0건이라 잴 대상이 없다.
+
+---
+
+## CORRECTION — 35차 창 라이브 결과 (2026-10-25 UTC)
+
+- **AC-2 ✅.** 35차 창(굽기 `54b79233c`, 신선 볼륨): 구매자 토큰으로 수량 100000 (오버핏 후드 집업) 주문 → 결제 확인 200 → 10 초 안에 `BACKORDERED`.
+  - 운영자(ecommerce) `POST /api/admin/orders/{id}/status {"status":"CONFIRMED"}` → **400 `INVALID_ORDER_REQUEST`**, 본문 «An order cannot be confirmed by an operator (current status: BACKORDERED) …».
+  - 주문은 `BACKORDERED` 그대로.
+- 볼륨 잔여: 주문 `d48c1c34…` 를 `CANCELLED` 로 정리했다(결제 환불은 재지 않았다).
+
+⇒ 판정: 모든 AC 닫힘 — 닫기 chore 대상

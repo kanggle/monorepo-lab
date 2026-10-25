@@ -102,3 +102,17 @@ A wms dead-lettering never names a partition that does not exist: the resolver r
 - The existing `*ErrorLoggingTest` (×5) stay green. `scripts/check-dead-letter-suffix.sh` rc=0, `--selftest` rc=0 (R6's `createProducerRecord` exemption now has no user — left as is, Out of Scope).
 - `MasterLocationDltRoutingIntegrationTest` (Testcontainers) — CI wms lane, see the PR.
 - AC-3 (live) stays open for the next demo window.
+
+---
+
+## CORRECTION — 35차 창 라이브 결과 (2026-10-25 UTC)
+
+35th window (bake `54b79233c`, fresh volume).
+
+- **AC-3 ✅.** `wms.admin.settings.v1` has 3 partitions, `wms.admin.settings.v1.DLT` has 1. Six keyed malformed records produced at 08:11:16Z landed on p0 ×2, p1 ×1, p2 ×3, so the window did place records on partitions ≠ 0.
+  - `.DLT` offset 0 → 6 within 10 s.
+  - inventory-service logged 6 × `kafka_listener_dead_lettered`, including partition=1 and partition=2 lines.
+  - «non-existent partition» count = 0 in every wms service. (The 34th window, same shape with a record on p1, logged the warning.)
+- Left on the volume: the 6 poisoned records stay on `wms.admin.settings.v1.DLT`.
+
+⇒ 판정: 모든 AC 닫힘 — 닫기 chore 대상
