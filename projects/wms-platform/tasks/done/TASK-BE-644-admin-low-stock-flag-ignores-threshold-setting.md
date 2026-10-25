@@ -8,7 +8,7 @@ admin-service 재고 읽기 모델의 `lowStockFlag` 가 저재고 설정(`inven
 
 # Status
 
-review
+done
 
 # Owner
 

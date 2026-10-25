@@ -8,7 +8,7 @@ ERP delegation screens draw the raw employee id (`01a16eaa-980d-…`) where the 
 
 # Status
 
-review
+done
 
 # Owner
 

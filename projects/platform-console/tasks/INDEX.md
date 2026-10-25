@@ -125,15 +125,12 @@ _(없음)_
 ## review
 
 
-- `TASK-PC-FE-371-delegation-rows-show-employee-ids-not-names.md` — **ERP 위임 화면(«내가 위임한» · «나에게 위임된» · 위임 현황 표)이 직원 이름 대신 내부 id 를 그린다** (REVIEW 2026-10-25 UTC · AC-5 = Vercel · 데모 창 라이브): 34차 창 발견 · `PC-FE-355` Out of Scope. 위임의 사람 칸은 직원 id(approval v2.4)이고, 결재 화면의 `ApprovalEmployeeRef` 로 그대로 풀린다 — 콘솔만, 굽기 무관. 분석=Opus 5.5 / 구현 권장=Sonnet. 구현: 두 렌더 자리에 `ApprovalEmployeeRef`. 수정 전 빨강 5 · console 전체 5544 초록.
-
 - `TASK-PC-FE-364-operator-overview-business-kpis.md` — **운영자 통합 개요 카드 여섯을 업무 지표로 — 잠긴 계정 · 미출고 주문 · 제출 대기 발주 · 미해소 대사 차이 · 내 결재 대기 · 출고 대기 주문** — 카드당 호출 1개 그대로(1:1 교체) · 서버 변경 없음 · 계약 § 2.4.9.1 먼저 · 소유자 결정 2026-10-22 KST (REVIEW, 2026-10-22 UTC · 문구 · 권한 표 소유자 승인 · 콘솔 nightly · federation e2e success · AC-3 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ❌ — WMS 출고 · SCM 발주 카드 `DOWNSTREAM_ERROR` · «WMS 점검 불가» → `TASK-PC-FE-369`.
 
-- `TASK-PC-FE-358-wms-daily-throughput-chart.md` — **WMS 개요 일별 입고 · 출고 처리량 그래프** — 계약 § 1.2 `GET /dashboard/throughput` 를 BFF · SSR · 화면으로 잇는다 · AC-0 닫힘 · 소유자 결정(창고 선택 · UTC 14일 · 건수 막대) · 새 문구 13 소유자 승인 · 브랜치 nightly success (REVIEW, 2026-10-22 UTC · AC-4 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-4 🟡 — 14일 창 그래프 ✅ · 빈 창 문구는 데이터상 못 잼.
-
-- `TASK-PC-FE-310-fold-catalog-into-overview.md` — **사이드바 «카탈로그» 를 개요 안으로 접는다** (REVIEW, 2026-10-06 UTC · 소유자 결정). 테넌트 없음 → 개요가 카탈로그 그리드 직접 노출(그리드 빈 경우만 옛 `NoTenantNotice` 추가) · 성공 → «제품·테넌트 전체» 접힘 섹션(상태점은 공용 `deriveHealthByDomain`) · BFF 불가 → 같은 섹션 펼침 · `/console` = `/dashboards/overview` 리다이렉트 · «카탈로그로 이동» 34곳 → «개요로 이동» · `permission-map.ts`/`console-nav-matching.ts` 의 orphan 행·특례 삭제. AC-0~AC-10 전부 닫힘(AC-10 의 nightly 확인만 라이브 ⚪) · AC-11 라이브 ⚪. tsc/lint/vitest(338/338·3807/3807) rc=0 · AC-9 bite 둘 다 정확한 칸만 적중. 분석=Opus 5.5 / 구현 권장=Sonnet. · 🔵 **33차 창(2026-10-23 UTC)**: AC-11 미착수.
-
 ## done
+- ✅ `TASK-PC-FE-310-fold-catalog-into-overview.md` — **DONE 2026-10-25 UTC (4-dim verified)** — impl PR #4193(`722b81437`, 실패 0) · AC-11 35차 창 ✅ — 익명 샘플 개요에 «제품·테넌트» 섹션(로그인 절반 = 32차). 기록 = 티켓 끝 `## CORRECTION — 35차 창` · `TASK-MONO-672` § 35th.
+- ✅ `TASK-PC-FE-358-wms-daily-throughput-chart.md` — **DONE 2026-10-25 UTC (4-dim verified)** — impl PR #4451(`940b86ec8`, 실패 0) · AC-4 35차 창 ✅ — 로그인 · 익명 샘플 둘 다 그래프(시드가 비지 않아 빈 문구 조건 미발동). 기록 = 티켓 끝 `## CORRECTION — 35차 창` · `TASK-MONO-672` § 35th.
+- ✅ `TASK-PC-FE-371-delegation-rows-show-employee-ids-not-names.md` — **DONE 2026-10-25 UTC (4-dim verified)** — impl PR #4544(`e8b37dcaa`, 실패 0) · AC-5 35차 창 ✅ — `/erp/delegation` 사람 칸 «번호 · 이름». 기록 = 티켓 끝 `## CORRECTION — 35차 창` · `TASK-MONO-672` § 35th.
 - ✅ `TASK-PC-FE-372-headline-metric-paths-not-pinned-to-fetchers.md` — **DONE 2026-10-25 UTC (4-dim verified)** — #4551(`676c14975`, 실패 0 · `Frontend unit tests` SUCCESS). 홈 대표 지표 leg 경로를 fetcher 상수에 고정(변이 2개 빨강). base 는 시험 안 표(세 번째 사본 — 약한 쪽). AC 전부 닫힘.
 - ✅ `TASK-PC-FE-369-operator-overview-wms-scm-cards-downstream-error.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4508(`45fa46428`, 실패 0) · 운영자 통합 개요의 «WMS 출고» · «SCM 발주» 카드 `DOWNSTREAM_ERROR` — 원인은 데모 주소 해석기의 동시 `/status`(수선 = `TASK-MONO-814`) · 34차 창 로그인 직후 첫 개요에서 여섯 카드가 값을 그렸고 도메인 상태 «정상 6 · 주의 0 · 점검 불가 0».
 - ✅ `TASK-PC-FE-368-home-overview-domain-headline-metric.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4524(`540dccd88`, 실패 0) · `ADR-MONO-084` P8 — 홈 도메인 카드에 대표 실적 지표 · 머지 뒤 첫 nightly `40087927639` success · 34차 창 홈 카드 여섯 도메인 모두 대표 지표 표시.
