@@ -8,7 +8,7 @@ TASK-BE-660
 
 # Status
 
-review
+done
 
 # Owner
 
