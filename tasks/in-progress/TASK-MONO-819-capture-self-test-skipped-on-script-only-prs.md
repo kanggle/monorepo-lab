@@ -8,7 +8,7 @@ TASK-MONO-819
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
