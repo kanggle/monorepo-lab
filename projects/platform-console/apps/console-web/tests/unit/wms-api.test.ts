@@ -132,12 +132,14 @@ const INV_PAGE = {
 const ALERT_PAGE = {
   content: [
     {
-      alertId: 'al-1',
+      id: 'al-1',
       alertType: 'LOW_STOCK',
       warehouseId: 'wh-1',
-      message: 'stock low',
+      locationId: 'loc-1',
+      thresholdQty: 10,
+      actualQty: 3,
       detectedAt: '2026-05-09T10:00:00Z',
-      acknowledged: false,
+      acknowledgedAt: null,
     },
   ],
   page: { number: 0, size: 20, totalElements: 1, totalPages: 1 },
@@ -455,7 +457,7 @@ describe('wms-api — tolerant parsing (unknown/future enum never throws)', () =
         jsonResponse({
           content: [
             {
-              alertId: 'al-9',
+              id: 'al-9',
               alertType: 'FUTURE_ALERT_TYPE_V2',
               someNewField: 'x',
               detectedAt: '2026-06-01T00:00:00Z',

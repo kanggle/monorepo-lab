@@ -43,7 +43,23 @@ export const EMPTY_SHIP_FILTERS: ShipFilterState = {
 };
 
 export function alertLabel(a: AlertRow): string {
-  return a.alertType ? `${a.alertType} (${a.alertId})` : a.alertId;
+  return a.alertType ? `${a.alertType} (${a.id})` : a.id;
+}
+
+/** TASK-PC-FE-373 — the producer sends no `acknowledged` boolean; state = `acknowledgedAt` present. */
+export function isAlertAcknowledged(a: AlertRow): boolean {
+  return a.acknowledgedAt != null && a.acknowledgedAt !== '';
+}
+
+/** TASK-PC-FE-373 — the producer sends no `message`; the «내용» cell is built from contract fields. */
+export function alertSummary(a: AlertRow): string {
+  const parts: string[] = [];
+  if (a.actualQty != null) parts.push(`현재 ${a.actualQty}`);
+  if (a.thresholdQty != null) parts.push(`임계 ${a.thresholdQty}`);
+  const target = a.locationId ?? a.warehouseId;
+  const qty = parts.join(' / ');
+  if (!qty && !target) return '—';
+  return [qty, target ? `위치 ${target}` : ''].filter(Boolean).join(' · ');
 }
 
 // --- 입고 / ASN (TASK-PC-FE-222) ------------------------------------------

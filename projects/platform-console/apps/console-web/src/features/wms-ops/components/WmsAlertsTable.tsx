@@ -3,6 +3,7 @@
 import { Button } from '@/shared/ui/Button';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
 import type { AlertRow } from '../api/types';
+import { alertSummary, isAlertAcknowledged } from './wms-ops-helpers';
 
 /**
  * Alerts region of the wms ops screen (TASK-PC-FE-103 split) — the alert table
@@ -18,9 +19,16 @@ export interface WmsAlertsTableProps {
    * which the server's acknowledge requires). Default `true` (fail-open).
    */
   canAcknowledge?: boolean;
+  /** TASK-PC-FE-373 — rows the page parser dropped (unparseable); surfaced, never silent. */
+  excludedRows?: number;
 }
 
-export function WmsAlertsTable({ rows, onAck, canAcknowledge = true }: WmsAlertsTableProps) {
+export function WmsAlertsTable({
+  rows,
+  onAck,
+  canAcknowledge = true,
+  excludedRows = 0,
+}: WmsAlertsTableProps) {
   return (
     <>
       {/* ── Alerts (confirm-gated acknowledge — the only mutation) ─────── */}
@@ -33,6 +41,15 @@ export function WmsAlertsTable({ rows, onAck, canAcknowledge = true }: WmsAlerts
         >
           조회 전용 — 알림 확인 처리에 필요한 업무 권한(WMS 운영 조치)이 이 테넌트에서 배정되지
           않아 «확인 처리» 버튼을 숨겼습니다.
+        </p>
+      )}
+      {excludedRows > 0 && (
+        <p
+          role="note"
+          data-testid="wms-alerts-excluded-note"
+          className="mb-2 text-xs text-muted-foreground"
+        >
+          해석할 수 없는 알림 {excludedRows}건은 표에서 제외했습니다.
         </p>
       )}
       {rows.length === 0 ? (
@@ -54,7 +71,7 @@ export function WmsAlertsTable({ rows, onAck, canAcknowledge = true }: WmsAlerts
                 유형
               </th>
               <th scope="col" className="p-2">
-                메시지
+                내용
               </th>
               <th scope="col" className="p-2">
                 감지 시각 (UTC)
@@ -70,15 +87,15 @@ export function WmsAlertsTable({ rows, onAck, canAcknowledge = true }: WmsAlerts
           <tbody>
             {rows.map((a, i) => (
               <tr
-                key={a.alertId}
+                key={a.id}
                 data-testid={`wms-alert-row-${i}`}
                 className="border-b border-border"
               >
                 <td className="p-2">{a.alertType ?? '—'}</td>
-                <td className="p-2">{a.message ?? '—'}</td>
+                <td className="p-2">{alertSummary(a)}</td>
                 <td className="p-2">{a.detectedAt ?? '—'}</td>
                 <td className="p-2">
-                  {a.acknowledged ? (
+                  {isAlertAcknowledged(a) ? (
                     <StatusBadge
                       tone="neutral"
                       data-testid={`wms-alert-acked-${i}`}
@@ -90,7 +107,7 @@ export function WmsAlertsTable({ rows, onAck, canAcknowledge = true }: WmsAlerts
                   )}
                 </td>
                 <td className="p-2">
-                  {a.acknowledged || !canAcknowledge ? (
+                  {isAlertAcknowledged(a) || !canAcknowledge ? (
                     <span className="text-xs text-muted-foreground">—</span>
                   ) : (
                     <Button

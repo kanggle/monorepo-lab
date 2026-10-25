@@ -233,21 +233,62 @@ export type AdjustmentPage = z.infer<typeof AdjustmentPageSchema>;
 
 // --- 1.6 alerts -----------------------------------------------------------
 
+// TASK-PC-FE-373 — the PRODUCER's row (admin-service-api.md § 1.6 `AlertLog`, wms
+// `AlertLogResponse`): the identifier is `id` (NOT `alertId` — that is only the name of the ack
+// URL path parameter), and there is NO `message` and NO `acknowledged` boolean: acknowledged
+// state is `acknowledgedAt != null` (see `isAlertAcknowledged`). `warehouseId` may be null while
+// `locationId` is set.
 export const AlertRowSchema = z
   .object({
-    alertId: z.string(),
+    id: z.string(),
     alertType: z.string().optional(),
     warehouseId: z.string().nullable().optional(),
-    message: z.string().nullable().optional(),
+    locationId: z.string().nullable().optional(),
+    skuId: z.string().nullable().optional(),
+    lotId: z.string().nullable().optional(),
+    thresholdQty: z.number().nullable().optional(),
+    actualQty: z.number().nullable().optional(),
     detectedAt: z.string().optional(),
-    acknowledged: z.boolean().optional(),
     acknowledgedAt: z.string().nullable().optional(),
     acknowledgedBy: z.string().nullable().optional(),
+    projectedAt: z.string().nullable().optional(),
   })
   .passthrough();
 export type AlertRow = z.infer<typeof AlertRowSchema>;
-export const AlertPageSchema = wmsPage(AlertRowSchema);
-export type AlertPage = z.infer<typeof AlertPageSchema>;
+
+/**
+ * Row-level tolerance for the ALERT LIST only (TASK-PC-FE-373 § Scope 4): a row that fails
+ * `AlertRowSchema` is dropped and counted in `excludedRows` instead of throwing — one bad row
+ * must not collapse the whole /wms overview into «일시적으로 불러올 수 없습니다». The page
+ * ENVELOPE stays strict. Deliberately NOT applied to `wmsPage()` at large (other reads' required
+ * keys are an intended degrade signal).
+ */
+export interface AlertPage {
+  content: AlertRow[];
+  page: WmsPageMeta;
+  sort?: string;
+  /** Rows dropped by the row-level tolerance below (0/absent = none). */
+  excludedRows?: number;
+}
+export const AlertPageSchema = z
+  .object({
+    content: z.array(z.unknown()),
+    page: WmsPageMetaSchema,
+    sort: z.string().optional(),
+  })
+  .transform((p): AlertPage => {
+    const content: AlertRow[] = [];
+    for (const raw of p.content) {
+      const r = AlertRowSchema.safeParse(raw);
+      if (r.success) content.push(r.data);
+    }
+    return {
+      content,
+      page: p.page,
+      sort: p.sort,
+      excludedRows: p.content.length - content.length,
+    };
+  });
 
 /** `POST .../alerts/{alertId}/acknowledge` → the updated AlertLog row. */
 export const AckResultSchema = AlertRowSchema;

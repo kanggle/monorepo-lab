@@ -958,26 +958,38 @@ function adjustmentsFixture(path: string): unknown {
 // § 1.6 alerts — GET /dashboard/alerts
 // ---------------------------------------------------------------------------
 
+// TASK-PC-FE-373 — the PRODUCER shape (`AlertLogResponse`): `id`, no `alertId`/`message`/
+// `acknowledged`; acknowledged state = `acknowledgedAt` present. The pre-373 fixture carried the
+// invented keys, which is exactly why every sample-fed test stayed green while the real producer
+// shape degraded the login /wms overview.
 const ALERTS = [
   {
-    alertId: 'alert-sample-0001',
+    id: 'alert-sample-0001',
     alertType: 'LOW_STOCK',
     warehouseId: WAREHOUSE.id,
-    message: `${SKUS[1].name.replace(' (샘플)', '')} 재고가 임계치 이하로 떨어졌습니다 (샘플)`,
+    locationId: LOCATIONS[0].id,
+    skuId: SKUS[1].id,
+    lotId: null as string | null,
+    thresholdQty: 10,
+    actualQty: 4,
     detectedAt: T_LATE,
-    acknowledged: false,
     acknowledgedAt: null as string | null,
     acknowledgedBy: null as string | null,
+    projectedAt: T_LATE,
   },
   {
-    alertId: 'alert-sample-0002',
+    id: 'alert-sample-0002',
     alertType: 'LOW_STOCK',
     warehouseId: WAREHOUSE.id,
-    message: `${SKUS[1].name.replace(' (샘플)', '')} 재고가 임계치 이하로 떨어졌습니다 (샘플)`,
+    locationId: LOCATIONS[0].id,
+    skuId: SKUS[1].id,
+    lotId: null as string | null,
+    thresholdQty: 10,
+    actualQty: 6,
     detectedAt: T_MID,
-    acknowledged: true,
-    acknowledgedAt: T_MID,
-    acknowledgedBy: 'op-sample-0001',
+    acknowledgedAt: T_MID as string | null,
+    acknowledgedBy: 'op-sample-0001' as string | null,
+    projectedAt: T_MID,
   },
 ] as const;
 
@@ -992,7 +1004,7 @@ function alertsFixture(path: string): unknown {
   if (warehouseId) rows = rows.filter((r) => r.warehouseId === warehouseId);
   if (acknowledged !== null) {
     const want = acknowledged === 'true';
-    rows = rows.filter((r) => r.acknowledged === want);
+    rows = rows.filter((r) => (r.acknowledgedAt !== null) === want);
   }
   return paginate(rows, query, 'detectedAt,desc');
 }

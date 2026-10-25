@@ -77,9 +77,9 @@ const INV = {
   page: { number: 0, size: 20, totalElements: 0, totalPages: 0 },
 };
 const ALERT = {
-  alertId: 'al-1',
+  id: 'al-1',
   alertType: 'LOW_STOCK',
-  acknowledged: true,
+  acknowledgedAt: '2026-05-09T11:00:00Z',
 };
 
 beforeEach(() => {

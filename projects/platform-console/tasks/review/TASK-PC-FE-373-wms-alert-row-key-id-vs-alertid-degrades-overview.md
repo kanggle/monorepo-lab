@@ -8,7 +8,7 @@ TASK-PC-FE-373
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -62,14 +62,14 @@ wms 경보가 1건 이상 있는 운영 상태에서도 로그인 `/wms` 개요�
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 위 «사실» 의 파일:줄을 착수 시점 코드로 다시 읽어 맞는지 확인하고 어긋난 줄은 이 절을 고쳐 기록한다. 추가로 `AlertLogEntity` 를 읽어 `AlertLogResponse` 의 nullable 여부를 확정한다(계약 필드 목록의 근거).
-- [ ] **AC-1 (계약)** — `admin-service-api.md` § 1.6 가 `AlertLog` 행 필드 목록(이름·타입·nullable)을 명시하고, `id` 가 행 식별자이며 `acknowledged`/`message` 는 응답에 없음을 적는다. 이 변경이 콘솔 수정과 **같은 PR 의 앞선 커밋**이다.
-- [ ] **AC-2 (실제 모양 입력, 수정 전 빨강)** — 콘솔 단위 테스트가 **생산자의 실제 모양 행**(키 `id`, `alertId` 없음, `acknowledged`/`message` 없음, `warehouseId:null` + `locationId`)을 `AlertPageSchema`/`listAlerts` 경로와 `getWmsSectionState` 에 먹이고 «degraded 가 아님 + 행이 표에 나옴» 을 단언한다. **수정을 되돌리면(스키마·소비 자리 원복) 이 테스트가 빨강**임을 mutation/revert 로 보이고 구현 보고에 기록한다. 대조군: 표본 픽스처를 쓴 기존 통과 테스트는 이 결함을 못 잡았다는 점을 적는다.
-- [ ] **AC-3 (ack 가 실제 id 를 쓴다)** — 실제 모양 행에서 «확인 처리» → 확인 → 요청 경로가 `/api/wms/alerts/<행의 id>/acknowledge` 이고 `undefined` 가 아니다(테스트로 경로 문자열 단언). 수정 전 빨강.
-- [ ] **AC-4 (상태 파생)** — `acknowledgedAt` 이 있는 행은 «확인됨» 이고 버튼이 없고, 없는 행은 «미확인» + 버튼. 수정 전 빨강(확인된 행이 «미확인» 으로 나옴).
-- [ ] **AC-5 (한 행이 전체를 지우지 않는다)** — 경보 응답에 정상 행 1 + 파싱 불가 행 1(예: `id` 부재)이 섞여 있을 때 개요가 degraded 가 아니고 정상 행이 표에 나온다. 수정 전 빨강.
-- [ ] **AC-6 (픽스처)** — 표본 경보 행이 생산자 모양(`id`)이고, 익명 `/wms` 표본 화면이 여전히 경보 표를 그린다(기존 sample 스위트 초록).
-- [ ] **AC-7 (회귀)** — console 전체 vitest(`--maxWorkers=2 --minWorkers=1`) · `tsc --noEmit` · `next lint` rc=0. 모든 e2e 스펙을 grep 해서 `alertId`/`wms-alert-row` 를 읽는 스펙이 있으면 함께 고친다.
+- [x] **AC-0** — 위 «사실» 의 파일:줄을 착수 시점 코드로 다시 읽어 맞는지 확인하고 어긋난 줄은 이 절을 고쳐 기록한다. 추가로 `AlertLogEntity` 를 읽어 `AlertLogResponse` 의 nullable 여부를 확정한다(계약 필드 목록의 근거).
+- [x] **AC-1 (계약)** — `admin-service-api.md` § 1.6 가 `AlertLog` 행 필드 목록(이름·타입·nullable)을 명시하고, `id` 가 행 식별자이며 `acknowledged`/`message` 는 응답에 없음을 적는다. 이 변경이 콘솔 수정과 **같은 PR 의 앞선 커밋**이다.
+- [x] **AC-2 (실제 모양 입력, 수정 전 빨강)** — 콘솔 단위 테스트가 **생산자의 실제 모양 행**(키 `id`, `alertId` 없음, `acknowledged`/`message` 없음, `warehouseId:null` + `locationId`)을 `AlertPageSchema`/`listAlerts` 경로와 `getWmsSectionState` 에 먹이고 «degraded 가 아님 + 행이 표에 나옴» 을 단언한다. **수정을 되돌리면(스키마·소비 자리 원복) 이 테스트가 빨강**임을 mutation/revert 로 보이고 구현 보고에 기록한다. 대조군: 표본 픽스처를 쓴 기존 통과 테스트는 이 결함을 못 잡았다는 점을 적는다.
+- [x] **AC-3 (ack 가 실제 id 를 쓴다)** — 실제 모양 행에서 «확인 처리» → 확인 → 요청 경로가 `/api/wms/alerts/<행의 id>/acknowledge` 이고 `undefined` 가 아니다(테스트로 경로 문자열 단언). 수정 전 빨강.
+- [x] **AC-4 (상태 파생)** — `acknowledgedAt` 이 있는 행은 «확인됨» 이고 버튼이 없고, 없는 행은 «미확인» + 버튼. 수정 전 빨강(확인된 행이 «미확인» 으로 나옴).
+- [x] **AC-5 (한 행이 전체를 지우지 않는다)** — 경보 응답에 정상 행 1 + 파싱 불가 행 1(예: `id` 부재)이 섞여 있을 때 개요가 degraded 가 아니고 정상 행이 표에 나온다. 수정 전 빨강.
+- [x] **AC-6 (픽스처)** — 표본 경보 행이 생산자 모양(`id`)이고, 익명 `/wms` 표본 화면이 여전히 경보 표를 그린다(기존 sample 스위트 초록).
+- [x] **AC-7 (회귀)** — console 전체 vitest(`--maxWorkers=2 --minWorkers=1`) · `tsc --noEmit` · `next lint` rc=0. 모든 e2e 스펙을 grep 해서 `alertId`/`wms-alert-row` 를 읽는 스펙이 있으면 함께 고친다.
 - [ ] **AC-8 (라이브, 다음 데모 창)** — Vercel Production 배포 후 다음 창에서 로그인 `/wms` 가 **경보 ≥ 1건** 상태로 개요를 렌더하고(경보 행 생성은 `TASK-BE-647` 재현 — 재고 조정으로 임계 이하), 표에 경보가 보이며 «확인 처리» 가 성공해 행이 «확인됨» 이 된다. 못 재면 ⚪ + 사유.
 
 # Related Specs
@@ -96,3 +96,23 @@ wms 경보가 1건 이상 있는 운영 상태에서도 로그인 `/wms` 개요�
 3. 계약 필드 목록 없이 콘솔만 고친다 — 다음에 누가 생산자 DTO 를 바꿔도 같은 드리프트가 조용히 재발한다(AC-1).
 4. `acknowledged` 파생을 빼먹는다 — 화면은 뜨지만 확인된 경보에 «확인 처리» 가 남는다(AC-4).
 5. 행 단위 관용(4번)을 `wmsPage()` 전체로 넓혀 다른 읽기의 의도된 필수 키 판정까지 약화한다 — 범위 밖.
+
+---
+
+# Implementation Notes
+
+Implemented 2026-10-25 UTC (branch `fix/pc-fe-373-wms-alert-row-key`). First commit = contract (`admin-service-api.md` § 1.6 `AlertLog` 12-field table; `id` is the row identifier, no `acknowledged`/`message`), second = console.
+
+**AC-0 (facts re-read).** All file:line facts in Scope held. `AlertLogEntity` columns: non-null = `id`, `alertType`, `detectedAt`, `projectedAt`; nullable = `warehouseId`, `locationId`, `skuId`, `lotId`, `thresholdQty`, `actualQty`, `acknowledgedAt`, `acknowledgedBy` (this is the contract table's source). One unlisted consumer: `tests/unit/wms-proxy.test.ts:80` `ALERT` constant (old shape) - updated.
+
+**Field mapping implemented.** `AlertRowSchema`: `alertId` -> `id` (required string); `message` and `acknowledged` removed; added optional/nullable `locationId`, `skuId`, `lotId`, `thresholdQty`, `actualQty`, `projectedAt`; `.passthrough()` kept. Consumer sites: `WmsOpsScreen.tsx` ack target `.alertId` -> `.id` (the mutation arg / URL path name `alertId` unchanged - it is the contract's path-parameter name); `WmsAlertsTable.tsx` row `key` -> `a.id`; `wms-ops-helpers.ts` `alertLabel` uses `id`. Acknowledged state = new `isAlertAcknowledged(a)` (`acknowledgedAt` present). The «메시지» column became «내용» built by `alertSummary(a)` = `현재 <actualQty> / 임계 <thresholdQty> · 위치 <locationId ?? warehouseId>` (`—` only when none of those exist).
+
+**Row-level tolerance (Scope 4).** `AlertPageSchema` is now `content: z.array(z.unknown())` + `transform` that `safeParse`s each row with `AlertRowSchema`, drops failures and reports `excludedRows` (envelope `page` still strict; `wmsPage()` untouched). `AlertPage` became an explicit interface (`excludedRows?`, `sort?`). The table shows `wms-alerts-excluded-note` ("해석할 수 없는 알림 N건은 표에서 제외했습니다."). No server log line was added (the visible note is the surfacing).
+
+**Fixture.** `shared/sample/fixtures/wms.ts` ALERTS now `id` + `locationId`/`skuId`/`lotId`/`thresholdQty`/`actualQty`/`acknowledgedAt`/`acknowledgedBy`/`projectedAt`; the `acknowledged` query filter derives from `acknowledgedAt`. Existing tests `wms-api`, `WmsOpsScreen`, `wms-proxy` moved to the producer shape. Control group: those tests plus the sample-fixture suite were all green while the real shape was broken - they fed the invented `alertId` shape, so they could not catch this.
+
+**Red before fix (AC-2/3/4/5).** New files `tests/unit/wms-alert-row-shape.test.ts` (6 tests) and `tests/unit/WmsOpsScreen-alert-row-shape.test.tsx` (4 tests). Run on the unfixed source (new tests only, source reverted to origin/main): **8 failed, 2 passed** - the 2 passes are the deliberate controls (zero alerts renders; broken page envelope still throws). Failing: `AlertPageSchema keeps the row, keyed by id` (ZodError: `alertId` expected string), `listAlerts() returns the row instead of throwing`, `getWmsSectionState: ONE alert row does not degrade...` (`expected true to be false`), `getWmsSectionState: good row + id-less row...` (same), `a non-object row is excluded too` (ZodError), and the three screen tests (AC-3 ack / AC-4 state / AC-5 table; ZodError at the real `AlertPageSchema.parse`). Because the schema failure masks the consumer sites, a second mutation was run on the fixed tree reverting ONLY the consumers (`WmsOpsScreen` ack arg back to `alertId`; `isAlertAcknowledged` back to `acknowledged === true`): 2 of 3 screen tests failed - `expected '/api/wms/alerts/undefined/acknowledge' to be '/api/wms/alerts/3f2b1c9e-0000-4000-8000-000000000001/acknowledge'` and `expected <button ...> to be null` (acked row still had the button). Sources restored afterwards.
+
+**Green.** `tsc --noEmit` rc=0; `next lint` rc=0 (one pre-existing warning in `onboarding/received-invitations/route.ts`); full console vitest `--maxWorkers=2 --minWorkers=1`: 449/450 files, 5555/5556 tests - the single failure was `WmsRefPicker — fetch + scope params (AC-2) > debounces the fetch...` (a timing flake in an unrelated file); that file re-run alone: 16/16 pass (rc=0). e2e grep (`e2e-smoke/`, `tests/e2e`, `tests/a11y`, `tests/helpers`) for `alertId` / `wms-alert-*` / «메시지» / `acknowledged`: no hits touching this screen (the only «메시지» hits are in `login-page.spec.ts`, unrelated).
+
+**Open.** AC-8 (live, next demo window) is not closed here.
