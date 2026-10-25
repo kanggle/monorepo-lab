@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-658-audit-slice-test-sends-a-source-the-api-ignores.md` — **감사 슬라이스 시험이 계약에 없는 `source=admin_actions` 를 보낸다 — 아무 소스도 안 읽고 빈 200 이라 이름과 무관하게 초록** (READY, 2026-10-25 UTC): `admin` 으로 + 받은 명령의 source 단언. 🔵 모르는 `source` 가 400 이 아니라 빈 200 인 것은 소유자 결정 거리(티켓에 기록). 분석=Opus 5.5 / 구현 권장=Haiku/Sonnet.
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
