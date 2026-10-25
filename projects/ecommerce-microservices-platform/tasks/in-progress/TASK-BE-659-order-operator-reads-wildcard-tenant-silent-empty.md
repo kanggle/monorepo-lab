@@ -8,7 +8,7 @@ ecommerce order operator reads (`/summary` · `/insights` · list · detail) wit
 
 # Status
 
-ready
+in-progress
 
 # Owner
 

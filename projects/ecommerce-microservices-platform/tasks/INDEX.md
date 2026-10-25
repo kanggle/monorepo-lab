@@ -76,13 +76,13 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-- `TASK-BE-659-order-operator-reads-wildcard-tenant-silent-empty.md` — **주문 운영자 읽기 넷(`/summary` · `/insights` · 목록 · 상세)이 `*` 테넌트에 빈 200 — 계약의 «`*` 조회 유지» 는 미구현 → `/metrics` 처럼 403** (READY, 2026-10-25 UTC): 소유자 결정(교차 테넌트 읽기를 새로 만들지 않음). `requireConcreteTenant` 재사용 + 계약 정정. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
 ## in-progress
 
-_(없음)_
+- `TASK-BE-659-order-operator-reads-wildcard-tenant-silent-empty.md` — **주문 운영자 읽기 넷(`/summary` · `/insights` · 목록 · 상세)이 `*` 테넌트에 빈 200 — 계약의 «`*` 조회 유지» 는 미구현 → `/metrics` 처럼 403** (IN-PROGRESS, 2026-10-25 UTC): 소유자 결정(교차 테넌트 읽기를 새로 만들지 않음). `requireConcreteTenant` 재사용 + 계약 정정. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 ## review
 
