@@ -10,6 +10,9 @@ import { callWmsAdmin } from './wms-client';
 // TASK-MONO-808)
 // ---------------------------------------------------------------------------
 
+/** TASK-PC-FE-372 — exported so the home headline leg (`shared/composition/operator-overview-headline.ts`) is pinned to it by a unit test. */
+export const WMS_METRICS_PATH = '/dashboard/metrics';
+
 /**
  * 입고 수량 (`qtyReceived`) · 출고 수량 (`qtyShipped`) · 출고 건수
  * (`shipmentCount`), current vs the same-length previous KST window, with a
@@ -33,7 +36,7 @@ export async function getWmsMetrics(
   const qs = new URLSearchParams({ period });
   if (warehouseId) qs.set('warehouseId', warehouseId);
   const res = await callWmsAdmin(
-    { method: 'GET', path: `/dashboard/metrics?${qs.toString()}` },
+    { method: 'GET', path: `${WMS_METRICS_PATH}?${qs.toString()}` },
     (json) => PerformanceMetricsSchema.parse(json),
   );
   return res.data;

@@ -124,13 +124,16 @@ export function getOrderInsights(period?: MetricsPeriod): Promise<OrderInsights>
   );
 }
 
+/** TASK-PC-FE-372 — exported so the home headline leg (`shared/composition/operator-overview-headline.ts`) is pinned to it by a unit test. */
+export const ORDER_METRICS_PATH = '/orders/metrics';
+
 /** GET /admin/orders/metrics?period= — the overview «실적» strip (ADR-MONO-084 P2,
  *  TASK-MONO-807): revenue · units · orders, current vs the same-length previous
  *  window, daily series. Shape = `platform/contracts/performance-metrics-contract.md`. */
 export function getOrderMetrics(period: MetricsPeriod): Promise<PerformanceMetrics> {
   const env = getServerEnv();
   return callEcommerce(
-    { method: 'GET', base: env.ECOMMERCE_ADMIN_BASE_URL, path: `/orders/metrics?period=${period}` },
+    { method: 'GET', base: env.ECOMMERCE_ADMIN_BASE_URL, path: `${ORDER_METRICS_PATH}?period=${period}` },
     (j) => PerformanceMetricsSchema.parse(j),
     ORDER_LABEL,
   );

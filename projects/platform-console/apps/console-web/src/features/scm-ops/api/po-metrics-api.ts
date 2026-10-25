@@ -10,6 +10,9 @@ import { callScm } from './scm-client';
 // (ADR-MONO-084 P5, TASK-MONO-810)
 // ---------------------------------------------------------------------------
 
+/** TASK-PC-FE-372 — exported so the home headline leg (`shared/composition/operator-overview-headline.ts`) is pinned to it by a unit test. */
+export const PO_METRICS_PATH = '/api/v1/procurement/po/metrics';
+
 /**
  * 발주 건수 (`poCount`) · 발주 금액 (`poAmount:<CUR>` — one key per currency,
  * minor units, never added across currencies) · 입고 완료 (`receivedCount`),
@@ -35,7 +38,7 @@ export async function getPoMetrics(
 ): Promise<PerformanceMetrics> {
   const qs = new URLSearchParams({ period });
   const { raw } = await callScm(
-    { path: `/api/v1/procurement/po/metrics?${qs.toString()}` },
+    { path: `${PO_METRICS_PATH}?${qs.toString()}` },
     (json) => PerformanceMetricsSchema.parse(unwrap(json)),
   );
   return raw;
