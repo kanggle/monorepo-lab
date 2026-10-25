@@ -23,7 +23,10 @@ import java.util.Optional;
  *
  * <p>Key shape: {@code feed:&lt;version&gt;:&lt;tenantId&gt;:&lt;accountId&gt;:&lt;page&gt;:&lt;size&gt;}.
  * The cached value is the JSON-serialized {@link PageResult}&lt;{@link FeedItemSnapshot}&gt;
- * built by the use case, so a hit can be returned with zero DB round-trips.
+ * built by the use case, so a hit skips the page query. It is <strong>not</strong> zero DB
+ * round-trips: the use case overlays live comment/reaction counts on every hit — two grouped
+ * aggregate queries per non-empty page (TASK-FAN-BE-053). The counts stored here are only the
+ * fallback for when that overlay query fails; nothing is served from them otherwise.
  *
  * <p><strong>Why the key carries a version (TASK-FAN-BE-046).</strong> The cached payload used
  * to be a rendered {@code FeedItemView}, whose {@code title}/{@code bodyPreview} were already
@@ -40,6 +43,13 @@ import java.util.Optional;
  * {@code community.post.published} / {@code community.follow.changed} can do explicit DEL if
  * sub-minute freshness is ever required. <strong>Entitlement is not on that list</strong>: it
  * is not cached here at all, so it needs no invalidation — see {@code GetFeedUseCase}.
+ * <strong>Neither are counts</strong>: they are re-read on every request, so a reaction or
+ * comment needs no DEL here either.
+ *
+ * <p><strong>Why {@link #KEY_VERSION} did not move for TASK-FAN-BE-053.</strong> The payload's
+ * shape did not change — the snapshot keeps {@code commentCount}/{@code reactionCount}, now as the
+ * overlay's failure fallback — so a {@code v3} entry written before the deploy deserializes to
+ * exactly what the new code expects, and its counts are overwritten on the first read.
  */
 @Slf4j
 @Component
@@ -77,7 +87,8 @@ public class FeedCacheRepository implements FeedCache {
                 .description("Number of feed cache operations that failed (fail-open to DB).")
                 .register(meterRegistry);
         this.cacheHit = Counter.builder("community_feed_cache_hits_total")
-                .description("Number of feed cache read hits (zero DB round-trips).")
+                .description("Number of feed cache read hits (page query skipped; live counts still "
+                        + "read — 2 aggregate queries per non-empty page).")
                 .register(meterRegistry);
         this.cacheMiss = Counter.builder("community_feed_cache_misses_total")
                 .description("Number of feed cache read misses (fall-through to DB).")

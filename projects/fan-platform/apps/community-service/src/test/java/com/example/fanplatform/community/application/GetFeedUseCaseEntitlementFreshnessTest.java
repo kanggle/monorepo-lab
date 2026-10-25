@@ -8,10 +8,11 @@ import com.example.fanplatform.community.domain.post.PostRepository;
 import com.example.fanplatform.community.domain.post.PostType;
 import com.example.fanplatform.community.domain.post.PostVisibility;
 import com.example.fanplatform.community.domain.reaction.ReactionRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -63,7 +64,15 @@ class GetFeedUseCaseEntitlementFreshnessTest {
     @Mock MembershipChecker membershipChecker;
     @Mock FeedCache feedCache;
 
-    @InjectMocks GetFeedUseCase useCase;
+    GetFeedUseCase useCase;
+
+    @BeforeEach
+    void setUp() {
+        // FeedReader is real: the tests stub the repositories it reads through (TASK-FAN-BE-053).
+        useCase = new GetFeedUseCase(
+                new FeedReader(postRepository, commentRepository, reactionRepository),
+                membershipChecker, feedCache, new SimpleMeterRegistry());
+    }
 
     private ActorContext fan() {
         return new ActorContext(FAN, TENANT, Set.of("FAN"));
@@ -151,15 +160,18 @@ class GetFeedUseCaseEntitlementFreshnessTest {
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("AC-3: 캐시 히트는 여전히 DB 왕복 0회다 (무력화가 아니라 수정임을 못박는다)")
-    void cacheHit_stillCostsZeroDatabaseRoundTrips() {
+    @DisplayName("AC-3: 캐시 히트는 여전히 페이지 질의를 하지 않는다 (무력화가 아니라 수정임을 못박는다)")
+    void cacheHit_stillSkipsThePageQuery() {
         cacheHit(snapshot("p1", PostVisibility.PUBLIC, AUTHOR));
 
         feed();
 
         // Fixing correctness by simply not caching would also make AC-1/AC-2 pass. This is the
         // assertion that would fail in that case.
-        verifyNoInteractions(postRepository, commentRepository, reactionRepository);
+        // (Until TASK-FAN-BE-053 this asserted zero DB round-trips. A hit now reads the live
+        // comment/reaction counts — pinned in GetFeedUseCaseCountFreshnessTest — but the page
+        // itself must still come from the cache.)
+        verifyNoInteractions(postRepository);
     }
 
     @Test

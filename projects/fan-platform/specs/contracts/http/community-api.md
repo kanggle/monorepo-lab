@@ -324,6 +324,25 @@ When `locked=true`, `title` and `bodyPreview` are `null` and `mediaRefs` is `[]`
 render a "Subscribe" gate). A photo URL is content — whoever holds it can fetch the photo — so it
 is redacted on exactly the terms the title is (see § `mediaRefs` below).
 
+### Freshness — two different promises (TASK-FAN-BE-053)
+
+The feed makes two freshness promises, and they are deliberately not the same:
+
+| What | Freshness |
+|---|---|
+| **Page composition** — which posts are on the page, their order, `totalElements` / `totalPages` / `hasNext`, and the post facts (`title`, `bodyPreview`, `mediaRefs`, `visibility`, `publishedAt`) | May be up to **5 minutes** stale (server-side page cache, TTL-only). A newly published post or a new follow appears after at most that window. |
+| **`commentCount` / `reactionCount`** | The value **at the time of the read** — the same value `GET /api/community/posts/{id}` returns at that moment. A reaction or comment is reflected on the very next feed request, regardless of the page cache. |
+| **`locked`** (and therefore the redaction of `title` / `bodyPreview` / `mediaRefs`) | Evaluated at the time of the read (TASK-FAN-BE-046). |
+
+**Degraded counts.** If the count lookup itself fails while the page is served from the cache, the
+response is still 200 and the two counts fall back to the values captured when the page was cached
+(at most 5 minutes old). A client cannot tell this case apart from the normal one and does not need
+to: the counts are display information, and failing the whole feed over them would trade a stale
+number for an empty screen. A failure of the page query itself is not covered by this fallback.
+
+A post deleted after the page was cached keeps its slot until the page expires (composition
+staleness) and reports `0` for both counts.
+
 ### `mediaRefs` — display-ready https URLs (TASK-MONO-679 ⓐ)
 
 Owner decision, 2026-09-15. A media ref is an **absolute `https://` URL a browser renders as-is** —

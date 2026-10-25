@@ -1,14 +1,19 @@
 package com.example.fanplatform.community.integration;
 
 import com.example.fanplatform.community.application.PostMediaRefSerializer;
+import com.example.fanplatform.community.domain.comment.Comment;
 import com.example.fanplatform.community.domain.follow.Follow;
 import com.example.fanplatform.community.domain.post.Post;
 import com.example.fanplatform.community.domain.post.PostType;
 import com.example.fanplatform.community.domain.post.PostVisibility;
 import com.example.fanplatform.community.domain.post.status.ActorType;
+import com.example.fanplatform.community.domain.reaction.Reaction;
+import com.example.fanplatform.community.domain.reaction.ReactionType;
 import com.example.fanplatform.community.infrastructure.cache.FeedCacheRepository;
+import com.example.fanplatform.community.infrastructure.jpa.CommentJpaRepository;
 import com.example.fanplatform.community.infrastructure.jpa.FollowJpaRepository;
 import com.example.fanplatform.community.infrastructure.jpa.PostJpaRepository;
+import com.example.fanplatform.community.infrastructure.jpa.ReactionJpaRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -68,6 +73,12 @@ class FeedQueryIntegrationTest extends CommunityServiceIntegrationBase {
     @Autowired
     StringRedisTemplate stringRedisTemplate;
 
+    @Autowired
+    ReactionJpaRepository reactionJpaRepository;
+
+    @Autowired
+    CommentJpaRepository commentJpaRepository;
+
     private String fanId;
     private String artistA;
     private String artistB;
@@ -108,8 +119,9 @@ class FeedQueryIntegrationTest extends CommunityServiceIntegrationBase {
 
     @AfterEach
     void cleanUp() {
-        followJpaRepository.deleteAll();
-        postJpaRepository.deleteAll();
+        // TRUNCATE, not deleteAll(): the TASK-FAN-BE-053 cells below also write reactions and
+        // comments, and must not leak them into the next class on the shared container.
+        truncateAll();
     }
 
     private void persistPublishedPost(String author, Instant publishedAt) {
@@ -257,11 +269,93 @@ class FeedQueryIntegrationTest extends CommunityServiceIntegrationBase {
         int secondSize = second.path("data").path("content").size();
 
         assertThat(secondTotal)
-                .as("read-through cache must serve the PRE-mutation snapshot — proves no DB hit")
+                .as("read-through cache must serve the PRE-mutation page — proves the page query did not run")
                 .isEqualTo(firstTotal);
         assertThat(secondSize)
                 .as("cached page content must match the first call exactly")
                 .isEqualTo(firstSize);
+    }
+
+    // ------------------------------------------------------------------
+    // TASK-FAN-BE-053 — counts are read at request time, the page is not
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("🔴 053 AC-6: 캐시를 채운 뒤 반응·댓글을 더하면 TTL 안에서도 다음 조회에 새 수치가 보인다")
+    void countsAddedAfterCaching_visibleWithinTtl() throws Exception {
+        String fanToken = jwt.signFanToken(fanId);
+        // Derived from the constant, never re-typed (FeedCacheRepository.KEY_VERSION rule).
+        String key = FeedCacheRepository.key("fan-platform", fanId, 0, 10);
+
+        JsonNode first = fetchFeed(fanToken, 0, 10).path("data").path("content").get(0);
+        String postId = first.path("postId").asText();
+        assertThat(first.path("reactionCount").asLong()).isZero();
+        assertThat(first.path("commentCount").asLong()).isZero();
+
+        // The reaction goes through the real write path (the live measurement used PUT).
+        HttpHeaders h = authHeaders(fanToken);
+        ResponseEntity<String> put = rest.exchange(
+                url("/api/community/posts/" + postId + "/reactions"),
+                HttpMethod.PUT,
+                new HttpEntity<>("{\"reactionType\":\"LOVE\"}", h),
+                String.class);
+        assertThat(put.getStatusCode()).isEqualTo(HttpStatus.OK);
+        commentJpaRepository.save(Comment.create(
+                UUID.randomUUID().toString(), "fan-platform", postId, fanId, "첫 댓글"));
+
+        // Discriminator for "served from the cache": change a page fact in the DB. If the second
+        // call rebuilt the page, the new title would show; it must not — only the counts move.
+        jdbcTemplate.update("UPDATE posts SET title = ? WHERE id = ?", "changed-in-db", postId);
+
+        Long ttl = stringRedisTemplate.getExpire(key);
+        assertThat(ttl).as("the cached page must still be live — this is the TTL window").isPositive();
+
+        JsonNode second = fetchFeed(fanToken, 0, 10).path("data").path("content").get(0);
+        assertThat(second.path("postId").asText()).isEqualTo(postId);
+        assertThat(second.path("title").asText())
+                .as("page served from the cache (composition may be stale)")
+                .isEqualTo("title");
+        assertThat(second.path("reactionCount").asLong())
+                .as("reactionCount is read at request time, not at cache-fill time")
+                .isEqualTo(1L);
+        assertThat(second.path("commentCount").asLong()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("053 AC-5: 히트에서 집계 질의가 실제 DB 오류로 실패해도 200 + 캐시 적재 시점 수치 (트랜잭션 경계 실측)")
+    void countQueryFailsOnHit_servesCachedCounts_not500() throws Exception {
+        String fanToken = jwt.signFanToken(fanId);
+
+        JsonNode top = fetchFeed(fanToken, 0, 10).path("data").path("content").get(0);
+        String postId = top.path("postId").asText();
+        // Cache a page whose snapshot says 1 reaction: seed, evict, refill.
+        reactionJpaRepository.save(Reaction.create(postId, fanId, "fan-platform", ReactionType.LIKE));
+        stringRedisTemplate.delete(FeedCacheRepository.key("fan-platform", fanId, 0, 10));
+        assertThat(fetchFeed(fanToken, 0, 10).path("data").path("content").get(0)
+                .path("reactionCount").asLong()).isEqualTo(1L);
+
+        // A real SQL error through Hibernate — not a mocked throw. This is what exercises the
+        // transaction boundary: Hibernate marks the transaction rollback-only, so if
+        // GetFeedUseCase.execute were @Transactional the caught failure would become a 500 at
+        // commit (UnexpectedRollbackException). A Mockito throw cannot reproduce that.
+        jdbcTemplate.execute("ALTER TABLE reactions RENAME TO reactions_offline_053");
+        try {
+            ResponseEntity<String> res = rest.exchange(
+                    url("/api/community/feed?page=0&size=10"),
+                    HttpMethod.GET,
+                    new HttpEntity<>(authHeaders(fanToken)),
+                    String.class);
+            assertThat(res.getStatusCode())
+                    .as("a failed count overlay must not fail the feed")
+                    .isEqualTo(HttpStatus.OK);
+            JsonNode item = objectMapper.readTree(res.getBody()).path("data").path("content").get(0);
+            assertThat(item.path("postId").asText()).isEqualTo(postId);
+            assertThat(item.path("reactionCount").asLong())
+                    .as("fallback = the count captured when the page was cached")
+                    .isEqualTo(1L);
+        } finally {
+            jdbcTemplate.execute("ALTER TABLE reactions_offline_053 RENAME TO reactions");
+        }
     }
 
     private JsonNode fetchFeed(String token, int page, int size) throws Exception {

@@ -10,10 +10,11 @@ import com.example.fanplatform.community.domain.post.PostType;
 import com.example.fanplatform.community.domain.post.PostVisibility;
 import com.example.fanplatform.community.domain.post.status.ActorType;
 import com.example.fanplatform.community.domain.reaction.ReactionRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -52,7 +53,15 @@ class GetFeedUseCaseTest {
     @Mock MembershipChecker   membershipChecker;
     @Mock FeedCache           feedCache;
 
-    @InjectMocks GetFeedUseCase useCase;
+    GetFeedUseCase useCase;
+
+    @BeforeEach
+    void setUp() {
+        // FeedReader is real: the tests stub the repositories it reads through (TASK-FAN-BE-053).
+        useCase = new GetFeedUseCase(
+                new FeedReader(postRepository, commentRepository, reactionRepository),
+                membershipChecker, feedCache, new SimpleMeterRegistry());
+    }
 
     // -----------------------------------------------------------------------
     // Helpers
