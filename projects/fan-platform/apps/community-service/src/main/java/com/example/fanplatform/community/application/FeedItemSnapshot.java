@@ -41,6 +41,13 @@ import java.util.List;
  * content in the sense that matters here — handing it to a non-member hands them the photo — so
  * it is never let out by a path the title would not also take. Adding it changed the cached shape,
  * which is why {@code FeedCacheRepository.KEY_VERSION} moved to {@code v3}.
+ *
+ * <p><strong>{@code commentCount}/{@code reactionCount} are not served from here
+ * (TASK-FAN-BE-053).</strong> They are facts too, but facts that change on every reaction and
+ * comment, so a cached copy goes stale within the TTL. On a cache hit {@code GetFeedUseCase}
+ * replaces them with values read at request time; the cached copies are only what is served if
+ * that read fails. They stay in the type for that reason — removing them would leave the failure
+ * path nothing to fall back to.
  */
 public record FeedItemSnapshot(
         String postId,
