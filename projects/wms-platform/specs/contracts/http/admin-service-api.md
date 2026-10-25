@@ -495,6 +495,28 @@ Query parameters: `alertType`, `warehouseId`, `acknowledged` (boolean),
 
 Response `200`: paginated list of `AlertLog` rows.
 
+**`AlertLog` row fields** (exactly these twelve; source: `AlertLogResponse` /
+`AlertLogEntity`, TASK-PC-FE-373):
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | UUID | no | **Row identifier** (= source eventId). The path parameter `{alertId}` of the acknowledge endpoint carries this value. There is no `alertId` field in the response. |
+| `alertType` | string (≤ 40) | no | e.g. `LOW_STOCK`; consumers must tolerate unknown values |
+| `warehouseId` | UUID | yes | may be `null` while `locationId` is set |
+| `locationId` | UUID | yes | |
+| `skuId` | UUID | yes | |
+| `lotId` | UUID | yes | |
+| `thresholdQty` | integer | yes | |
+| `actualQty` | integer | yes | |
+| `detectedAt` | ISO-8601 instant | no | |
+| `acknowledgedAt` | ISO-8601 instant | yes | `null` = not yet acknowledged |
+| `acknowledgedBy` | string (≤ 120) | yes | may be `null` even when `acknowledgedAt` is set |
+| `projectedAt` | ISO-8601 instant | no | |
+
+There is **no `acknowledged` boolean and no `message` field** in the response.
+Acknowledged state is derived from `acknowledgedAt != null`. The `acknowledged`
+query parameter above filters on that same condition.
+
 #### `POST /api/v1/admin/dashboard/alerts/{alertId}/acknowledge` — Acknowledge alert
 
 Auth: `WMS_OPERATOR` or higher.
@@ -503,7 +525,8 @@ Requires `Idempotency-Key`.
 Request: empty body (the endpoint sets `acknowledged_at = now()` and
 `acknowledged_by = X-Actor-Id`).
 
-Response `200`: the updated `AlertLog` row.
+Response `200`: the updated `AlertLog` row (same twelve-field shape as the list
+rows above).
 Errors: `ALERT_NOT_FOUND` (404) — no alert with that id;
 `STATE_TRANSITION_INVALID` (422) — alert already acknowledged;
 `DUPLICATE_REQUEST` (409).
