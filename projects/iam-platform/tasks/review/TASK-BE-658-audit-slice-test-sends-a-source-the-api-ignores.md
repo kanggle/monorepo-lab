@@ -8,7 +8,7 @@ TASK-BE-658
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -49,9 +49,9 @@ The slice test that claims «the admin source needs only `audit.read`» exercise
 
 # Acceptance Criteria
 
-- [ ] **AC-1** — the test sends `source=admin` and asserts the captured command's `source` is `admin`; 200.
-- [ ] **AC-2** — mutation: with the test's value put back to `admin_actions`, the new assertion is red.
-- [ ] **AC-3** — `:projects:iam-platform:apps:admin-service:test --tests '*AuditControllerSliceTest' --rerun` green.
+- [x] **AC-1** — the test sends `source=admin` and asserts the captured command's `source` is `admin`; 200.
+- [x] **AC-2** — mutation: with the test's value put back to `admin_actions`, the new assertion is red.
+- [x] **AC-3** — `:projects:iam-platform:apps:admin-service:test --tests '*AuditControllerSliceTest' --rerun` green.
 
 # Related Specs
 
@@ -68,3 +68,11 @@ The slice test that claims «the admin source needs only `audit.read`» exercise
 # Failure Scenarios
 
 1. The value is fixed but nothing asserts what reached the use case — the next typo is green again. AC-1's capture.
+
+---
+
+# Implementation — 2026-10-25 UTC
+
+- `AuditControllerSliceTest.audit_query_admin_source_only_requires_audit_read` sends `source=admin` and captures the `QueryAuditCommand` the use case receives: `source == "admin"`.
+- Fixed tree: `:admin-service:test --tests '*AuditControllerSliceTest' --rerun` rc=0. Mutation (value back to `admin_actions`): rc=1, exactly this test `FAILED`. File restored afterwards.
+- Owner question left open (Out of Scope): an unknown `source` answers an empty 200, not a 400.
