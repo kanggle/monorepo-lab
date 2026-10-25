@@ -37,12 +37,14 @@ function wrapper() {
 const ALERTS: AlertPage = {
   content: [
     {
-      alertId: 'al-1',
+      id: 'al-1',
       alertType: 'LOW_STOCK',
       warehouseId: 'wh-1',
-      message: 'stock low',
+      locationId: 'loc-1',
+      thresholdQty: 10,
+      actualQty: 3,
       detectedAt: '2026-05-09T10:00:00Z',
-      acknowledged: false,
+      acknowledgedAt: null,
     },
   ],
   page: { number: 0, size: 20, totalElements: 1, totalPages: 1 },
@@ -129,7 +131,7 @@ describe('WmsOpsScreen — alert acknowledge (confirm-gated, reason-free)', () =
     const fetchMock = vi.fn((url: string, _init?: RequestInit) =>
       Promise.resolve(
         String(url).includes('/acknowledge')
-          ? jsonResponse({ ...ALERTS.content[0], acknowledged: true })
+          ? jsonResponse({ ...ALERTS.content[0], acknowledgedAt: '2026-05-09T11:00:00Z' })
           : jsonResponse(ALERTS),
       ),
     );
@@ -165,7 +167,7 @@ describe('WmsOpsScreen — alert acknowledge (confirm-gated, reason-free)', () =
     const fetchMock = vi.fn((url: string, _init?: RequestInit) => {
       if (String(url).includes('/acknowledge')) {
         return Promise.resolve(
-          jsonResponse({ ...ALERTS.content[0], acknowledged: true }),
+          jsonResponse({ ...ALERTS.content[0], acknowledgedAt: '2026-05-09T11:00:00Z' }),
         );
       }
       return Promise.resolve(
@@ -173,7 +175,7 @@ describe('WmsOpsScreen — alert acknowledge (confirm-gated, reason-free)', () =
           ...ALERTS,
           content: [
             ALERTS.content[0],
-            { ...ALERTS.content[0], alertId: 'al-2' },
+            { ...ALERTS.content[0], id: 'al-2' },
           ],
         }),
       );
@@ -185,7 +187,7 @@ describe('WmsOpsScreen — alert acknowledge (confirm-gated, reason-free)', () =
         ...ALERTS,
         content: [
           ALERTS.content[0],
-          { ...ALERTS.content[0], alertId: 'al-2' },
+          { ...ALERTS.content[0], id: 'al-2' },
         ],
       },
     });

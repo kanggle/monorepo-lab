@@ -109,7 +109,7 @@ export function WmsOpsScreen({
     if (!ackTarget) return;
     ack.mutate(
       {
-        alertId: ackTarget.alert.alertId,
+        alertId: ackTarget.alert.id,
         idempotencyKey: ackTarget.idempotencyKey,
       },
       {
@@ -155,6 +155,7 @@ export function WmsOpsScreen({
         rows={alertsData.content}
         onAck={openAck}
         canAcknowledge={canAcknowledge}
+        excludedRows={alertsData.excludedRows}
       />
 
       {/* 활동(최근 출고) glance — LAST, after the attention (alert) content
