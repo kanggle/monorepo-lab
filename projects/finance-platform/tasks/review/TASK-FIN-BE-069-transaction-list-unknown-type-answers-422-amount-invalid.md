@@ -8,7 +8,7 @@ TASK-FIN-BE-069
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -53,9 +53,9 @@ A client that sends a filter value the service does not know is told «bad reque
 
 # Acceptance Criteria
 
-- [ ] **AC-1** — contract first: allowed values + `400 VALIDATION_ERROR` in § transactions.
-- [ ] **AC-2** — `type=CREDIT` → 400 `VALIDATION_ERROR`; `status=DONE` → 400; red before the change.
-- [ ] **AC-3** — control: `type=topup` (lowercase) still 200; a `Money` violation on a POST still 422 `AMOUNT_INVALID` (existing tests stay green).
+- [x] **AC-1** — contract first: allowed values + `400 VALIDATION_ERROR` in § transactions.
+- [x] **AC-2** — `type=CREDIT` → 400 `VALIDATION_ERROR`; `status=DONE` → 400; red before the change.
+- [x] **AC-3** — control: `type=topup` (lowercase) still 200; a `Money` violation on a POST still 422 `AMOUNT_INVALID` (existing tests stay green).
 
 # Related Specs
 
@@ -74,3 +74,16 @@ A client that sends a filter value the service does not know is told «bad reque
 
 1. The global IAE arm is changed instead — every amount error becomes 400. AC-3.
 2. Only `type` is fixed and `status` keeps the 422. AC-2 names both.
+
+---
+
+# Implementation — 2026-10-25 UTC
+
+- Contract: `account-api.md` § transactions — allowed `type` / `status` values (case-insensitive, blank = no filter), 400 `VALIDATION_ERROR` for an unknown one, and the order (filter check before the account lookup → 400 before 404).
+- `TransactionController.list`: `requireKnown("type", …, TransactionType.class)` / `requireKnown("status", …, TransactionStatus.class)` → `InvalidQueryParameterException` (→ `GlobalExceptionHandler.java:160-163` 400). The service and the global IAE → 422 arm are untouched.
+
+# Verification
+
+- Red before (new slice cells on the old controller): unknown `type=CREDIT` and `status=DONE` — 2 `FAILED`; the control (`topup` · `completed` reach the service) green.
+- After: `:account-service:test --rerun` 212 tests · 0 failures · 0 skipped, including `GlobalExceptionHandlerTest` (bare IAE still 422 `AMOUNT_INVALID` — AC-3's amount-error control) and `TransactionControllerSliceTest` 5/5.
+- Console impact: none (PC-FE-370 already sends only the seven type values; the proxy passes 400 and 422 alike).
