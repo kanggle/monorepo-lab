@@ -8,7 +8,7 @@ ecommerce order operator reads (`/summary` · `/insights` · list · detail) wit
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -58,10 +58,10 @@ An operator whose token carries the wildcard tenant `*` is told the order reads 
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — the `*` caller census above (file:line), or ⚪ with the reason.
-- [ ] **AC-1** — contract first (top note · `:315` · four Errors rows).
-- [ ] **AC-2** — `*` on each of the four reads → 403 `ACCESS_DENIED`; red before the change.
-- [ ] **AC-3** — control: a concrete tenant with the order read role → 200 on all four; the `*` personas of `AdminOrderBusinessRoleGateSliceTest` updated to the new expectation, not deleted.
+- [x] **AC-0** — the `*` caller census above (file:line), or ⚪ with the reason.
+- [x] **AC-1** — contract first (top note · `:315` · four Errors rows).
+- [x] **AC-2** — `*` on each of the four reads → 403 `ACCESS_DENIED`; red before the change.
+- [x] **AC-3** — control: a concrete tenant with the order read role → 200 on all four; the `*` personas of `AdminOrderBusinessRoleGateSliceTest` updated to the new expectation, not deleted.
 
 # Related Specs
 
@@ -81,3 +81,21 @@ An operator whose token carries the wildcard tenant `*` is told the order reads 
 
 1. Only `/summary` and `/insights` change and list/detail keep the silent empty — AC-2 names four.
 2. The contract keeps «`*` keeps the read» — the next reader re-opens it. AC-1.
+
+---
+
+# Implementation — 2026-10-25 UTC
+
+**AC-0 — who calls these four with `*`:** nobody that relies on it.
+- Console: `TASK-MONO-817` AC-0 (2026-10-24) measured «콘솔에서는 아무도 닿지 못한다» — the home composition answers 400 `NO_ACTIVE_TENANT` with no active tenant (`operator-overview-composition.ts:70`), uses the assumed concrete-tenant token otherwise, and domain screens sit behind `DomainTenantGate`. The `OrderOperatorAccess` javadoc's «the console operator overview forwards `*`» (TASK-BE-506) was stale and is corrected.
+- Demo seed: `operator_token ecommerce` (concrete) — `infra/demo/seed/seed-ecommerce.sh:413,768-821`.
+- e2e / other services: no `*` call to `/api/admin/orders*` found. Only the two slice tests used `*`.
+
+**Change:**
+- Contract (`order-api.md`): top note (BE-506's «`*` kept on 4 paths» struck, TASK-BE-659 rule), § metrics sentence, and the four Errors rows (which also said a stale «Requires ADMIN role»).
+- `OrderOperatorAccess.requireRead` refuses `*` whatever the roles; `requireConcreteTenant` (metrics-only) folded into it and removed; `/metrics` keeps the same 403.
+
+# Verification
+
+- Red before: `AdminOrderBusinessRoleGateSliceTest` with the two `*` personas set to «every read 403» — both `FAILED` on the old code (the four reads answered non-403).
+- After: `:order-service:test --rerun` 472 tests · 0 failures · 0 skipped (incl. `AdminOrderMetricsControllerSliceTest` — `/metrics` `*` still 403, and the concrete-tenant personas — AC-3's control).
