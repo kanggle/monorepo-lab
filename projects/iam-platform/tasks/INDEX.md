@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-660-audit-query-unknown-source-answers-empty-200.md` — **감사 조회가 모르는 `source` 에 빈 200 → 경계에서 400 `VALIDATION_ERROR`** (READY, 2026-10-25 UTC): 소유자 결정. 선례 `BE-475`(허용 목록 밖 `status` → 400). 출처 `BE-658`. 분석=Opus 5.5 / 구현 권장=Sonnet.
+(empty)
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
@@ -115,7 +115,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-(empty)
+- `TASK-BE-660-audit-query-unknown-source-answers-empty-200.md` — **감사 조회가 모르는 `source` 에 빈 200 → 경계에서 400 `VALIDATION_ERROR`** (IN-PROGRESS, 2026-10-25 UTC): 소유자 결정. 선례 `BE-475`(허용 목록 밖 `status` → 400). 출처 `BE-658`. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
