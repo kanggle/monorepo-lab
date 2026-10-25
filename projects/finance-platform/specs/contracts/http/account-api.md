@@ -219,7 +219,9 @@ credit-target in one Tx).
 
 ## GET /api/finance/accounts/{id}/transactions
 
-Paginated (`?page=&size=&type=&status=`).
+Paginated (`?page=&size=&type=&status=`). Filters (optional, case-insensitive, blank = no filter) —
+`type` ∈ `TOPUP` · `WITHDRAW` · `TRANSFER` · `HOLD` · `CAPTURE` · `RELEASE` · `REVERSAL`;
+`status` ∈ `REQUESTED` · `VALIDATED` · `AUTHORIZED` · `SETTLED` · `COMPLETED` · `FAILED` · `REVERSED`.
 
 **200**: `{ "data": { "content": [ { "transactionId", "type", "status", "money",
 "counterpartyAccountId?", "reversalOfTransactionId?", "createdAt",
@@ -229,7 +231,10 @@ Paginated (`?page=&size=&type=&status=`).
 `size` / `totalElements` are carried both inside `data` and (redundantly) in
 `meta` for parity with the other v1 list endpoints' `meta`-only convention.
 
-**Errors**: 404 `ACCOUNT_NOT_FOUND`.
+**Errors**: 400 `VALIDATION_ERROR` (`type` / `status` not one of the values above — not this service's 422 for a
+bare `IllegalArgumentException`; TASK-FIN-BE-069 — before it, an unknown value such as `CREDIT` answered 422
+`AMOUNT_INVALID`), 404 `ACCOUNT_NOT_FOUND`. The filter check runs at the controller, before the account lookup:
+an unknown account with an unknown filter answers 400, not 404.
 
 ## GET /api/finance/accounts/metrics
 

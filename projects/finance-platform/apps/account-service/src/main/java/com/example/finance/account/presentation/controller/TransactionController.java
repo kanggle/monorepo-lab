@@ -12,6 +12,9 @@ import com.example.finance.account.application.command.ReleaseHoldCommand;
 import com.example.finance.account.application.command.TopUpCommand;
 import com.example.finance.account.application.command.TransferCommand;
 import com.example.finance.account.application.view.TransactionView;
+import com.example.finance.account.domain.transaction.TransactionType;
+import com.example.finance.account.domain.transaction.status.TransactionStatus;
+import com.example.finance.account.presentation.advice.InvalidQueryParameterException;
 import com.example.finance.account.presentation.dto.ApiEnvelope;
 import com.example.finance.account.presentation.dto.CaptureHoldRequest;
 import com.example.finance.account.presentation.dto.HoldResponse;
@@ -161,6 +164,10 @@ public class TransactionController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+        // TASK-FIN-BE-069 — an unknown filter value is 400 VALIDATION_ERROR (the metrics `period` path,
+        // InvalidQueryParameterException), never the bare-IAE 422 AMOUNT_INVALID the service's valueOf would raise.
+        requireKnown("type", type, TransactionType.class);
+        requireKnown("status", status, TransactionStatus.class);
         ActorContext actor = ActorContextResolver.currentOrThrow(ActorContext.class);
         PageResult<TransactionView> p =
                 service.listTransactions(id, actor, type, status, page, size);
@@ -170,5 +177,18 @@ public class TransactionController {
         meta.put("size", p.size());
         meta.put("totalElements", p.totalElements());
         return ResponseEntity.ok(ApiEnvelope.of(body, meta));
+    }
+
+    /** Blank = no filter (as the service reads it); otherwise the value must name a constant, case-insensitive. */
+    private static <E extends Enum<E>> void requireKnown(String name, String value, Class<E> type) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        try {
+            Enum.valueOf(type, value.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new InvalidQueryParameterException(name + " must be one of "
+                    + java.util.Arrays.toString(type.getEnumConstants()) + " (was: " + value + ")", e);
+        }
     }
 }

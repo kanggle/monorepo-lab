@@ -26,6 +26,9 @@ import java.util.Set;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -110,5 +113,37 @@ class TransactionControllerSliceTest {
                 .andExpect(jsonPath("$.data.totalElements").value(0))
                 .andExpect(jsonPath("$.data.totalPages").value(0))
                 .andExpect(jsonPath("$.meta.totalElements").value(0));
+    }
+
+    // ── TASK-FIN-BE-069 — an unknown filter value is a bad request, not an «invalid amount» ──────────
+
+    @Test
+    @DisplayName("🔴 FIN-BE-069: unknown type (CREDIT) → 400 VALIDATION_ERROR, service not called")
+    void unknownTypeIs400() throws Exception {
+        mockMvc.perform(get("/api/finance/accounts/acc-1/transactions").param("type", "CREDIT"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verify(service, never()).listTransactions(anyString(), any(), any(), any(), anyInt(), anyInt());
+    }
+
+    @Test
+    @DisplayName("🔴 FIN-BE-069: unknown status (DONE) → 400 VALIDATION_ERROR, service not called")
+    void unknownStatusIs400() throws Exception {
+        mockMvc.perform(get("/api/finance/accounts/acc-1/transactions").param("status", "DONE"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verify(service, never()).listTransactions(anyString(), any(), any(), any(), anyInt(), anyInt());
+    }
+
+    @Test
+    @DisplayName("FIN-BE-069 control: a known value in any case (topup · completed) still reaches the service → 200")
+    void knownValueAnyCaseIs200() throws Exception {
+        when(service.listTransactions(anyString(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(new PageResult<>(List.of(view()), 0, 20, 1, 1));
+
+        mockMvc.perform(get("/api/finance/accounts/acc-1/transactions")
+                        .param("type", "topup").param("status", "completed"))
+                .andExpect(status().isOk());
+        verify(service).listTransactions(anyString(), any(), eq("topup"), eq("completed"), anyInt(), anyInt());
     }
 }
