@@ -8,7 +8,7 @@ TASK-PC-FE-374
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -77,3 +77,11 @@ frontend
 
 - 기대값을 파생 함수로 재계산하는 테스트 → 픽스처가 틀려도 초록. 금지(Scope 4).
 - 새 행의 id 가 기존 상세 화면 링크·교차 참조(주문→배송, ASN→검수)와 충돌 → 상세 표본이 깨짐. 기존 id 체계를 이어 쓴다.
+
+# Implementation Notes (2026-10-26 UTC)
+
+- 추가 행: ecommerce 주문 11(`order-sample-0007~0017`) + 배송 4 + 상품 `prod-sample-0004`·셀러 `seller-sample-0004` · scm PO 6 · erp 결재 7 · finance 거래 6(TOPUP·TRANSFER 각 3, 합이 상쇄돼 잔액 불변) · iam 로그인 10·잠금 2 · wms SHIPPED 출고 6(saga·피킹·배송 동반) + CLOSED ASN 5(검수 동반) · ledger 환율 이력 쌍당 7·8점.
+- AC-1 월 비영 일수(대표 지표): ecommerce 매출 10 · scm 발주 8 · erp 상신 10 · finance 7 · iam 로그인 성공 8 · wms 출고 7/입고 6. AC-2 주 비영: 각 1~2일(wms 출고는 기존 «주간에 0 인 날이 남는다» 대조군 때문에 09-14 하루). AC-3 월 랭킹: 상품 4 · 셀러 3. AC-4: 7·8점.
+- AC-6: `tsc` rc=0 · `lint` rc=0 · `vitest run tests/unit/sample-` 23 파일 459건 rc=0. 전체 vitest 는 rc=1 — 실패는 `TenantsScreen`·`TenantPlacement`·`TenantDetail`·`OperatorProfileEditDialog` 등 샘플 픽스처를 안 쓰는 상호작용 테스트였고, **변경 없는 main 체크아웃에서 같은 4개 파일을 돌려도 3건이 실패**(매 실행 다른 테스트) → 기존 부하 의존 flake, 이 변경과 무관.
+- 범위 판단: scm `receivedCount` 는 근거 행(RECEIVED 이력)이 없어 "0" 유지. iam `newAccount` 는 이미 `IAM_ACCOUNTS.createdAt` 파생이었고 신규 계정 행이 없어 0 유지. `ORDERS_SUMMARY`·`SHIPPINGS_SUMMARY` 를 손 상수에서 행 파생으로 바꿨다(행 수와 어긋나지 않게). DELIVERED 주문은 기존 «DELIVERED 필터 = 빈 결과» 테스트 보존을 위해 안 넣었다. 새 실현 주문의 정산 accrual 은 없다(9월 정산 기간은 의도적으로 OPEN·빈 상태).
+- 손 고친 테스트(기대값=손으로 센 상수): `sample-{ecommerce,scm,erp,finance,iam,wms}-metrics.test.ts` + 목록에 없던 `sample-fixtures-schema-{ecommerce,scm,wms}.test.ts`.

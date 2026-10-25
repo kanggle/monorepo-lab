@@ -554,6 +554,58 @@ interface OutboundOrder {
   requiredShipDate: string;
 }
 
+function pad4(n: number): string {
+  return String(n).padStart(4, '0');
+}
+
+/**
+ * TASK-PC-FE-374 — six more SHIPPED orders (ord-sample-0005..0010) shipped on
+ * Sept 2 / 4 / 9 / 10 / 12 / 13 (KST), so the «실적» strip's 출고 bars read across
+ * the month. Generated from this one seed list so the order, its saga, its
+ * picking request and its shipment can never disagree. None is shipped inside
+ * the previous-week window (09-07..08) or in the week window other than the
+ * existing ord-sample-0003 (09-14), keeping the «quiet day is "0"» control.
+ */
+interface ExtraShippedSeed {
+  n: number;
+  createdAt: string;
+  shippedAt: string;
+  skuIdx: 0 | 1 | 2;
+  qty: number;
+}
+const EXTRA_SHIPPED_SEEDS: readonly ExtraShippedSeed[] = [
+  { n: 5, createdAt: '2026-09-01T02:00:00Z', shippedAt: '2026-09-02T06:00:00Z', skuIdx: 0, qty: 25 }, // KST 09-02
+  { n: 6, createdAt: '2026-09-03T01:00:00Z', shippedAt: '2026-09-04T02:00:00Z', skuIdx: 1, qty: 40 }, // KST 09-04
+  { n: 7, createdAt: '2026-09-08T01:00:00Z', shippedAt: '2026-09-09T05:00:00Z', skuIdx: 2, qty: 15 }, // KST 09-09
+  { n: 8, createdAt: '2026-09-09T01:00:00Z', shippedAt: '2026-09-10T07:00:00Z', skuIdx: 0, qty: 35 }, // KST 09-10
+  { n: 9, createdAt: '2026-09-11T01:00:00Z', shippedAt: '2026-09-12T03:00:00Z', skuIdx: 1, qty: 30 }, // KST 09-12
+  { n: 10, createdAt: '2026-09-12T01:00:00Z', shippedAt: '2026-09-13T05:00:00Z', skuIdx: 2, qty: 10 }, // KST 09-13
+];
+
+const EXTRA_SHIPPED_ORDERS: readonly OutboundOrder[] = EXTRA_SHIPPED_SEEDS.map((s) => ({
+  orderId: `ord-sample-${pad4(s.n)}`,
+  orderNo: `ORD-${s.createdAt.slice(0, 10).replace(/-/g, '')}-${pad4(s.n)}`,
+  source: 'MANUAL',
+  customerPartnerId: PARTNERS[1].id,
+  warehouseId: WAREHOUSE.id,
+  status: 'SHIPPED',
+  sagaState: 'SHIPPED',
+  lines: [
+    {
+      orderLineId: `ol-sample-${pad4(s.n)}-1`,
+      lineNo: 1,
+      skuId: SKUS[s.skuIdx].id,
+      skuCode: SKUS[s.skuIdx].skuCode,
+      lotId: null,
+      qtyOrdered: s.qty,
+    },
+  ],
+  version: 4,
+  createdAt: s.createdAt,
+  updatedAt: s.shippedAt,
+  requiredShipDate: s.shippedAt.slice(0, 10),
+}));
+
 const OUTBOUND_ORDERS: readonly OutboundOrder[] = [
   {
     orderId: 'ord-sample-0001',
@@ -647,6 +699,7 @@ const OUTBOUND_ORDERS: readonly OutboundOrder[] = [
     updatedAt: T_MID,
     requiredShipDate: '2026-09-18',
   },
+  ...EXTRA_SHIPPED_ORDERS,
 ];
 
 function orderById(id: string): OutboundOrder | undefined {
@@ -704,14 +757,16 @@ function ordersFixture(path: string): unknown {
 // fixture function so both answer the SAME data.
 // ---------------------------------------------------------------------------
 
-const SAMPLE_WMS_SHIPMENTS = OUTBOUND_ORDERS.filter((o) => o.status === 'SHIPPED').map((o) => ({
-  shipmentId: 'ship-sample-0001',
+const SAMPLE_WMS_SHIPMENTS = OUTBOUND_ORDERS.filter((o) => o.status === 'SHIPPED').map((o, i) => ({
+  // The first SHIPPED order (ord-sample-0003) keeps ship-sample-0001 / TRACK-SAMPLE-0001
+  // (coverage.ts and the dispatch lookup name it); later ones continue the sequence.
+  shipmentId: `ship-sample-${pad4(i + 1)}`,
   orderId: o.orderId,
   orderNo: o.orderNo,
   warehouseId: o.warehouseId,
-  shipmentNo: 'SHP-20260505-0001',
+  shipmentNo: `SHP-20260505-${pad4(i + 1)}`,
   carrierCode: 'CJ-LOGISTICS',
-  trackingNo: 'TRACK-SAMPLE-0001',
+  trackingNo: `TRACK-SAMPLE-${pad4(i + 1)}`,
   shippedAt: o.updatedAt,
   totalQty: o.lines.reduce((sum, l) => sum + l.qtyOrdered, 0),
   lastEventAt: o.updatedAt,
@@ -739,7 +794,65 @@ function shipmentsFixture(path: string): unknown {
 // § 1.4 inbound (ASN) summary + inspection
 // ---------------------------------------------------------------------------
 
-const ASNS = [
+interface AsnSeed {
+  asnId: string;
+  asnNo: string;
+  warehouseId: string;
+  warehouseCode: string;
+  supplierPartnerId: string;
+  supplierName: string;
+  status: string;
+  source: string;
+  expectedArriveDate: string;
+  lineCount: number;
+  receivedAt: string;
+  closedAt: string | null;
+  lastEventAt: string;
+  version: number;
+}
+
+/**
+ * TASK-PC-FE-374 — five more CLOSED ASNs (asn-sample-0003..0007), each with a
+ * completed inspection, put away on Sept 3 / 6 / 10 / 14 / 15 (KST) so the
+ * «실적» strip's 입고 bars read across the month and the week window. Nothing is
+ * closed inside the previous-week window (09-07..08). `n=4` carries a small
+ * damaged-quantity discrepancy (83 expected, 80 passed, 3 damaged).
+ */
+interface ExtraClosedAsnSeed {
+  n: number;
+  receivedAt: string;
+  closedAt: string;
+  lineCount: number;
+  expected: number;
+  passed: number;
+  damaged: number;
+}
+const EXTRA_CLOSED_ASN_SEEDS: readonly ExtraClosedAsnSeed[] = [
+  { n: 3, receivedAt: '2026-09-03T01:00:00Z', closedAt: '2026-09-03T04:00:00Z', lineCount: 4, expected: 120, passed: 120, damaged: 0 }, // KST 09-03
+  { n: 4, receivedAt: '2026-09-06T00:00:00Z', closedAt: '2026-09-06T01:00:00Z', lineCount: 2, expected: 83, passed: 80, damaged: 3 }, // KST 09-06
+  { n: 5, receivedAt: '2026-09-10T02:00:00Z', closedAt: '2026-09-10T06:00:00Z', lineCount: 6, expected: 200, passed: 200, damaged: 0 }, // KST 09-10
+  { n: 6, receivedAt: '2026-09-14T01:00:00Z', closedAt: '2026-09-14T03:00:00Z', lineCount: 3, expected: 60, passed: 60, damaged: 0 }, // KST 09-14
+  { n: 7, receivedAt: '2026-09-15T00:30:00Z', closedAt: '2026-09-15T02:00:00Z', lineCount: 2, expected: 45, passed: 45, damaged: 0 }, // KST 09-15
+];
+
+const EXTRA_CLOSED_ASNS: readonly AsnSeed[] = EXTRA_CLOSED_ASN_SEEDS.map((s) => ({
+  asnId: `asn-sample-${pad4(s.n)}`,
+  asnNo: `ASN-${s.receivedAt.slice(0, 10).replace(/-/g, '')}-${pad4(s.n)}`,
+  warehouseId: WAREHOUSE.id,
+  warehouseCode: WAREHOUSE.warehouseCode,
+  supplierPartnerId: PARTNERS[0].id,
+  supplierName: PARTNERS[0].name,
+  status: 'CLOSED',
+  source: s.n % 2 === 0 ? 'MANUAL' : 'WEBHOOK_ERP',
+  expectedArriveDate: s.receivedAt.slice(0, 10),
+  lineCount: s.lineCount,
+  receivedAt: s.receivedAt,
+  closedAt: s.closedAt,
+  lastEventAt: s.closedAt,
+  version: 2,
+}));
+
+const ASNS: readonly AsnSeed[] = [
   {
     asnId: 'asn-sample-0001',
     asnNo: 'ASN-20260420-0001',
@@ -772,7 +885,8 @@ const ASNS = [
     lastEventAt: T_MID,
     version: 2,
   },
-] as const;
+  ...EXTRA_CLOSED_ASNS,
+];
 
 function asnsFixture(path: string): unknown {
   const { pathname, query } = splitPath(path);
@@ -797,7 +911,8 @@ function asnInspectionFixture(path: string): unknown {
   const m = pathname.match(new RegExp(`^${ADMIN}/dashboard/asns/([^/]+)/inspection$`));
   if (!m) return undefined;
   const asnId = decodeURIComponent(m[1]);
-  if (asnId === ASN_INSPECTION.asnId) return ASN_INSPECTION;
+  const found = ASN_INSPECTIONS.find((i) => i.asnId === asnId);
+  if (found) return found;
   return fixtureNotFound('NOT_FOUND', 'inspection not yet completed');
 }
 
@@ -815,6 +930,23 @@ const ASN_INSPECTION = {
   totalQtyDamaged: 0,
   totalQtyShort: 0,
 };
+
+/** Every completed inspection — the CLOSED ASNs' (TASK-PC-FE-374 added five). */
+const ASN_INSPECTIONS = [
+  ASN_INSPECTION,
+  ...EXTRA_CLOSED_ASN_SEEDS.map((s) => ({
+    asnId: `asn-sample-${pad4(s.n)}`,
+    warehouseId: WAREHOUSE.id,
+    inspectionCompletedAt: s.closedAt,
+    inspectorId: 'insp-sample-0001',
+    totalLines: s.lineCount,
+    discrepancyCount: s.damaged > 0 ? 1 : 0,
+    totalQtyExpected: s.expected,
+    totalQtyPassed: s.passed,
+    totalQtyDamaged: s.damaged,
+    totalQtyShort: 0,
+  })),
+];
 
 // ---------------------------------------------------------------------------
 // GET /dashboard/metrics?period= — the 개요 «실적» strip (ADR-MONO-084 P3,
@@ -835,9 +967,11 @@ interface SampleFlow {
   qty: number;
 }
 
-const SAMPLE_PUTAWAYS: readonly SampleFlow[] = ASNS.filter(
-  (a) => a.status === 'CLOSED' && a.asnId === ASN_INSPECTION.asnId,
-).map((a) => ({ at: a.closedAt ?? a.lastEventAt, warehouseId: a.warehouseId, qty: ASN_INSPECTION.totalQtyPassed }));
+const SAMPLE_PUTAWAYS: readonly SampleFlow[] = ASNS.flatMap((a): SampleFlow[] => {
+  const inspection = ASN_INSPECTIONS.find((i) => i.asnId === a.asnId);
+  if (a.status !== 'CLOSED' || !inspection) return [];
+  return [{ at: a.closedAt ?? a.lastEventAt, warehouseId: a.warehouseId, qty: inspection.totalQtyPassed }];
+});
 
 const SAMPLE_SHIPPED: readonly SampleFlow[] = SAMPLE_WMS_SHIPMENTS.map((s) => ({
   at: s.shippedAt,
@@ -1169,6 +1303,13 @@ const SAGAS: Readonly<Record<string, { sagaId: string; version: number; startedA
   'ord-sample-0002': { sagaId: 'saga-sample-0002', version: 2, startedAt: T_MID },
   'ord-sample-0003': { sagaId: 'saga-sample-0003', version: 4, startedAt: T_EARLY },
   'ord-sample-0004': { sagaId: 'saga-sample-0004', version: 2, startedAt: T_MID },
+  // TASK-PC-FE-374 — the six extra SHIPPED orders.
+  ...Object.fromEntries(
+    EXTRA_SHIPPED_SEEDS.map((s) => [
+      `ord-sample-${pad4(s.n)}`,
+      { sagaId: `saga-sample-${pad4(s.n)}`, version: 4, startedAt: s.createdAt },
+    ]),
+  ),
 };
 
 function sagaFixture(path: string): unknown {
@@ -1262,6 +1403,37 @@ const PICKING_REQUESTS: Readonly<Record<string, unknown[]>> = {
     },
   ],
   'ord-sample-0004': [],
+  // TASK-PC-FE-374 — the six extra SHIPPED orders: one CONFIRMED picking request each.
+  ...Object.fromEntries(
+    EXTRA_SHIPPED_SEEDS.map((s) => {
+      const orderId = `ord-sample-${pad4(s.n)}`;
+      return [
+        orderId,
+        [
+          {
+            pickingRequestId: `pr-sample-${pad4(s.n)}`,
+            orderId,
+            sagaId: SAGAS[orderId].sagaId,
+            warehouseId: WAREHOUSE.id,
+            status: 'CONFIRMED',
+            lines: [
+              {
+                pickingRequestLineId: `prl-sample-${pad4(s.n)}`,
+                orderLineId: `ol-sample-${pad4(s.n)}-1`,
+                skuId: SKUS[s.skuIdx].id,
+                lotId: null,
+                locationId: LOCATIONS[s.skuIdx].id,
+                qtyToPick: s.qty,
+              },
+            ],
+            version: 1,
+            createdAt: s.createdAt,
+            updatedAt: s.shippedAt,
+          },
+        ],
+      ];
+    }),
+  ),
 };
 
 function pickingRequestsFixture(path: string): unknown {
@@ -1303,23 +1475,26 @@ function wmsOutboundFixture(path: string): unknown {
 // `callFlatEnvelopeGateway`, core `flat` — see module header)
 // ---------------------------------------------------------------------------
 
-const SAMPLE_WMS_DISPATCH = {
-  id: 'dispatch-sample-0001',
-  shipmentId: SAMPLE_WMS_SHIPMENTS[0]?.shipmentId,
+// One dispatch per sample shipment (TASK-PC-FE-374 grew the shipments from 1 to 7;
+// the first keeps `dispatch-sample-0001` / `TRACK-SAMPLE-0001`).
+const SAMPLE_WMS_DISPATCHES = SAMPLE_WMS_SHIPMENTS.map((s, i) => ({
+  id: `dispatch-sample-${pad4(i + 1)}`,
+  shipmentId: s.shipmentId,
   status: 'DISPATCHED',
-  trackingNo: 'TRACK-SAMPLE-0001',
-  carrierCode: 'CJ-LOGISTICS',
-};
+  trackingNo: s.trackingNo,
+  carrierCode: s.carrierCode,
+}));
 
 function dispatchByShipmentFixture(path: string): unknown {
   const { pathname } = splitPath(path);
   const m = pathname.match(new RegExp(`^${LOGISTICS}/dispatches/by-shipment/([^/]+)$`));
   if (!m) return undefined;
   const shipmentId = decodeURIComponent(m[1]);
-  if (shipmentId !== SAMPLE_WMS_DISPATCH.shipmentId) {
+  const dispatch = SAMPLE_WMS_DISPATCHES.find((d) => d.shipmentId === shipmentId);
+  if (!dispatch) {
     return fixtureNotFound('DISPATCH_NOT_FOUND', 'no dispatch for this shipment');
   }
-  return { data: SAMPLE_WMS_DISPATCH };
+  return { data: dispatch };
 }
 
 function wmsOutboundLogisticsFixture(path: string): unknown {
@@ -1374,6 +1549,6 @@ export const WMS_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
     pickingRequests: Object.values(PICKING_REQUESTS).flat(),
   },
   'flat:wms_outbound_logistics': {
-    dispatch: SAMPLE_WMS_DISPATCH,
+    dispatch: SAMPLE_WMS_DISPATCHES,
   },
 };

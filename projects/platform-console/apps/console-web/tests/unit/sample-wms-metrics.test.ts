@@ -80,20 +80,50 @@ describe('sample wms /dashboard/metrics (TASK-MONO-808)', () => {
     }
   });
 
-  it('입고 수량 = the CLOSED ASN’s inspection passed quantity, put away in the month (not this week)', async () => {
+  it('입고 수량 = the CLOSED ASNs’ inspection passed quantities, put away by closedAt', async () => {
     const inspection = InspectionSchema.parse(
       await (await admin('/api/v1/admin/dashboard/asns/asn-sample-0002/inspection')).json(),
     );
     const month = await metrics('month');
     const week = await metrics('week');
-    // Put away 2026-09-12 (KST) — inside 이번 달, before this Monday (09-14).
-    expect(month.metrics.find((x) => x.key === 'qtyReceived')?.current).toBe(
-      String(inspection.totalQtyPassed),
-    );
-    expect(week.metrics.find((x) => x.key === 'qtyReceived')?.current).toBe('0');
+    // asn-0002 put away 2026-09-12 (KST) alone on that day — its own passed quantity.
     expect(month.series.find((s) => s.date === '2026-09-12')?.values.qtyReceived).toBe(
       String(inspection.totalQtyPassed),
     );
+    // Hand-summed month: 500 (09-12) + 120 (09-03) + 80 (09-06; 83 expected, 3 damaged)
+    // + 200 (09-10) + 60 (09-14) + 45 (09-15) = 1005.
+    expect(month.metrics.find((x) => x.key === 'qtyReceived')?.current).toBe('1005');
+    // Week window (09-14..15): 60 + 45 = 105.
+    expect(week.metrics.find((x) => x.key === 'qtyReceived')?.current).toBe('105');
+    const received = (m: typeof month) =>
+      m.series.filter((s) => s.values.qtyReceived !== '0').map((s) => s.date);
+    expect(received(month)).toEqual([
+      '2026-09-03', '2026-09-06', '2026-09-10', '2026-09-12', '2026-09-14', '2026-09-15',
+    ]);
+    expect(received(week)).toEqual(['2026-09-14', '2026-09-15']);
+    // The damaged-quantity ASN: passed (80), not expected (83), is what counts.
+    const damaged = InspectionSchema.parse(
+      await (await admin('/api/v1/admin/dashboard/asns/asn-sample-0004/inspection')).json(),
+    );
+    expect(damaged.totalQtyPassed).toBe(80);
+    expect(damaged.totalQtyExpected).toBe(83);
+  });
+
+  it('TASK-PC-FE-374 — 출고 bars: 7 KST days in the month (hand-listed), 1 in the week', async () => {
+    const month = await metrics('month');
+    const week = await metrics('week');
+    const shippedDays = (m: typeof month) =>
+      m.series.filter((s) => s.values.shipmentCount !== '0').map((s) => s.date);
+    expect(shippedDays(month)).toEqual([
+      '2026-09-02', '2026-09-04', '2026-09-09', '2026-09-10',
+      '2026-09-12', '2026-09-13', '2026-09-14',
+    ]);
+    expect(shippedDays(week)).toEqual(['2026-09-14']);
+    // Month: 25 + 40 + 15 + 35 + 30 + 10 + 20 (ord-0003) = 175 over 7 shipments; week: 20 over 1.
+    expect(month.metrics.find((x) => x.key === 'qtyShipped')?.current).toBe('175');
+    expect(month.metrics.find((x) => x.key === 'shipmentCount')?.current).toBe('7');
+    expect(week.metrics.find((x) => x.key === 'qtyShipped')?.current).toBe('20');
+    expect(week.metrics.find((x) => x.key === 'shipmentCount')?.current).toBe('1');
   });
 
   it('the series is every date of the current window, zero-filled, and sums to the current totals', async () => {
@@ -107,7 +137,7 @@ describe('sample wms /dashboard/metrics (TASK-MONO-808)', () => {
       // Zero-filled: quiet days are present as "0", not dropped.
       expect(m.series.some((s) => s.values.qtyShipped === '0'), p).toBe(true);
     }
-    // The single shipment is on 09-14 KST (09:00Z = 18:00 KST).
+    // In the week window the only shipment is on 09-14 KST (09:00Z = 18:00 KST).
     const week = await metrics('week');
     expect(week.series.find((s) => s.date === '2026-09-14')?.values.shipmentCount).toBe('1');
     expect(week.series.find((s) => s.date === '2026-09-15')?.values.shipmentCount).toBe('0');

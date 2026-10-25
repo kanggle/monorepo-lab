@@ -103,10 +103,14 @@ describe('sample finance /api/finance/accounts/metrics (TASK-MONO-812)', () => {
     }
     expect(sawNonZero).toBe(true);
 
-    // The month: the one 80,000 원 top-up (09-01); the ACTIVE hold and the FAILED
-    // transfer move nothing — the control group, visible on the sample screen.
+    // The month (hand-summed): 4 top-ups 80,000 + 50,000 + 30,000 + 20,000 = 180,000 원
+    // and 3 transfers 40,000 + 25,000 + 35,000 = 100,000 원; the ACTIVE hold and the
+    // FAILED transfer move nothing — the control group, visible on the sample screen.
     const month = await metrics('month');
-    expect(month.metrics.map((x) => x.current)).toEqual(['1', '80000', '0', '0', '0', '0']);
+    expect(month.metrics.map((x) => x.current)).toEqual(['4', '180000', '3', '100000', '0', '0']);
+    // The week window (09-14..15 KST): the 09-14 transfer 35,000 + the 09-15 top-up 20,000.
+    const week = await metrics('week');
+    expect(week.metrics.map((x) => x.current)).toEqual(['1', '20000', '1', '35000', '0', '0']);
   });
 
   it('the series is every date of the current window, zero-filled, every key, summing to the totals', async () => {
@@ -122,6 +126,20 @@ describe('sample finance /api/finance/accounts/metrics (TASK-MONO-812)', () => {
     const month = await metrics('month');
     // 2026-09-01T00:05Z = 09:05 KST on 09-01.
     expect(month.series.find((s) => s.date === '2026-09-01')?.values['topupAmount:KRW']).toBe('80000');
+    // TASK-PC-FE-374 density: days with a settled TOPUP/TRANSFER, hand-listed (KST).
+    const active = month.series
+      .filter((s) => s.values.topupCount !== '0' || s.values.transferCount !== '0')
+      .map((s) => s.date);
+    expect(active).toEqual([
+      '2026-09-01', '2026-09-03', '2026-09-06', '2026-09-07',
+      '2026-09-10', '2026-09-14', '2026-09-15',
+    ]);
+    const week = await metrics('week');
+    expect(
+      week.series
+        .filter((s) => s.values.topupCount !== '0' || s.values.transferCount !== '0')
+        .map((s) => s.date),
+    ).toEqual(['2026-09-14', '2026-09-15']);
   });
 
   it('no / unknown period → not answered (the console always sends one)', () => {

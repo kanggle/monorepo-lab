@@ -100,10 +100,28 @@ describe('sample erp /api/erp/approval/metrics (TASK-MONO-809)', () => {
     const approvedTotal = month.metrics
       .filter((x) => x.key === 'approved')
       .reduce((acc, x) => acc + BigInt(x.current) + BigInt(x.previous), BigInt(0));
-    // Only the one APPROVED request (finalized 2026-08-02, the previous month
-    // window) contributes — the stage-0 approval of the IN_REVIEW one does not.
-    expect(requests.filter((r) => r.status === 'APPROVED')).toHaveLength(1);
-    expect(String(approvedTotal)).toBe('1');
+    // Only the four APPROVED requests contribute — appr-0004 (finalized 2026-08-02,
+    // previous-month window) and appr-0006/0007/0009 (finalized 09-03 / 09-08 / 09-14
+    // KST, current window) — the stage-0 approval of the IN_REVIEW one does not.
+    expect(requests.filter((r) => r.status === 'APPROVED')).toHaveLength(4);
+    expect(String(approvedTotal)).toBe('4');
+    const cur = (key: string) => month.metrics.find((x) => x.key === key)?.current;
+    expect([cur('submitted'), cur('approved'), cur('rejected')]).toEqual(['10', '3', '2']);
+  });
+
+  it('TASK-PC-FE-374 — the bars are spread: month submitted on 10 KST days, week on 09-14 and 09-15', async () => {
+    const month = await metrics('month');
+    const week = await metrics('week');
+    const days = (m: typeof month, key: string) =>
+      m.series.filter((s) => s.values[key] !== '0').map((s) => s.date);
+    expect(days(month, 'submitted')).toEqual([
+      '2026-09-02', '2026-09-04', '2026-09-05', '2026-09-08', '2026-09-09',
+      '2026-09-10', '2026-09-11', '2026-09-12', '2026-09-14', '2026-09-15',
+    ]);
+    expect(days(month, 'approved')).toEqual(['2026-09-03', '2026-09-08', '2026-09-14']);
+    expect(days(month, 'rejected')).toEqual(['2026-09-09', '2026-09-15']);
+    expect(days(week, 'submitted')).toEqual(['2026-09-14', '2026-09-15']);
+    expect(week.metrics.find((x) => x.key === 'submitted')?.current).toBe('2');
   });
 
   it('the series is every date of the current window, zero-filled, and sums to the current totals', async () => {
