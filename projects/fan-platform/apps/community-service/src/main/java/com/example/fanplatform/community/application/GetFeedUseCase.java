@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.EnumMap;
 import java.util.List;
@@ -91,6 +92,7 @@ public class GetFeedUseCase {
                 .register(meterRegistry);
     }
 
+    @Transactional(readOnly = true) // MUTATION — CI-only red-before proof, do not merge
     public PageResult<FeedItemView> execute(ActorContext actor, int page, int size) {
         int safePage = Math.max(0, page);
         int safeSize = Math.min(Math.max(1, size), MAX_SIZE);
