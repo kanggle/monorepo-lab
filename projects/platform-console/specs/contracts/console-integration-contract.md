@@ -1264,7 +1264,16 @@ no § 3 row).
   this; the DRAFT PO is dispatched via procurement's existing `DRAFT →
   SUBMITTED` flow, reachable from the § 2.4.6 scm-ops PO surface). This is the
   ADR-MONO-027 D5 human-gate invariant made visible. Each suggestion row shows
-  the `triggerAvailableQty` that explains **why** it was suggested.
+  the `triggerAvailableQty` that explains **why** it was suggested. When the
+  row carries `reorderPointAtTrigger` (the reorder-point snapshot at trigger
+  time — producer `demand-planning-api.md`, present only when the SKU had a
+  `reorder_policy`), the row shows it together with `triggerAvailableQty` and
+  `suggestedQty` as a one-line bar **plus** the numbers as text (the bar is
+  never the only carrier of the values). When the key is absent (the
+  suggestion was triggered without a policy, or the row predates the field) or
+  `null`, the row shows `—` with **no** bar — the console MUST NOT substitute
+  `triggerAvailableQty`, `0`, or the current policy for the missing value.
+  The field is optional in the consumer schema (tolerance invariant unchanged).
 
 - **Resilience (§ 2.5) — action-specific producer errors mapped to actionable
   inline states (flat scm envelope)**:

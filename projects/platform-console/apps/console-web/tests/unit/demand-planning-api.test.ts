@@ -119,6 +119,8 @@ const SUGGESTIONS_ENVELOPE = {
   meta: { page: 0, size: 20, totalElements: 1, totalPages: 1 },
 };
 
+const REORDER_ROW = { ...SUGGESTIONS_ENVELOPE.data[0], reorderPointAtTrigger: 10 };
+
 const APPROVE_ENVELOPE = {
   data: {
     id: '0192-abc',
@@ -592,5 +594,21 @@ describe('demand-planning-api — tolerant parsing (unknown/future status + sour
     const page = await listSuggestions();
     expect(page.content[0].status).toBe('FUTURE_STATUS_V2');
     expect(page.content[0].source).toBe('FUTURE_SOURCE');
+  });
+
+  it('TASK-PC-FE-377 — reorderPointAtTrigger parses and is kept; an absent key still parses (stays undefined)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          data: [REORDER_ROW, { ...SUGGESTIONS_ENVELOPE.data[0], id: 's-no-rp' }],
+          meta: { page: 0, size: 20, totalElements: 2, totalPages: 1 },
+        }),
+      ),
+    );
+    const page = await listSuggestions();
+    expect(page.content[0].reorderPointAtTrigger).toBe(10);
+    expect(page.content[1].reorderPointAtTrigger).toBeUndefined();
+    expect('reorderPointAtTrigger' in page.content[1]).toBe(false);
   });
 });

@@ -50,6 +50,11 @@ export const SuggestionSchema = z
     source: z.string().nullable().optional(),
     // why it was suggested: the available qty that tripped the reorder point.
     triggerAvailableQty: z.number().nullable().optional(),
+    // TASK-PC-FE-377 — the reorder-point SNAPSHOT at trigger time (not the current
+    // policy; never changes afterwards). The producer OMITS the key when the SKU had
+    // no reorder_policy at trigger (and on rows predating the field) — key absent =
+    // no value; never substitute triggerAvailableQty / 0 for it.
+    reorderPointAtTrigger: z.number().nullable().optional(),
     // present once approve materialised a DRAFT PO.
     materializedPoId: z.string().nullable().optional(),
     createdAt: z.string().optional(),

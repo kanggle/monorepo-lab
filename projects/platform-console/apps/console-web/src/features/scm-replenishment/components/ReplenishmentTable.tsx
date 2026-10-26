@@ -1,6 +1,8 @@
 import { Button } from '@/shared/ui/Button';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
+import { barToneClass } from '@/shared/ui/InlineBar';
 import { masterRefLabel } from '@/shared/lib/master-ref-label';
+import { reorderBarGeometry, reorderBarText } from '../lib/reorder-bar';
 import {
   suggestionStatusTone,
   canApprove,
@@ -25,6 +27,60 @@ const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 function supplierCodeRef(supplierId: string | null | undefined) {
   if (!supplierId || UUID_SHAPE.test(supplierId)) return null;
   return { code: supplierId };
+}
+
+/**
+ * 「재주문점 · 발동 재고 · 제안」 칸 — `TASK-PC-FE-377`. 막대는 장식(`aria-hidden`, `InlineBar`
+ * 와 같은 규칙)이고 숫자는 항상 텍스트로 함께 있다. `reorderPointAtTrigger` 키가 없으면(정책 없이
+ * 발동했거나 필드 도입 전 행) 막대 없이 재주문점 자리에 `—` — 다른 값으로 대신 채우지 않는다.
+ */
+function ReorderPointCell({ s, i }: { s: Suggestion; i: number }) {
+  const input = {
+    reorderPoint: s.reorderPointAtTrigger,
+    triggerQty: s.triggerAvailableQty,
+    suggestedQty: s.suggestedQty,
+  };
+  const geo = reorderBarGeometry(input);
+  const text = reorderBarText(input);
+  // min-w-24 + wrapping text, not min-w-40: on a 390px phone the wider cell added ~146px
+  // to a table that already overflows the page there (measured against main).
+  return (
+    <div className="flex min-w-24 flex-col gap-1">
+      {geo && (
+        <div
+          className="relative h-2 w-full overflow-hidden rounded bg-muted"
+          aria-hidden="true"
+          data-testid={`repl-row-bar-${i}`}
+          data-overflow={geo.triggerAboveReorderPoint ? 'true' : undefined}
+        >
+          <div className="flex h-2 w-full">
+            <div
+              className={`h-2 ${barToneClass('warning')}`}
+              style={{ width: `${geo.triggerPct}%` }}
+              data-segment="trigger"
+              data-pct={geo.triggerPct}
+            />
+            <div
+              className={`h-2 ${barToneClass('progress')}`}
+              style={{ width: `${geo.suggestedPct}%` }}
+              data-segment="suggested"
+              data-pct={geo.suggestedPct}
+            />
+          </div>
+          {geo.reorderPointPct !== null && (
+            <div
+              className="absolute top-0 h-2 w-0.5 bg-foreground"
+              style={{ left: `${geo.reorderPointPct}%` }}
+              data-marker="reorder-point"
+            />
+          )}
+        </div>
+      )}
+      <span className="text-xs leading-tight" data-testid={`repl-row-bar-text-${i}`}>
+        {text}
+      </span>
+    </div>
+  );
 }
 
 /**
@@ -86,7 +142,7 @@ export function ReplenishmentTable({
               추천 수량
             </th>
             <th scope="col" className="p-2">
-              트리거 가용재고
+              재주문점 · 발동 재고 · 제안
             </th>
             <th scope="col" className="p-2">
               상태
@@ -135,7 +191,7 @@ export function ReplenishmentTable({
                 </td>
                 <td className="p-2">{s.suggestedQty ?? '—'}</td>
                 <td className="p-2" data-testid={`repl-row-trigger-${i}`}>
-                  {s.triggerAvailableQty ?? '—'}
+                  <ReorderPointCell s={s} i={i} />
                 </td>
                 <td className="p-2" data-testid={`repl-row-status-${i}`}>
                   <StatusBadge tone={suggestionStatusTone(s.status)}>
