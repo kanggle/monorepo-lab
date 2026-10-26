@@ -9,7 +9,7 @@ post 상세 화면에 댓글 **목록 + 작성 + 본인 삭제** UI 를 넣는�
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -233,3 +233,17 @@ post 상세 화면(`/posts/[id]`)에서 팬이 그 글의 댓글을 **읍고**, 
   - AC-5 는 «404 또는 빈 응답이어도 섹션만 숨겨진다» 를 라이브로 재라고 적었고 ⚪ 를 닫힘으로 받는다고 적지 않았다. 위 200 경로는 그 AC 가 묻는 분기가 아니다.
 
 ⇒ review 유지 — 남은 것: AC-5 의 404 분기 (라이브로 만들 수 없다 — ⚪ + 단위 시험 증거로 닫을지는 소유자 결정)
+
+---
+
+## CORRECTION — AC-5 404 분기 ⚪ 소유자 결정 · 닫음 (2026-10-26 UTC)
+
+- **AC-5 의 404 분기는 ⚪ 로 닫는다 — 라이브로 404 를 만들 수 없다(백엔드가 댓글 목록 엔드포인트를 서빙).** 소유자 결정(2026-10-26 UTC). 200 경로는 35차 CORRECTION 에서 라이브 ✅(목록 · 작성 · 삭제).
+- **갈음하는 증거 = 단위 시험** `projects/fan-platform/web/fan-platform-web/src/__tests__/comment-section-404.test.tsx` (파일 존재 확인, 2026-10-26). 4 셀이 단언하는 것:
+  - 🔴 `getComments` 가 `ApiError(404)` 로 reject → `memberPostDetail` 렌더가 throw 하지 않고, `member-post-detail` · 본문 · `좋아요` 반응 버튼은 있으며 `comment-section` 만 없다.
+  - `ApiError(0, NETWORK_ERROR)` → 같은 방식으로 섹션만 숨는다.
+  - 대조군: 성공 응답 → `comment-section` 과 댓글 본문이 보인다.
+  - 빈 목록 → `comment-section` + `comment-empty` (깨진 것처럼 보이지 않음).
+- **4차원 확인 (2026-10-26 UTC):** (a) `gh pr view 4197` → `state=MERGED`, 머지 커밋 `2ada6cbe33b00031ea8b50abfe576a7629feb6ba`(2026-10-06T19:22:58Z). (b) `git merge-base --is-ancestor 2ada6cbe3 origin/main` → rc=0 (origin/main tip `73935df10`). (c) `statusCheckRollup` 65 건 중 `conclusion=="FAILURE"` **0**. (d) `# Acceptance Criteria` 를 열어 읽음: AC-0 · 1 · 2 · 3 · 4 · 6 은 자기 `[x]`, AC-5 는 200 경로 라이브 ✅(35차) + 404 분기 ⚪(위, 소유자 결정) — 전부 닫힘. 열린 AC 없음.
+
+⇒ done 으로 이동.

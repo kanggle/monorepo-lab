@@ -89,11 +89,11 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## review
 
-- `TASK-SCM-BE-062-suggestion-carries-reorder-point-at-trigger.md` — **REVIEW (2026-10-22 UTC · CI IT pass · AC-3 = 굽기 뒤 라이브) — 소유자 결정 (가) 스냅샷 `reorderPointAtTrigger` · 계약 · 구현 완료, 단위/슬라이스/계약 시험 로컬 초록 · Testcontainers IT 는 CI 대기 · 서버 변경 = 굽기.** 보충 제안 행에 «발동 당시 재주문점» 을 저장 · 응답 — 콘솔이 SKU 마다 정책을 따로 부르지 않고 «재주문점 · 발동 재고 · 제안 수량» 막대를 그리게. AC-0: `ADR-MONO-017` 갈래 B 해당 **안 함**(D3 = 교차 도메인 집계 엔드포인트 · 이것은 단일 도메인 기존 행의 필드 추가) · 콘솔 zod `.passthrough()` 라 추가가 안 깨짐. 소유자 결정: 스냅샷(추천) vs 현재 정책. 후속 = 콘솔 티켓. 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ⚪ — 보충 제안 0 건.
 
 
 
 ## done
+- ✅ `TASK-SCM-BE-062-suggestion-carries-reorder-point-at-trigger.md` — **DONE 2026-10-26 UTC (4-dim verified)** — impl PR #4477(`f23bec8e9`, 실패 0) · AC-3 새 행 35차 창 ✅ · «옛 제안은 key 없음» ⚪ 소유자 결정(신선 볼륨에 V4 이전 행 없음) · 콘솔 후속 `TASK-PC-FE-377` 기안. 기록 = 티켓 끝 `## CORRECTION — AC-3 «옛 제안은 key 없음» 절반 ⚪ 소유자 결정 · 콘솔 후속 기안 · 닫음`
 - ✅ `TASK-SCM-BE-063-asn-receipt-bypasses-po-status-check.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4523(`4763a2ac2`, 실패 0) · ASN 입고가 발주 상태 기계를 지난다(취소 · 미확정 발주는 422 `PO_STATUS_TRANSITION_INVALID`) · 34차 AMI 에 실림 · `TASK-MONO-810` 계약 각주 제거 확인 · 라이브 ⚪(볼륨에 `CANCELED` 발주 없음).
 - ✅ `TASK-SCM-BE-061-received-event-drops-every-line-after-the-first.md` — **DONE 2026-10-07 UTC (4-dim verified)** — impl PR **#4206**, 스쿼시 **`58392b114`** (머지 시점 실패 0).
 
