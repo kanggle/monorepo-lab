@@ -4404,7 +4404,7 @@ Owner decisions OD-6 · OD-7 (2026-10-15 UTC). Implementation slice **773 S6** (
 
 **Loop bound**: the non-operator landing `/new-tenant` is inside the guard but reaches it through branch 3 with no network hop; branch 3 renders no page that calls an operator API (allow-list + skipped calls). The only refresh hops are § 2.6.1's (when the access cookie — and with it the marker — has expired), bounded as there.
 
-**Sample mode**: a sample visitor (branch 1) asking for `/new-tenant` gets `/` (the sample shell has no tenant creation); `/new-tenant…` is rejected as a § 2.6.2 demo-ended target.
+**Sample mode**: a sample visitor (branch 1) asking for `/new-tenant` gets a static notice on `/new-tenant` itself — no redirect and no network call (TASK-PC-FE-376, owner decision 2026-10-26 UTC: the sidebar item stays visible, so a silent bounce to `/` read as a broken menu). The notice says the sample shell cannot create a tenant and offers 로그인 = `/login?redirect=%2Fnew-tenant` (the shell's own `buildLoginRedirectFor`), which returns to this screen after sign-in, plus a link back to 개요. No creation form and no «받은 초대» read is mounted. `/new-tenant…` is rejected as a § 2.6.2 demo-ended target.
 
 ### 2.7 Active-Tenant Switcher → Assume-Tenant Exchange (normative — ADR-MONO-020 D4)
 
