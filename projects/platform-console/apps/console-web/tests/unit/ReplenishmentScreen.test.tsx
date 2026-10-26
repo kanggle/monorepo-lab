@@ -85,6 +85,41 @@ describe('ReplenishmentScreen — list + filter + pagination + trigger qty', () 
     expect(screen.getByTestId('repl-pageinfo')).toHaveTextContent('1 / 2 페이지');
   });
 
+  it('TASK-PC-FE-377 — reorderPointAtTrigger present → bar + numeric text (aria-hidden bar)', () => {
+    render(
+      <ReplenishmentScreen
+        suggestions={{ ...PAGE, content: [suggestion({ reorderPointAtTrigger: 10 })] }}
+      />,
+      { wrapper: wrapper() },
+    );
+    expect(screen.getByTestId('repl-row-bar-text-0')).toHaveTextContent(
+      '재주문점 10 · 발동 5 · 제안 100',
+    );
+    const bar = screen.getByTestId('repl-row-bar-0');
+    expect(bar).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByTestId('repl-row-trigger-0')).toHaveTextContent('5');
+  });
+
+  it('TASK-PC-FE-377 — key absent (and null) → — and NO bar; no invented reorder point', () => {
+    render(
+      <ReplenishmentScreen
+        suggestions={{
+          ...PAGE,
+          content: [
+            suggestion({ id: 's-1' }),
+            suggestion({ id: 's-2', reorderPointAtTrigger: null }),
+          ],
+        }}
+      />,
+      { wrapper: wrapper() },
+    );
+    for (const i of [0, 1]) {
+      expect(screen.queryByTestId(`repl-row-bar-${i}`)).not.toBeInTheDocument();
+      const text = screen.getByTestId(`repl-row-bar-text-${i}`);
+      expect(text).toHaveTextContent('재주문점 — · 발동 5 · 제안 100');
+    }
+  });
+
   it('submits the status filter and re-queries the proxy', async () => {
     const fetchMock = vi
       .fn()

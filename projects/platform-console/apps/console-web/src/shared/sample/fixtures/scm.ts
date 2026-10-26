@@ -924,6 +924,8 @@ interface SuggestionSeed {
   status: string;
   source: string;
   triggerAvailableQty: number | null;
+  /** Reorder-point snapshot at trigger. `null` = the producer OMITS the key (see {@link suggestionBody}). */
+  reorderPointAtTrigger: number | null;
   materializedPoId: string | null;
   createdAt: string;
 }
@@ -950,6 +952,7 @@ const SCM_SUGGESTIONS: readonly SuggestionSeed[] = [
     status: 'SUGGESTED',
     source: 'ALERT',
     triggerAvailableQty: 5,
+    reorderPointAtTrigger: 10,
     materializedPoId: null,
     createdAt: '2026-09-13T00:00:00Z',
   },
@@ -963,6 +966,7 @@ const SCM_SUGGESTIONS: readonly SuggestionSeed[] = [
     status: 'APPROVED',
     source: 'ALERT',
     triggerAvailableQty: 8,
+    reorderPointAtTrigger: 12,
     materializedPoId: null,
     createdAt: '2026-09-12T00:00:00Z',
   },
@@ -976,6 +980,7 @@ const SCM_SUGGESTIONS: readonly SuggestionSeed[] = [
     status: 'MATERIALIZED',
     source: 'BATCH',
     triggerAvailableQty: 2,
+    reorderPointAtTrigger: null,
     materializedPoId: 'po-sample-0002',
     createdAt: '2026-09-08T00:00:00Z',
   },
@@ -989,10 +994,21 @@ const SCM_SUGGESTIONS: readonly SuggestionSeed[] = [
     status: 'DISMISSED',
     source: 'ALERT',
     triggerAvailableQty: 6,
+    reorderPointAtTrigger: 10,
     materializedPoId: null,
     createdAt: '2026-09-01T00:00:00Z',
   },
 ];
+
+/**
+ * Producer shape (`@JsonInclude(NON_NULL)` — demand-planning-api.md « Absent keys, not
+ * `null` values »): a `null` `reorderPointAtTrigger` is OMITTED, never serialised as null.
+ * (sugg-sample-0003 = BATCH, triggered without a policy → no key.)
+ */
+function suggestionBody(seed: SuggestionSeed): Record<string, unknown> {
+  const { reorderPointAtTrigger, ...rest } = seed;
+  return reorderPointAtTrigger === null ? rest : { ...rest, reorderPointAtTrigger };
+}
 
 function replenishmentFixture(path: string): unknown {
   const { pathname, query } = splitPath(path);
@@ -1002,7 +1018,7 @@ function replenishmentFixture(path: string): unknown {
     const id = decodeURIComponent(detailMatch[1]);
     const found = SCM_SUGGESTIONS.find((s) => s.id === id);
     if (!found) return fixtureNotFound('SUGGESTION_NOT_FOUND', 'suggestion not found');
-    return { data: found, meta: { timestamp: SAMPLE_AS_OF } };
+    return { data: suggestionBody(found), meta: { timestamp: SAMPLE_AS_OF } };
   }
 
   if (pathname !== SUGGESTIONS_PATH) return undefined;
@@ -1015,7 +1031,7 @@ function replenishmentFixture(path: string): unknown {
   if (skuCode) rows = rows.filter((s) => s.skuCode === skuCode);
   const start = page * size;
   return {
-    data: rows.slice(start, start + size),
+    data: rows.slice(start, start + size).map(suggestionBody),
     meta: {
       page,
       size,

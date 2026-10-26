@@ -172,6 +172,26 @@ describe('AC-1 — demand-planning suggestions (surface `scm_replenishment`) par
     for (const item of envelope.data) SuggestionSchema.parse(item);
   });
 
+  it('TASK-PC-FE-377 — reorderPointAtTrigger: numbers on 0001/0002/0004 (<= trigger bound), key OMITTED (not null) on 0003', async () => {
+    const res = replenishment('/api/v1/demand-planning/suggestions?page=0&size=20');
+    const envelope = (await json(res)) as { data: Record<string, unknown>[] };
+    const byId = new Map(envelope.data.map((r) => [r.id as string, r]));
+    for (const id of ['sugg-sample-0001', 'sugg-sample-0002', 'sugg-sample-0004']) {
+      const row = byId.get(id)!;
+      expect(typeof row.reorderPointAtTrigger, id).toBe('number');
+      expect(row.triggerAvailableQty as number, id).toBeLessThanOrEqual(
+        row.reorderPointAtTrigger as number,
+      );
+    }
+    const batch = byId.get('sugg-sample-0003')!;
+    expect('reorderPointAtTrigger' in batch).toBe(false);
+    // detail route follows the same producer shape
+    const detail = (await json(
+      replenishment('/api/v1/demand-planning/suggestions/sugg-sample-0003'),
+    )) as { data: Record<string, unknown> };
+    expect('reorderPointAtTrigger' in detail.data).toBe(false);
+  });
+
   it('GET /suggestions/{id} (detail) for every suggestion', async () => {
     for (const id of [
       'sugg-sample-0001',
