@@ -65,6 +65,31 @@ describe('PerformanceStrip', () => {
     expect(screen.getByTestId('performance-strip-trend')).toHaveTextContent('판매 수량 · 일별');
   });
 
+  it('TASK-PC-FE-375 — each day column carries a hover readout (date · metric · value), hidden from assistive tech', () => {
+    const { unmount } = render(
+      <PerformanceStrip cell={OK} selected="month" periodHrefs={HREFS} labels={LABELS} />,
+    );
+    const money = screen.getByTestId('performance-strip-trend-tip-2026-10-01');
+    expect(money).toHaveTextContent('10/1 매출 ₩410,000');
+    expect(money).toHaveAttribute('aria-hidden', 'true');
+    // Shown by CSS only: invisible until its own day column is hovered.
+    expect(money).toHaveClass('invisible', 'group-hover:visible');
+    expect(screen.getByTestId('performance-strip-trend-day-2026-10-01')).toHaveClass('group');
+    // A 0 day has a readout too — the column, not the (absent) bar, is the target.
+    expect(screen.getByTestId('performance-strip-trend-tip-2026-10-02')).toHaveTextContent('10/2 매출 ₩0');
+    // Opens toward the middle so neither edge column is clipped.
+    expect(money).toHaveClass('left-0');
+    expect(screen.getByTestId('performance-strip-trend-tip-2026-10-02')).toHaveClass('right-0');
+    // The screen-reader line is unchanged and is not duplicated by the readout.
+    expect(screen.getAllByText('10/1: ₩410,000')).toHaveLength(1);
+    unmount();
+
+    render(
+      <PerformanceStrip cell={OK} selected="month" periodHrefs={HREFS} labels={LABELS} chartKey="items" />,
+    );
+    expect(screen.getByTestId('performance-strip-trend-tip-2026-10-01')).toHaveTextContent('10/1 판매 수량 0');
+  });
+
   it('period switch: two links, the selected one marked', () => {
     render(<PerformanceStrip cell={OK} selected="month" periodHrefs={HREFS} labels={LABELS} />);
     const week = screen.getByTestId('performance-strip-period-week');
