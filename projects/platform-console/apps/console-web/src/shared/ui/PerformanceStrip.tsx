@@ -245,17 +245,33 @@ function TrendChart({
     <div data-testid={testid}>
       <p className="mb-2 text-sm font-medium">{label} · 일별</p>
       <ol aria-label={`${label} 일별 추이`} className="flex items-stretch gap-1 overflow-x-auto">
-        {bars.map((b) => (
+        {bars.map((b, i) => (
           <li
             key={b.date}
             data-testid={`${testid}-day-${b.date}`}
-            className="flex min-w-[1.75rem] flex-1 flex-col items-center"
+            className="group flex min-w-[1.75rem] flex-1 flex-col items-center"
           >
             <span className="sr-only">{`${shortDate(b.date)}: ${formatMetricValue(b.value, metric)}`}</span>
-            <div aria-hidden="true" className="flex h-24 w-full items-end justify-center border-b border-border">
+            <div aria-hidden="true" className="relative flex h-24 w-full items-end justify-center border-b border-border">
+              {/* Hover readout (TASK-PC-FE-375): the whole day column is the
+                  target, so a 0 or 2%-sliver day can be read too. It sits
+                  inside the bar area because the list's overflow-x-auto would
+                  clip anything above it, and opens toward the chart's middle
+                  so the first and last columns are not cut off at the edge.
+                  Hidden from assistive tech — the sr-only line says the same. */}
+              <span
+                aria-hidden="true"
+                data-testid={`${testid}-tip-${b.date}`}
+                className={cn(
+                  'pointer-events-none invisible absolute top-0 z-10 whitespace-nowrap rounded border border-border bg-background px-2 py-1 text-xs tabular-nums text-foreground shadow-sm group-hover:visible',
+                  i < bars.length / 2 ? 'left-0' : 'right-0',
+                )}
+              >
+                {`${shortDate(b.date)} ${label} ${formatMetricValue(b.value, metric)}`}
+              </span>
               <div
                 data-testid={`${testid}-bar-${b.date}`}
-                className="w-3 rounded-t bg-primary/70"
+                className="w-3 rounded-t bg-primary/70 group-hover:bg-primary"
                 style={{ height: `${b.percent}%` }}
               />
             </div>

@@ -8,7 +8,7 @@ TASK-PC-FE-375
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -72,3 +72,9 @@ frontend
 
 - 툴팁 텍스트를 `sr-only` 와 똑같이 만들면 `getByText` 가 두 개를 찾아 기존 테스트가 깨진다 — 형식을 다르게(지표명 포함) 한다.
 - `overflow-x-auto` 가 세로 넘침도 잘라 툴팁이 안 보일 수 있다 — 툴팁은 막대 영역(`h-24`) 안쪽 위에 두어 넘치지 않게 한다.
+
+# Implementation Notes (2026-10-26 UTC)
+
+- `TrendChart` 날짜 열 `<li>` 에 `group`, 막대 영역에 `relative`, 툴팁 `<span aria-hidden>` 은 `invisible … group-hover:visible`(막대 영역 안 `top-0`). 앞쪽 절반 열은 `left-0`(오른쪽으로 펼침), 뒤쪽 절반은 `right-0`. hover 한 막대는 `group-hover:bg-primary` 로 진해진다. 서버 컴포넌트 유지.
+- AC-1·AC-3 실측(로컬 `next dev`, 샘플 방문자, Playwright hover): `/ecommerce?period=month` 15열 — 첫 열 `9/1 매출 ₩0` 툴팁 x 277..364 · 끝 열 `9/15 매출 ₩28,000` x 1101..1227, 차트 x 277..1227 안. `/scm?period=week` 2열 — `9/14 발주 건수 1`·`9/15 발주 건수 1`, 둘 다 차트 안. hover 전 `isVisible=false` → 후 `true`.
+- AC-2·AC-4: `performance-strip.test.tsx` 에 툴팁 문구(금액·수량)·`aria-hidden`·정렬 클래스·`sr-only` 비중복 단언 추가. `performance-strip` + `f5-chart-geometry-exception` 18건 rc=0 · `tsc` rc=0 · `lint` rc=0.
