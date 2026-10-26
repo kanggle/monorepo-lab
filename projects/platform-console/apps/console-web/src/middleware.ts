@@ -6,7 +6,7 @@ import { NON_OPERATOR_LANDING } from '@/shared/lib/non-operator';
 /**
  * TASK-MONO-773 S6 (console-integration-contract § 2.6.4) — `/onboarding` stays as an ADDRESS only: the
  * standalone `(onboarding)` page is gone and every visitor asking for it (or anything under it) gets
- * `307 → /new-tenant`; the `(console)` guard then decides (sample → `/`, non-operator → the screen, operator →
+ * `307 → /new-tenant`; the `(console)` guard then decides (sample → the screen's static «샘플에서는 만들 수 없습니다» notice — TASK-PC-FE-376, non-operator → the screen, operator →
  * the screen in its operator mode). A redirect here — not a page — because there is no page left to render.
  */
 function isOldOnboardingAddress(pathname: string): boolean {

@@ -137,12 +137,12 @@ const ALLOWED: Record<string, { count: number; category: Category; why: string }
   'features/onboarding/api/onboarding-client.ts': {
     count: 2,
     category: 'unreachable-for-sample',
-    why: 'create organization + received invitations (TASK-MONO-773 S6) — both need the IAM access cookie a sample visitor lacks (/api/onboarding/** answers 401 without it; /new-tenant sends a sample visitor to /)',
+    why: 'create organization + received invitations (TASK-MONO-773 S6) — both need the IAM access cookie a sample visitor lacks (/api/onboarding/** answers 401 without it; /new-tenant shows a sample visitor a no-network notice instead of the form — TASK-PC-FE-376)',
   },
   'features/onboarding/components/CreateOrganizationForm.tsx': {
     count: 1,
     category: 'unreachable-for-sample',
-    why: 'rendered only by /new-tenant (TASK-MONO-773 S6), which redirects a sample visitor to / before rendering',
+    why: 'rendered only by /new-tenant (TASK-MONO-773 S6), whose sample branch returns a static notice before the form is reached (TASK-PC-FE-376)',
   },
   'features/ecommerce-ops/hooks/use-ecommerce-images.ts': {
     count: 1,
