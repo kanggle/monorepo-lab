@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import {
   CreateOrganizationForm,
   ReceivedInvitations,
@@ -9,6 +9,7 @@ import { listOrgNodes } from '@/features/org-hierarchy';
 import { getSelfOrNull } from '@/shared/api/iam-operators-read';
 import { hasPermission } from '@/shared/guide/permission-map';
 import { getServerEnv } from '@/shared/config/env';
+import { buildLoginRedirectFor } from '@/shared/lib/login-redirect';
 import { getAccessToken, isNonOperatorSession, isSampleVisitor } from '@/shared/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -33,10 +34,46 @@ export const dynamic = 'force-dynamic';
  *    active tenant) → the self form: never the more privileged form on a guess, and the producer answers a `'*'`
  *    caller there with `409 OPERATOR_ALREADY_PROVISIONED` (its copy names the platform administrator).
  *
- * Sample visitor (guard row 1) → `/` (the sample shell has no tenant creation — § 2.6.4 «Sample mode»).
+ * Sample visitor (guard row 1) → a static notice on this same address (§ 2.6.4 «Sample mode», TASK-PC-FE-376):
+ * the sample shell cannot create a tenant (the self modes need the IAM access cookie, the SUPER_ADMIN mode the
+ * operator token — a sample visitor has neither), so it says so and offers 로그인 back to here. It used to
+ * `redirect('/')`, which — with the sidebar item still visible — read as a menu that silently did nothing.
+ * No network call, no form mounted.
  */
 export default async function NewTenantPage() {
-  if (await isSampleVisitor()) redirect('/');
+  if (await isSampleVisitor()) {
+    return (
+      <NewTenantFrame intro="회사(테넌트)를 만들고 그 관리자가 되는 화면입니다.">
+        <div
+          role="status"
+          data-testid="new-tenant-sample-notice"
+          className="rounded-lg border border-border bg-muted/40 p-6 text-sm text-foreground"
+        >
+          <p className="font-medium">샘플 콘솔에서는 테넌트를 만들 수 없습니다.</p>
+          <p className="mt-2 text-muted-foreground">
+            로그인하면 이 화면에서 새 테넌트를 만들고, 받은 초대를 확인할 수 있습니다.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link
+              href={buildLoginRedirectFor('/new-tenant')}
+              prefetch={false}
+              data-testid="new-tenant-sample-login"
+              className="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              로그인
+            </Link>
+            <Link
+              href="/dashboards/overview"
+              data-testid="new-tenant-sample-overview"
+              className="rounded-md border border-border px-4 py-2 font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              개요로 돌아가기
+            </Link>
+          </div>
+        </div>
+      </NewTenantFrame>
+    );
+  }
 
   const emailVerificationUrl = `${getServerEnv().OIDC_ISSUER_URL}/email-verification`;
 

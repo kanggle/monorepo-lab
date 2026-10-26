@@ -230,9 +230,10 @@ export const SCREEN_COVERAGE: Readonly<Record<string, ScreenStatus>> = {
   '/subscriptions': 'ready',
   '/tenants': 'ready',
   '/tenants/[tenantId]': 'ready',
-  // TASK-MONO-773 S6 — pending, and deliberately so: a sample visitor never sees this screen — the page sends
-  // them to `/` (no tenant creation in the sample shell, console-integration-contract § 2.6.4 «Sample mode»).
-  '/new-tenant': 'pending',
+  // TASK-PC-FE-376 — static: a sample visitor gets a no-network notice here («샘플에서는 만들 수 없습니다» +
+  // 로그인), not the creation form (console-integration-contract § 2.6.4 «Sample mode»). `pending` would stack
+  // the shell's «준비 중» note on top of it. Was `pending` + a redirect to `/` (TASK-MONO-773 S6).
+  '/new-tenant': 'static',
   // TASK-MONO-771 S5 — pending: its only data is the `tenant_entry_policy` surface (no fixture).
   '/security-settings': 'pending',
 

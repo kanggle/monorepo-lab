@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-376-sample-new-tenant-notice-instead-of-redirect.md` — **샘플 방문자가 «테넌트 생성» 메뉴를 누르면 말없이 개요로 튕긴다** (READY 2026-10-26 UTC · 소유자 결정: 메뉴는 두고 안내 화면): `/new-tenant` 샘플 분기 `redirect('/')` → 정적 안내 + 로그인(`/login?redirect=%2Fnew-tenant`). 계약 § 2.6.4 «Sample mode» 먼저 · 커버리지 `'static'`. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 
 
@@ -126,6 +126,7 @@ _(없음)_
 ## review
 
 
+- `TASK-PC-FE-376-sample-new-tenant-notice-instead-of-redirect.md` — **샘플 방문자가 «테넌트 생성» 메뉴를 누르면 말없이 개요로 튕긴다** (REVIEW 2026-10-26 UTC · 소유자 결정: 메뉴는 두고 안내 화면 · AC-1~5 닫음): 계약 § 2.6.4 «Sample mode» 먼저 → `/new-tenant` 샘플 분기 `redirect('/')` → 정적 안내 + 로그인(`/login?redirect=%2Fnew-tenant`) + 개요로 돌아가기, 커버리지 `'static'`. 로컬 Playwright 로 메뉴 클릭 → 안내 · «준비 중» 미중첩 실측. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-375-performance-strip-bar-hover-value.md` — **개요 «실적» 일별 막대에 마우스를 올리면 그 날의 값이 보이게** (REVIEW 2026-10-26 UTC · 소유자 요청 · AC-1~4 닫음): 공용 `PerformanceStrip` `TrendChart` 에 순수 CSS hover 툴팁(`날짜 지표명 값`, `aria-hidden`), 날짜 열 전체가 hover 대상, 앞/뒤 절반 열은 왼/오른쪽 고정으로 가장자리 잘림 없음(로컬 Playwright hover 실측). 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-374-sample-overview-charts-denser-fixtures.md` — **익명 샘플 모드의 도메인 개요 그래프가 거의 비어 있다** (REVIEW 2026-10-26 UTC · 소유자 요청 · AC-1~5 닫음 / AC-6 은 샘플 459건·tsc·lint 초록, 전체 vitest 의 tenants·operators 상호작용 flake 는 main 에서도 재현): 픽스처에 9/1~15 분포 행 추가 — 월 비영 일수 ecommerce 10·scm 8·erp 10·finance 7·iam 8·wms 7, 주간 각 1~2일, 월 랭킹 상품 4·셀러 3, 환율 이력 7·8점. 고정 테스트 9개를 손으로 셈한 상수로 갱신. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-373-wms-alert-row-key-id-vs-alertid-degrades-overview.md` — **로그인 `/wms` 개요가 경보 행 1건만 있어도 통째로 «일시적으로 불러올 수 없습니다»** (REVIEW 2026-10-25 UTC · 35차 창 라이브 발견 · AC-0~7 닫음 / AC-8 라이브 열림): 콘솔 `AlertRowSchema` 는 `alertId` 를 필수로 요구하는데 wms admin-service `AlertLogResponse` 는 `id` 로 내보낸다 → zod 파싱 throw → `wms-state` catch-all 이 개요 전체를 degraded 로 접는다. ack 버튼도 `alertId`(=undefined)로 호출, 생산자는 `acknowledged`·`message` 도 안 보내 확인된 경보가 «미확인» 으로 나온다. 표본 픽스처가 `alertId` 를 써서 익명 화면이 가렸다. 계약 § 1.6 은 필드 이름이 없다 → 필드 목록을 먼저 고정(같은 PR)하고 콘솔이 생산자에 맞춘다(생산자 불변). 경보 목록 한정 행 단위 관용 포함, `wmsPage()` 전면 관용은 범위 밖. 분석=Opus 5.5 / 구현 권장=Sonnet. 🔵 구현: 계약 § 1.6 `AlertLog` 12필드 고정(앞선 커밋) → `AlertRowSchema.id` · 경보 목록 한정 행 단위 `safeParse`(`excludedRows`) · 확인됨=`acknowledgedAt` 파생 · 내용 열=`현재/임계/위치` · 픽스처 생산자 모양.

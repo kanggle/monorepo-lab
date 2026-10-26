@@ -135,8 +135,17 @@ const INVITE = {
 };
 
 describe('sample visitor — no tenant creation in the sample shell (§ 2.6.4 «Sample mode»)', () => {
-  it('🔴 /new-tenant → redirect /', async () => {
-    await expect(Promise.resolve().then(() => NewTenantPage())).rejects.toMatchObject({ to: '/' });
+  it('🔴 TASK-PC-FE-376 — /new-tenant renders the notice in place (no redirect to /), with 로그인 back to here', async () => {
+    const tree = await renderPage();
+
+    expect(byTestId(tree, 'new-tenant-sample-notice')).toBeDefined();
+    expect(props(byTestId(tree, 'new-tenant-sample-login')).href).toBe('/login?redirect=%2Fnew-tenant');
+    expect(props(byTestId(tree, 'new-tenant-sample-overview')).href).toBe('/dashboards/overview');
+
+    // Nothing that needs a session is mounted, and nothing is asked.
+    expect(mounted(tree, CreateOrganizationForm)).toHaveLength(0);
+    expect(mounted(tree, TenantCreateScreen)).toHaveLength(0);
+    expect(mounted(tree, ReceivedInvitations)).toHaveLength(0);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

@@ -8,7 +8,7 @@ TASK-PC-FE-376
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -81,3 +81,11 @@ frontend
 
 - 커버리지를 `pending` 으로 두면 안내 위에 «준비 중» 이 겹친다 → AC-3.
 - 로그인 링크를 손으로 조립하면 셸의 로그인 규칙과 갈라진다 → 같은 함수 사용.
+
+# Implementation Notes (2026-10-26 UTC)
+
+- 커밋 순서: 계약 § 2.6.4 «Sample mode» 먼저(`3eaf76970`) → 구현. 같은 계약 § 2.6.2 의 `/new-tenant…` 거절 사유 «not reachable in sample mode» 도 «정적 안내만 보인다» 로 고쳤다(거절 규칙 자체는 불변).
+- `new-tenant/page.tsx`: 샘플 분기가 `NewTenantFrame`(같은 «테넌트 생성» 제목) 안에 `new-tenant-sample-notice`(`role="status"`) + `new-tenant-sample-login`(`buildLoginRedirectFor('/new-tenant')`) + `new-tenant-sample-overview`(`/dashboards/overview`). `redirect` import 제거. `coverage.ts` `'/new-tenant': 'static'`. 옛 «→ `/`» 를 말하던 주석 3곳(`page.tsx`, `middleware.ts`, `sample-fetch-allowlist.test.ts` why 2건) 정리.
+- AC-1·AC-2: `new-tenant-page.test.tsx` 샘플 케이스 = 리다이렉트 없음 · 안내 · 로그인 href `/login?redirect=%2Fnew-tenant` · 개요 href · 양식 3종 미마운트 · `fetch` 0회. 옛 코드에선 `renderPage()` 의 «리다이렉트 아님» 단언에서 실패한다.
+- AC-3 실측(로컬 `next dev`, 샘플 방문자, Playwright): 개요에서 사이드바 «테넌트 생성» 클릭 → URL `/new-tenant` 유지 · 안내 표시 · «샘플 데이터는 준비 중» 0건 · «개요로 돌아가기» → `/dashboards/overview`.
+- AC-5: 대상 6파일(`new-tenant-page` · `sample-coverage-ledger` · `SampleScreenNotice` · `permission-map-drift` · `sample-fetch-allowlist` · `onboarding-address-redirect`) 97건 rc=0 · `tsc` rc=0 · `lint` rc=0.
