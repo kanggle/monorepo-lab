@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-_(없음)_
+- `TASK-PC-FE-375-performance-strip-bar-hover-value.md` — **개요 «실적» 일별 막대에 마우스를 올리면 그 날의 값이 보이게** (READY 2026-10-26 UTC · 소유자 요청): 값이 `sr-only` 에만 있어 눈으로는 높이만 비교된다. 공용 `PerformanceStrip` `TrendChart` 에 순수 CSS hover 툴팁(날짜·지표명·값, `aria-hidden`), 날짜 열 전체가 hover 대상. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 
