@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-_(없음)_
+- `TASK-PC-FE-377-replenishment-table-reorder-point-bar.md` — **`/scm/replenishment` 표가 «재주문점 · 발동 재고 · 제안 수량» 을 한 줄 막대로 보인다 — `reorderPointAtTrigger` 소비** (READY, 2026-10-26 UTC · `TASK-SCM-BE-062` 의 콘솔 후속 · 서버 선행 충족(굽기 `283fd39cf` · 35차 창 라이브 값 확인)). 계약 `console-integration-contract.md` 먼저 → `SuggestionSchema` 한 줄 + 표 칸 + 순수 눈금 함수 + 샘플 시드(키 없음 표본 0003) · 키 없으면 `—`(지어낸 숫자 금지). AC-7 라이브 ⚪. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 

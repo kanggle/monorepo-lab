@@ -1957,6 +1957,15 @@ The console (Vercel) has nothing to do with the bake. PC-FE-338 a `56a15be8b` ·
     - `TASK-BE-652` AC-2 — console WMS 운영설정 + `GET /api/wms/settings` 200 with `inventory.low_stock.default_threshold_qty`; then `TASK-BE-644` AC-3 (10 → 25 → «저재고만» changes) — 🔴 the console has no settings **write** path, so the change needs an operator API call: plan it as a user-run command.
     - `TASK-MONO-814` AC-6 + `TASK-PC-FE-369` AC-2 — fix already live on Vercel (`45fa46428`, no bake needed): open the logged-in `demo-corp` overview **cold** (first render after >15 s) → all six cards draw a value (no `DOWNSTREAM_ERROR`, no «WMS 점검 불가»), and CloudWatch `AWS/Lambda Throttles` for `portfolio-demo-control` = 0 in that minute (`aws cloudwatch get-metric-statistics … --period 60`). Then `TASK-PC-FE-364` AC-3 again.
     - Still open from the 33rd: · the ⚪ rows that need demo data (`TASK-BE-645` backorder, `TASK-BE-647` SKU below 10, `TASK-SCM-BE-062` a triggered suggestion) — create that data deliberately in the window or record ⚪ again.
+20. 🆕 **Checks the 35th window left for the next window** (added 2026-10-26 UTC; owner decisions of that day). 🔴 Measurement targets only — **each ticket stays in `review/` and owns its own AC** (this list holds no obligation, per the rule at the top of § Order). Deployed demo AMI = the 35th bake: `54b79233c` → `ami-068ae07b2b3ac7797` (§ 35th window — results); ancestry read with `git merge-base --is-ancestor <impl merge> 54b79233c` on 2026-10-26 UTC.
+    - **Needs a bake** (impl merged **after** `54b79233c`, so NOT in the deployed AMI — they ride the next bake with a re-list of `git log 54b79233c..origin/main -- ':(glob)projects/*/apps/**' ':(glob)libs/**' ':(glob)infra/demo/**'`):
+      - `TASK-BE-661` AC-4 (impl #4568 `d5e2928b1`) — on a fresh volume drop `SKU-APPLE-001` below 10 → the scm suggestion carries `"warehouseCode":"WH01"` (the 35th window's side finding: the suggestion's `warehouseId` held the LOCATION id). Same data step as the 35th preparation steps 1 → 3 (§ 35th window — preparation).
+      - `TASK-FAN-BE-053` AC-8 (impl #4563 `b3a113aa6`) — reaction `PUT` → `GET /api/v1/community/feed` `reactionCount` equals the post detail's **while the Redis key `feed:v3:…` TTL > 0** (the 35th measured 1 vs 0 with ttl 297), then `DELETE` → 204 and the feed count follows.
+    - **Needs a running backend, no bake** (impl already in the deployed AMI or console/web-only):
+      - `TASK-BE-624` AC-4 (impl #4184 `3eb21c693`, **already in** `54b79233c`) — a fresh **IAM-email signup** (new account) → `GET /api/users/me` returns the email filled (not blank).
+      - `TASK-PC-FE-373` AC-8 (impl #4565 `a733cac85`, console on Vercel) — logged-in `/wms` overview with ≥ 1 alert row renders (no whole-overview degrade) and the acknowledge button acts on the row `id`; needs a wms alert row (step 3 of the 35th preparation creates one).
+      - `TASK-FAN-FE-033` AC-6 (impl #4562 `eabc96810`, web on Vercel) — click a pressed reaction again → it is removed (DELETE) and the press clears; click a different type → it switches.
+      - **One shared ≥ 35-min idle run:** `TASK-FE-106` AC-2 · AC-3 (AC-0 is ⚪ — owner decision 2026-10-26 UTC, see that ticket's CORRECTION) + `TASK-FAN-FE-027` AC-1 — idle the store and fan sessions together, return, and record both; run alongside other work.
 
 ### Not measured, and owned by no open AC (recorded so the gap is visible — not carried)
 
@@ -2269,8 +2278,12 @@ The 34th window left five ACs ⚪ because the demo volume did not hold the state
 - `TASK-PC-FE-358` — the empty-14-day-window text (only reachable on a volume with no throughput data in the window).
 - `TASK-BE-652` AC-0 — ①~③ as file:line / IT output, especially ③ (the console has no setting write path); also why the screen shows 2 rows against the API's 4.
 - `TASK-FE-106` AC-0 · AC-2 · AC-3 and `TASK-FAN-FE-027` AC-1 — the ≥ 35-min idle return; run alongside other work (FE-106 AC-0 needs a pre-fix deploy, so it needs an owner decision).
+  - 🔵 2026-10-26 UTC: FE-106 AC-0 is ⚪ (owner decision — no pre-fix build in production); AC-2 · AC-3 and FAN-FE-027 AC-1 are in the one shared idle run listed in § Order item 20.
 - `TASK-FAN-FE-032` AC-5 — the 404 branch cannot be produced against the current backend (owner decision: ⚪ plus the unit test, or keep open).
+  - 🔵 2026-10-26 UTC: decided ⚪ + `comment-section-404.test.tsx`; the ticket moved to `done/` (4-dim, #4197).
 - `TASK-SCM-BE-062` AC-3 — the old-row-null half, and the console follow-up ticket the AC asks for.
+  - 🔵 2026-10-26 UTC: old-row half ⚪ (owner decision), follow-up drafted as `TASK-PC-FE-377`; the ticket moved to `done/` (4-dim, #4477).
+- Checks added 2026-10-26 UTC (§ Order item 20): `TASK-BE-661` AC-4 · `TASK-FAN-BE-053` AC-8 (next bake) · `TASK-BE-624` AC-4 · `TASK-PC-FE-373` AC-8 · `TASK-FAN-FE-033` AC-6 (no bake).
 - `TASK-MONO-819` AC-2 — no script-only PR yet.
 - The live ACs of the three new defect tickets, once they are filed and merged.
 - Owner decision (not a measurement): pruning the older 33rd-generation AMI.

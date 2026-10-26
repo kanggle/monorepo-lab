@@ -8,7 +8,7 @@ TASK-SCM-BE-062
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -245,3 +245,14 @@ AC-0 은 `*IT*.java` 로 Glob 했고 0 을 받았다. 이 서비스의 IT 이름
 - 볼륨 잔여: 제안 `4d55514c…` 는 `DISMISSED` 로 정리했다.
 
 ⇒ review 유지 — 남은 것: AC-3 의 «옛 제안은 null» 절반 (신선 볼륨에선 만들 수 없다 — ⚪ 로 닫을지는 소유자 결정) · 콘솔 후속 티켓 기안 (소유자/오케스트레이터)
+
+---
+
+## CORRECTION — AC-3 «옛 제안은 key 없음» 절반 ⚪ 소유자 결정 · 콘솔 후속 기안 · 닫음 (2026-10-26 UTC)
+
+- **AC-3 의 «옛 제안은 key 없음» 절반은 ⚪ 로 닫는다 — 신선 볼륨에는 V4 이전에 만들어진 제안 행이 없어 잴 대상이 없다.** 소유자 결정(2026-10-26 UTC). 새 행 절반은 35차 CORRECTION 에서 라이브 ✅(`reorderPointAtTrigger: 10` · `triggerAvailableQty: 5`). «키 없음» 의 코드 쪽 증거는 이 티켓 § 시험이 이미 기록: 슬라이스 `SuggestionControllerSliceTest`(`null` 이면 `doesNotExist` + `not(hasKey)`) · 계약 시험 `SuggestionResponseContractTest`(최소 행에 `null` 값 키 0) · IT 의 정책 없는 SKU → `null`.
+- **콘솔 후속 티켓 기안 (AC-3 마지막 절 · 닫힘):** `projects/platform-console/tasks/ready/TASK-PC-FE-377-replenishment-table-reorder-point-bar.md` — 「`/scm/replenishment` 표가 «재주문점 · 발동 재고 · 제안 수량» 을 한 줄 막대로 보인다 — `reorderPointAtTrigger` 소비」. 서버 선행(굽기 `283fd39cf` 가 impl 머지를 조상으로 포함)은 충족.
+- **4차원 확인 (2026-10-26 UTC):** (a) `gh pr view 4477` → `state=MERGED`, 머지 커밋 `f23bec8e99e099c0d1d8e66b395ed04566f27e75`. (b) `git merge-base --is-ancestor f23bec8e9 origin/main` → rc=0 (origin/main tip `73935df10`). (c) `statusCheckRollup` 67 건 중 `conclusion=="FAILURE"` **0**. (d) `# Acceptance Criteria` 를 열어 읽음: AC-0 · AC-1 · AC-2 는 자기 `[x]`(AC-2 의 «CI IT 확인 전엔 닫지 않는다» 는 § 머지 전 확인의 run `39814660754` 가 닫음), AC-3 은 새 행 라이브 ✅(35차) + 옛 행 ⚪(위) + 콘솔 후속 기안(위) — 전부 닫힘. 열린 AC 없음.
+- 별도: 35차 CORRECTION 의 «`warehouseId` 가 location id» 새 결함은 이 티켓 범위 밖이며 별도 티켓 대상으로 남는다(이 이동과 무관).
+
+⇒ done 으로 이동.
