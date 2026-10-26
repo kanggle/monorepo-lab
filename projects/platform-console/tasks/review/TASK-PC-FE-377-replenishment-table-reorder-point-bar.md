@@ -8,7 +8,7 @@ TASK-PC-FE-377
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -98,3 +98,14 @@ frontend
 - **막대를 색·길이만으로 그린다** — 접근성 실패. 숫자 텍스트가 항상 함께.
 - **샘플 시드를 `null` 로 직렬화한다** — 생산자 `NON_NULL` 모양과 갈라져 샘플이 «null 도 온다» 는 잘못된 인상을 굳힌다.
 - **계약보다 코드를 먼저 바꾼다** — Change Rule 위반(AC-1).
+
+# Implementation Notes (2026-10-26 UTC)
+
+- **AC-1** 커밋 순서: 계약 `b11c3815a`(`console-integration-contract.md` § 보충 게이트 + `architecture.md:182` 괄호 한 구절) → 구현 `76f860c1d`.
+- **AC-2** `types.ts` `SuggestionSchema.reorderPointAtTrigger: z.number().nullable().optional()` + 의미 주석, `.passthrough()` 불변. `demand-planning-api.test.ts`: 값 10 유지 · 키 없는 행도 파싱되고 `'reorderPointAtTrigger' in row === false`.
+- **AC-3 · 열 결정 = 대체**: 「트리거 가용재고」 칸을 「재주문점 · 발동 재고 · 제안」 칸으로 바꿨다(열 수 불변, 발동 재고 숫자는 새 칸 텍스트에 남는다). testid `repl-row-trigger-${i}` 는 그 `<td>` 에 유지, 새 `repl-row-bar-${i}`(막대, 키 없으면 렌더 안 함) · `repl-row-bar-text-${i}`. 막대는 `aria-hidden`(`InlineBar` 규칙), 텍스트 항상 동반 `재주문점 10 · 발동 5 · 제안 50`. 키 없음 → 막대 없이 `재주문점 — · 발동 2 · 제안 15`(발동·제안은 실제 값이라 남긴다 — 티켓의 «`—`» 를 «재주문점 자리에 `—`» 로 해석, 지어낸 숫자 없음).
+- **AC-4** `features/scm-replenishment/lib/reorder-bar.ts` `reorderBarGeometry` / `reorderBarText` — 눈금 `max(재주문점, 발동) + 제안`, 재주문점은 마커. 재주문점 null/NaN/Infinity/음수 → `null`(막대 없음) · 0 → 마커 생략(0 나눗셈 없음) · 발동 > 재주문점 → 눈금 확장 + `triggerAboveReorderPoint` · 제안 0/null/음수 → 0%. `tests/unit/reorder-bar.test.ts`.
+- **AC-5** 샘플 `scm.ts` 0001=10(발동 5) · 0002=12(발동 8) · 0004=10(발동 6), 0003 은 `suggestionBody()` 가 키 생략(목록·상세 둘 다). `sample-fixtures-schema-scm.test.ts` 가 숫자 · `≤ 재주문점` · 0003 키 없음을 단언.
+- **AC-6** `tsc` rc=0 · `lint` rc=0 · vitest 대상 4파일 93건 + `tests/unit/sample` 전체(30파일 595건, 구현 에이전트 실행) rc=0.
+- **브라우저 실측(로컬 `next dev`, 샘플 방문자, Playwright)**: 1280px — 4행 중 막대 3 · 0003 은 `재주문점 —`, 페이지 가로 넘침 없음. 🔴 **390px 모바일 — 표가 페이지를 넘친다. 단 main 에서도 넘친다**(같은 화면 main `scrollWidth` 554 / 표 536, 감싸는 `overflow-x` 요소 없음). 처음 구현(`min-w-40`)은 +146px 를 더했고 `min-w-24` + 줄바꿈 텍스트로 +82px(636)까지 줄였다 — 남은 증가는 정보가 는 칸의 자연 폭. **표에 가로 스크롤 감싸개가 없는 것은 이 티켓 이전부터의 결함이고 범위 밖**(별도 티켓 후보).
+- **AC-7 ⚪ 열림** — 로그인 콘솔 라이브(다음 창, Vercel 배포만 필요).
