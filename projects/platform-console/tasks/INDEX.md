@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-_(없음)_
+- `TASK-PC-FE-378-finance-sample-chart-topup-days.md` — **Fix issue found in TASK-PC-FE-374 — 재무 개요 «실적» 그래프(충전 건수)가 월간 4일뿐** (READY 2026-10-26 UTC · 운영 샘플 실측): 그래프는 `chartKey="topupCount"` 인데 374 는 TOPUP∪TRANSFER 날로 «7» 을 셌다. TOPUP 날 ≥ 6 으로 픽스처 보강(잔액 짝 유지) + «그리는 지표» 로 세는 단언. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 

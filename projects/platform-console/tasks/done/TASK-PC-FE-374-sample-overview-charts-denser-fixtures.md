@@ -85,3 +85,12 @@ frontend
 - AC-6: `tsc` rc=0 · `lint` rc=0 · `vitest run tests/unit/sample-` 23 파일 459건 rc=0. 전체 vitest 는 rc=1 — 실패는 `TenantsScreen`·`TenantPlacement`·`TenantDetail`·`OperatorProfileEditDialog` 등 샘플 픽스처를 안 쓰는 상호작용 테스트였고, **변경 없는 main 체크아웃에서 같은 4개 파일을 돌려도 3건이 실패**(매 실행 다른 테스트) → 기존 부하 의존 flake, 이 변경과 무관.
 - 범위 판단: scm `receivedCount` 는 근거 행(RECEIVED 이력)이 없어 "0" 유지. iam `newAccount` 는 이미 `IAM_ACCOUNTS.createdAt` 파생이었고 신규 계정 행이 없어 0 유지. `ORDERS_SUMMARY`·`SHIPPINGS_SUMMARY` 를 손 상수에서 행 파생으로 바꿨다(행 수와 어긋나지 않게). DELIVERED 주문은 기존 «DELIVERED 필터 = 빈 결과» 테스트 보존을 위해 안 넣었다. 새 실현 주문의 정산 accrual 은 없다(9월 정산 기간은 의도적으로 OPEN·빈 상태).
 - 손 고친 테스트(기대값=손으로 센 상수): `sample-{ecommerce,scm,erp,finance,iam,wms}-metrics.test.ts` + 목록에 없던 `sample-fixtures-schema-{ecommerce,scm,wms}.test.ts`.
+
+---
+
+## CORRECTION — AC-1 재무 칸은 닫히지 않았다 (2026-10-26 UTC, 운영 실측)
+
+- 🔴 **위 «finance 7» 은 그래프가 그리는 지표가 아니다.** 재무 개요는 `FinanceOverviewScreen.tsx:321` `chartKey="topupCount"` — 충전 건수만 그린다. «7» 은 TOPUP **또는** TRANSFER 가 있는 날의 합집합이었고(`sample-finance-metrics.test.ts:129`), TOPUP 만의 날은 **4**(9/1 · 0004 · 0006 · 0009). AC-1 «5일 이상» 미충족.
+- 실측: 운영 `https://console.hubwang.com` 샘플 방문자(Playwright, 배포 `c7e58e9ba` success · 이 티켓 머지 `bc4c0eb0b` ⊂ 그 배포) — `/finance?period=month` 0 아닌 막대 **4** · `week` 1. 같은 실측에서 나머지 다섯은 그리는 지표 기준 ecommerce 10 · scm 8 · erp 10 · iam 8 · wms 7 → 충족.
+- 이 마감을 한 쪽의 잘못: 구현 보고의 일수를 **그래프의 `chartKey` 와 대조하지 않고** 4차원 (d) 를 통과시켰다.
+- ⇒ 수정 = **`TASK-PC-FE-378`**(ready). 이 파일은 done 에 둔다(동결 — 남은 일은 그 티켓이 나른다).
