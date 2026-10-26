@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-_(없음)_
+- `TASK-PC-FE-376-sample-new-tenant-notice-instead-of-redirect.md` — **샘플 방문자가 «테넌트 생성» 메뉴를 누르면 말없이 개요로 튕긴다** (READY 2026-10-26 UTC · 소유자 결정: 메뉴는 두고 안내 화면): `/new-tenant` 샘플 분기 `redirect('/')` → 정적 안내 + 로그인(`/login?redirect=%2Fnew-tenant`). 계약 § 2.6.4 «Sample mode» 먼저 · 커버리지 `'static'`. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 
