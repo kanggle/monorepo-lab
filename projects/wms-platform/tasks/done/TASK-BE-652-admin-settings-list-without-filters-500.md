@@ -8,7 +8,7 @@ admin-service 의 조건 없는 `GET /api/v1/admin/settings` 가 500 — `AdminS
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -127,3 +127,13 @@ Fix issue found in TASK-BE-644. 콘솔 `GET /api/wms/settings` → admin-service
 - **AC-0 — 열린 채 유지.** 이번 창에서 건드리지 않았다(① 실 DB IT 출력 · ③ 콘솔 쓰기 경로 부재 측정이 남아 있다).
 
 ⇒ review 유지 — 남은 것: AC-0 (①~③ 을 file:line · IT 출력으로 — 특히 ③ «콘솔 쓰기 경로 부재» 미측정). AC-1 · AC-2 는 닫힘.
+
+---
+
+## CORRECTION — AC-0 닫힘 (2026-10-26 UTC, 코드·CI 측정 · 라이브 불요)
+
+- **AC-0 ✅ — ①~③ 전부 file:line · CI 출력으로.**
+  - **① IT 출력 (CI run `39969962421`, head `874b09b4b` = 시험만 담은 커밋, 2026-10-23T14:28Z, conclusion `failure`)** — `gh run view 39969962421 --log-failed` 원문: `AdminListSearchIT > users_noFilters_and_eachFilterAlone() FAILED` · `InvalidDataAccessResourceUsageException at AdminListSearchIT.java:109` ← `SQLGrammarException` ← `PSQLException` · `83 tests completed, 1 failed`. settings 넷은 이 실행에서 초록(수정 전 코드) — 그래서 `SettingsListLiveShapeIT` 를 더했고 그 커밋 `501b5d582` 에서 settings 둘이 `SQLGrammarException` 빨강(85건 중 3건, AC-1 기록), 구현 `8b7ed5239` 뒤 fail 0. ⇒ 깨지는 조합 = `keyPrefix`/`q` 가 없는 호출(무필터 · 다른 필터만). 기존 시험이 못 잡은 이유는 위 구현 노트(목록 쿼리를 실 PG 로 부르는 IT 부재 · in-memory 저장소)와 «AC-0 보강»(정렬 없는 `PageRequest` · 따뜻한 해석 캐시).
+  - **② 형제 — admin-service 밖까지 넓혔다.** wms `apps/**/src/main/**/*.java` 의 `LIKE … CONCAT(` 전수: admin-service 는 이미 `LikePatterns`/`RefSearch` 로 고쳐짐(주석만 남음). **master-service 에 같은 계열 6줄** — `adapter/out/persistence/JpaWarehouseRepository.java:24-26,44-46` · `JpaPartnerRepository.java:29-30` · `JpaSkuRepository.java:40-41` (`LOWER(..) LIKE LOWER(CONCAT('%', :q, '%'))`). 🔵 **모양이 다르다**: 모두 `(:q IS NULL OR :q = '' OR …)` — `:q = ''` 가 파라미터를 문자열로 타입 지정한다(깨진 admin 두 쿼리에는 이 비교가 없었다). 실 PG 증거: `WarehouseRepositoryImplTest.java:191` 이 Testcontainers `postgres:16-alpine`(`:40`)에서 `new WarehouseListCriteria(ACTIVE, null)` 로 `q=null` 검색을 부른다. ⚪ **Partner · Sku 의 `q=null` 실 PG 호출은 시험에서 찾지 못했다**(`PartnerRepositoryImplTest` · `SkuRepositoryImplTest` 는 Testcontainers 이나 null-q 검색 호출 0건) — 같은 `:q = ''` 모양이라 같은 결과로 추정하지만 **측정은 아니다**. 같은 500 이라는 증거가 없으므로 범위 = **이 티켓 밖, 별도 티켓 없음**(재발 시 이 줄이 출발점). 🔴 «Warehouse 한 줄 초록» 을 «master 전체 안전» 으로 승격하지 않는다.
+  - **③ 콘솔 → admin 경로 · 쓰기 경로 부재.** 경로: `console-web/src/app/api/wms/settings/route.ts:20` `GET` 하나(파일에 `PUT`/`PATCH`/`POST` export 없음, `:15-18` «READ-ONLY: GET only … no proxy route for it exists here») → `features/wms-ops/api/wms-settings-api.ts:25-37` `listSettings` `{ method: 'GET', path: '/settings?…' }` → `callWmsAdmin`(admin-service `/api/v1/admin/settings`, § 5.1). 단건은 `:50-60` `getSetting` GET. **쓰기 부재 측정**: `features/wms-ops/**` 의 `/settings` 출현 10줄이 전부 GET 또는 주석, `src/**` 전체에서 settings 로 가는 `PUT|PATCH|POST|DELETE` 0건. ⇒ `TASK-BE-644` AC-3(콘솔에서 임계값 바꾸기)은 **콘솔로는 잴 수 없다** — 쓰기는 `PUT /api/v1/admin/settings/{key}`(§ 5.3, `WMS_ADMIN`)를 직접 부르는 것뿐이고, 콘솔 쓰기 화면은 이 티켓 Out of Scope 대로 별도 결정.
+- **AC-1 ✅ · AC-2 ✅**(34 · 35차 CORRECTION) ⇒ **모든 AC 닫힘 → done.** 4차원: impl PR #4502 `state=MERGED` · squash `adae12ea4` ⊂ `origin/main` · 머지 시점 `statusCheckRollup` FAILURE 0 · 이 AC 절.
