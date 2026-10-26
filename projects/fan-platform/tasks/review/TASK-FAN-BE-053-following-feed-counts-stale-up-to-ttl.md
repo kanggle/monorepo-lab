@@ -127,3 +127,12 @@ fan-platform
 ## AC-7 형제 grep
 
 fan-platform 의 Redis 사용처는 `FeedCacheRepository`(community)와 `ArtistDirectoryCacheAdapter`(artist) 둘뿐(`StringRedisTemplate|RedisTemplate` grep). artist 디렉터리 캐시의 `ArtistView` 에는 수치 필드가 없다 — 같은 결함 없음. 상세(`GET /posts/{id}`)·`/posts/mine` 은 캐시 없음.
+
+---
+
+## CORRECTION — AC-6 · AC-7 닫힘 (2026-10-26 UTC, CI 로그 실측)
+
+- **AC-6 ✅** — impl PR #4563(head `c22c8c9d2`, squash `b3a113aa6`) 의 run `40185901815` job `121146537505` «Integration (fan-platform, Testcontainers)» = SUCCESS. 잡 초록만으로 닫지 않고 **로그에서 셀 이름을 읽었다**(태그 없는 Testcontainers 는 «돌았다» 가 추론뿐인 함정): `:projects:fan-platform:apps:community-service:integrationTest` 실행, `FeedQueryIntegrationTest > 🔴 053 AC-6: 캐시를 채운 뒤 반응·댓글을 더하면 TTL 안에서도 다음 조회에 새 수치가 보인다 PASSED` · `FeedQueryIntegrationTest > 053 AC-5: 히트에서 집계 질의가 실제 DB 오류로 실패해도 200 + 캐시 적재 시점 수치 (트랜잭션 경계 실측) PASSED`, 기존 4셀도 PASSED, 요약 표 `community-service:integrationTest | 59 | 0 | 0 | 0`, `BUILD SUCCESSFUL in 2m 51s`. ⚪ (b) 셀의 **수정 전 빨강**(`execute` 에 `@Transactional(readOnly = true)` 복원 → 500)은 CI 변이를 돌리지 않아 **측정하지 않았다** — 이 셀이 트랜잭션 경계를 무는지는 단위 테스트의 `@Transactional` 경계 핀(위 «테스트» 절)이 대신 지킨다.
+- **AC-7 ✅** — 통합: 위 59건 실패 0. 단위: 같은 run 의 job `121146537301` «Build & Test (JDK 21, Linux)» = SUCCESS, 로그에 `> Task :projects:fan-platform:apps:community-service:test` 가 접미사 없이(= `UP-TO-DATE`/`FROM-CACHE` 아님, 실제 실행) 찍히고 빌드 성공 — 이 잡은 테스트별 이벤트를 출력하지 않아 **셀 단위는 로그로 못 본다**; 셀 수는 구현 기록의 로컬 실행(`--rerun-tasks` rc=0, 41 클래스 238 tests, 실패 0)이다. 형제 grep 은 위 절.
+- **AC-8 — 열린 채 유지**(다음 AMI 굽기 후 창). ⇒ review 유지.
+- (원문 체크박스는 동결 규칙상 바꾸지 않았다 — 이 절이 AC-6 · AC-7 의 닫힘 기록이다.)
