@@ -103,11 +103,11 @@ describe('sample finance /api/finance/accounts/metrics (TASK-MONO-812)', () => {
     }
     expect(sawNonZero).toBe(true);
 
-    // The month (hand-summed): 4 top-ups 80,000 + 50,000 + 30,000 + 20,000 = 180,000 원
-    // and 3 transfers 40,000 + 25,000 + 35,000 = 100,000 원; the ACTIVE hold and the
-    // FAILED transfer move nothing — the control group, visible on the sample screen.
+    // The month (hand-summed): 6 top-ups 80,000 + 50,000 + 30,000 + 20,000 + 10,000 + 15,000
+    // = 205,000 원 and 4 transfers 40,000 + 25,000 + 35,000 + 25,000 = 125,000 원; the ACTIVE
+    // hold and the FAILED transfer move nothing — the control group, visible on the sample screen.
     const month = await metrics('month');
-    expect(month.metrics.map((x) => x.current)).toEqual(['4', '180000', '3', '100000', '0', '0']);
+    expect(month.metrics.map((x) => x.current)).toEqual(['6', '205000', '4', '125000', '0', '0']);
     // The week window (09-14..15 KST): the 09-14 transfer 35,000 + the 09-15 top-up 20,000.
     const week = await metrics('week');
     expect(week.metrics.map((x) => x.current)).toEqual(['1', '20000', '1', '35000', '0', '0']);
@@ -131,10 +131,20 @@ describe('sample finance /api/finance/accounts/metrics (TASK-MONO-812)', () => {
       .filter((s) => s.values.topupCount !== '0' || s.values.transferCount !== '0')
       .map((s) => s.date);
     expect(active).toEqual([
-      '2026-09-01', '2026-09-03', '2026-09-06', '2026-09-07',
-      '2026-09-10', '2026-09-14', '2026-09-15',
+      '2026-09-01', '2026-09-03', '2026-09-05', '2026-09-06', '2026-09-07',
+      '2026-09-10', '2026-09-12', '2026-09-14', '2026-09-15',
     ]);
+    // TASK-PC-FE-378: the chart draws `topupCount` ONLY (FinanceOverviewScreen
+    // chartKey) — count THAT metric's non-zero days, separate from the union above.
+    const topupDays = month.series.filter((s) => s.values.topupCount !== '0').map((s) => s.date);
+    expect(topupDays).toEqual([
+      '2026-09-01', '2026-09-03', '2026-09-05', '2026-09-07', '2026-09-12', '2026-09-15',
+    ]);
+    expect(topupDays.length).toBeGreaterThanOrEqual(6);
     const week = await metrics('week');
+    expect(week.series.filter((s) => s.values.topupCount !== '0').map((s) => s.date)).toEqual([
+      '2026-09-15',
+    ]);
     expect(
       week.series
         .filter((s) => s.values.topupCount !== '0' || s.values.transferCount !== '0')
