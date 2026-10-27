@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-_(없음)_
+- `TASK-PC-FE-379-operator-overview-headline-week-comparison-bars.md` — **운영자 통합 개요 카드 headline 에 «이번 주 vs 지난 주» 막대 두 개** (READY 2026-10-27 UTC · 소유자 채택): 이미 받는 `current`·`previous` 로 metric 하나 안에서 같은 눈금 · 중립 색(증감 색칠 금지) · `aria-hidden` · 순수 기하 함수(`chartMagnitude`, F5 가드 유지). 계약·서버·호출 불변. 스파크라인은 계약·기간 결정 선행이라 범위 밖. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 
