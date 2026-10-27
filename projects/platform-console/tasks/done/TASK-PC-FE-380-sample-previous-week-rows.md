@@ -8,7 +8,7 @@ TASK-PC-FE-380
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -97,3 +97,10 @@ frontend
 - **바뀐 상수(손 합산):** wms 월 `qtyShipped` 195 → 220, 주간 previous 20 → 45 / finance 월 `['7','235000','5','155000',…]` → `['7','217000','5','137000',…]`, 주간 previous `['2','60000','1','30000',…]` → `['2','42000','1','12000',…]`, `topupCount` 날 6 유지 / iam 월 `['8','4','3','0']` → `['8','6','3','0']`, 주간 previous `['0','3','1','0']` 신설, 실패 날 4 → 5(하한 5 를 **겨우** 충족) / erp APPROVED 4 → 6, 월 `['10','3','2']` → `['12','5','2']`, 상신 날 10 → 11, 주간 previous 상신 1 · 승인 3 · 반려 0 신설.
 - **검증:** 메인 세션 재실행 vitest `tests/unit/sample` · `features/operator-overview` · `performance-format` 32 파일 604건 rc=0 · `tsc` rc=0 · 에이전트 전체 vitest 451 파일 5,587건 rc=0 · `lint` rc=0.
 - AC-5(운영 실측)는 여전히 열림 — 이 재조정이 머지·배포된 뒤 잰다.
+
+---
+
+## CORRECTION — AC-5 닫힘 · done (2026-10-27 UTC, 운영 실측)
+
+- **AC-5 ✅** — Vercel `Production – kanggle-console` 배포 id `7359306803`, sha `11879fb11…`(= 이 티켓 squash, 재조정 포함) `success`. 운영 `https://console.hubwang.com/dashboards/overview` 샘플 방문자(Playwright), 이번 주 / 지난 주 · 막대 폭: iam 1 / 3 (33% / 100%) · wms 20 / 45 (44% / 100%) · scm ₩77,500 / ₩87,500 (89% / 100%) · finance ₩35,000 / ₩12,000 (100% / 34%) · erp 1 / 3 (33% / 100%) · ecommerce ₩48,000 / ₩36,000 (100% / 75%) — 로컬 실측과 동일, wms · finance · ecommerce 의 «지난 주» 폭 > 0, 여섯 카드 모두 두 막대가 다르다.
+- 4차원: impl PR #4590 `state=MERGED` · squash `11879fb11` ⊂ `origin/main` · 머지 시점 `statusCheckRollup` FAILURE 0 · AC-1~5 전부 닫힘 ⇒ **done**.
