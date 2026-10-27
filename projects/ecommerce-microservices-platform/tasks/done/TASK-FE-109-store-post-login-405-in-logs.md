@@ -4,7 +4,7 @@ TASK-FE-109
 
 # Status
 
-review
+done
 
 # Title
 
@@ -82,3 +82,19 @@ ecommerce-microservices-platform
 
 - AC-1 의 라이브 칸(«다음 창 Vercel 로그에서 `POST /login 405` 0줄» + vitals 대조군)은 이번 창에서 **재지 않았다** ⚪ — 스토어 Vercel 요청 로그를 읽지 않았다. 이 칸에는 AMI 가 아니라 Vercel 로그가 필요하다.
 - 그래서 `review/` 에 그대로 둔다. 다음 창의 할 일 목록: `TASK-MONO-672` § Order «Still open» 8.
+
+---
+
+## CORRECTION — AC-1 라이브 칸 ⚪ 소유자 결정 · 측정 도구 대체 · 닫음 (2026-10-27 UTC)
+
+- **배포 전제:** 운영 `Production – kanggle-store` 배포 `45fa46428…`(2026-10-23T17:46:08Z) ⊃ 수정 squash `1ead6ea72`(#4328) — `git merge-base --is-ancestor` 참.
+- 🔴 **AC 문구의 도구(«Vercel 로그에서 `POST /login 405` 0줄»)는 지금 판정 도구가 될 수 없다 — 양성 대조군으로 확인.** 2026-10-27T08:00:19Z 에 `curl -X POST https://store.hubwang.com/login?fe109=control` 로 **405 1건을 일부러 만들었다**(응답 `405` 확인). 그 시간대(08:00:15~08:01:10Z)를:
+  - CLI `vercel logs -p kanggle-store -e production`(런타임) → 28건 **전부** `POST /api/vitals` 함수 stdout(web-vitals), 주입한 405 **없음**.
+  - CLI `vercel logs requests …`(CDN 요청 기록) → `plan_upgrade_required`(Observability Plus 필요) — 읽을 수 없음.
+  - 대시보드 Logs(소유자가 같은 시간대를 열어 붙임) → 같은 28줄, 주입한 405 **없음**(가장 이른 줄 17:00:28 KST).
+  - ⇒ 지금의 Vercel 로그는 이 405 가 몇 번 나든 «0줄» 로 보인다. 26차 창에서는 같은 로그에 `POST /login 405` 가 보였는데 왜 이제 안 보이는지는 **측정하지 않았다**(추론: 당시엔 `/login` POST 가 함수를 거쳐 기록됐고 지금은 함수 없이 응답 — 미확인).
+- **대신 원인 지점을 직접 쟀다(운영, 비로그인, Playwright, 로그인 흐름 3회: `/login` 6초 체류 → 클릭 → `/` 로 이동 = pagehide 로 vitals 전송):** 브라우저가 store 로 보낸 요청은 `GET /login`(200) 과 `POST /api/vitals`(응답 확인분 전부 **204**)뿐이고 **`POST /login` 은 0건**. 수정 전 405 의 출처는 `/api/vitals` 가 307 로 `/login` 에 넘겨지는 것(AC-0)이므로, 그 출발점에서 요청이 생기지 않음을 본 것이다.
+- **vitals 대조군 ✅:** 같은 시간대 함수 로그 28건 = `{"type":"web-vitals",…}`(FCP · TTFB · LCP · CLS · INP · FID, path `/login` · `/`) — 수집 라우트에 도달해 기록된다(CLI · 대시보드 일치).
+- ⚪ **로그인 상태는 운영에서 재지 않았다**(Edge Case «둘 다 잰다»). 수정 전에도 로그인 방문자는 인증 검사를 통과해 307 경로를 타지 않았고, CI 단위 대조군(«로그인한 방문자도 `/api/vitals` 에서 막히지 않음», run 38413114273 17/17)이 그 절반을 덮는다.
+- **소유자 결정(2026-10-27 UTC): ⚪ 로 마감** — AC-1 라이브 칸은 «AC 의 도구가 대조군을 못 봄 + 원인 지점 직접 실측 + vitals 대조군» 으로 닫는다. ⇒ AC-0 · AC-1 전부 닫힘.
+- 4차원: impl PR #4328 `state=MERGED` · squash `1ead6ea72` ⊂ `origin/main` · 머지 시점 `statusCheckRollup` FAILURE 0 · 이 AC 절 ⇒ **done**.
