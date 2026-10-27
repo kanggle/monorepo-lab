@@ -145,6 +145,54 @@ if ! seed_supplier; then
 fi
 
 # =============================================================================
+# 0b. 최근 4주 과거 발주 — «실적» 일별 그래프 · 운영자 개요 «지난 주» (TASK-MONO-820)
+# =============================================================================
+# 🔵 자리가 여기인 이유: 필요한 것은 위 0. 의 SUPPLIER_ID 와 토큰뿐이고, 시드 단계 전체가
+#    demo-up.sh 의 POST_UP_BUDGET(240s) 안에 묶여 있어 맨 끝(제안 60초 대기 뒤)에 두면 잘릴 수 있다.
+# 아래 1~3 은 전부 «오늘» 에 찍힌다 — `/po/metrics` 는 submitted_at 과 RECEIVED 이력의
+# occurred_at 을 KST 일로 자르므로(PurchaseOrderMetricsService) 그래프는 막대 하나뿐이었다.
+# 과거 시각으로 상신하는 API 가 없으므로 이 단계만 직접-DB 다. 규칙(창 · 날짜 유도 id ·
+# 수렴)은 `lib-backfill.sh` 헤더와 README § 「시각 경계 — 예외: 최근 4주 과거 이력」.
+#
+# 🔵 아웃박스를 거치지 않는다 = 이벤트가 없다 ⇒ wms 로 inbound-expected 가 가지 않고(ASN 이
+#    생기지 않는다) supplier-mock 도 안 불린다. 이 행들은 «과거에 이미 끝난 일» 이라 맞다.
+#    RECEIVED 행도 wms 입고 없이 이력만 갖는다 — 지표가 읽는 것은 이력뿐이다.
+# 🔵 공급사 = 위 0. 에서 얻은 SUPPLIER_ID, 구매자 = 이 운영자 토큰의 sub, SKU = $SKU_A.
+# shellcheck source=infra/demo/seed/lib-backfill.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib-backfill.sh"
+scm_backfill() {
+  local buyer sql planned before after
+  buyer="$(jwt_sub "$SEED_TOKEN")"
+  [ -n "$buyer" ] || { seed_fail "과거 발주 — 운영자 토큰에서 sub 를 읽지 못했습니다"; return 1; }
+  bf_init || { seed_fail "과거 발주 — 창을 계산하지 못했습니다"; return 1; }
+  sql="$(bf_scm_sql "$SEED_TENANT" "$SUPPLIER_ID" "$buyer" "$SKU_A")" \
+    || { seed_fail "과거 발주 — SQL 생성 실패(빈 인자?)"; return 1; }
+  planned="$(bf_planned "$sql" purchase_orders)"
+  bf_id_range 0101
+  local q="SELECT count(*) FROM purchase_orders WHERE tenant_id = '$SEED_TENANT' AND id BETWEEN '$BF_LO' AND '$BF_HI';"
+  before="$(dbquery "$PG_C" psql "$PG_DB" "$PG_U" "$PG_P" "$q" | tr -d ' \r\n')"
+  if ! dbexec --why "과거 시각으로 PO 를 상신·확정·입고하는 API 가 없다 — POST /api/v1/procurement/po 와 /po/{id}/submit|confirm 은 submitted_at·confirmed_at 을 서버 Clock(지금)으로 찍고(PurchaseOrderApplicationService), RECEIVED 는 wms 입고 이벤트 소비로만 생긴다. /po/metrics 는 submitted_at 과 po_status_history(to_status=RECEIVED).occurred_at 을 KST 일로 자르므로 «최근 28일» 막대는 과거 시각 행으로만 생긴다(TASK-MONO-820 · README § 시각 경계 예외). 행 id·번호는 KST 날짜에서 유도 → ON CONFLICT DO NOTHING / WHERE NOT EXISTS 로 수렴" \
+      "$PG_C" psql "$PG_DB" "$PG_U" "$PG_P" <<<"$sql" >/dev/null; then
+    seed_fail "과거 발주 INSERT 실패 — 트랜잭션 전체가 되돌려졌습니다(ON_ERROR_STOP)"
+    return 1
+  fi
+  after="$(dbquery "$PG_C" psql "$PG_DB" "$PG_U" "$PG_P" "$q" | tr -d ' \r\n')"
+  bf_day "$BF_FIRST"; local first="$BF_DATE"; bf_day "$BF_LAST"
+  if [ -n "$planned" ] && [ "${after:-x}" = "$planned" ]; then
+    if [ "${after:-0}" -gt "${before:-0}" ] 2>/dev/null; then
+      SEED_CREATED=$((SEED_CREATED + 1)); seed_log "생성  과거 발주 $first ~ $BF_DATE (KST) — 창 안 $after 건 (이번에 +$(( after - ${before:-0} )))"
+    else
+      SEED_EXISTING=$((SEED_EXISTING + 1)); seed_log "존재  과거 발주 $first ~ $BF_DATE (KST) — 창 안 $after 건 (수렴, +0)"
+    fi
+  elif [ "${after:-0}" -gt 0 ] 2>/dev/null; then
+    seed_warn "과거 발주 — 창 안 $after 건, 계획 $planned 건. 같은 id 를 다른 생성기 판이 먼저 넣었을 수 있습니다(lib-backfill.sh 변경 후 첫 부팅이면 정상)"
+  else
+    seed_fail "과거 발주 — INSERT 는 성공했는데 창 안 행이 ${after:-<읽기 실패>} 건입니다(계획 $planned)"
+  fi
+}
+scm_backfill
+
+# =============================================================================
 # 1. /scm/config — SKU-공급사 매핑 + 재고 정책
 # =============================================================================
 # PUT upsert 라 본질적으로 멱등하다(같은 본문 재적용 = 같은 상태).
@@ -382,5 +430,6 @@ if http GET "$SCM/api/v1/inventory-visibility/snapshot?size=20"; then
 else
   seed_fail "재고 가시성 조회 — HTTP $SEED_LAST_STATUS ${SEED_LAST_BODY:0:160}"
 fi
+
 
 seed_summary

@@ -45,7 +45,8 @@ skipped=()
 for d in "${DOMAINS[@]}"; do
   script="$HERE/seed-$d.sh"
   if [ ! -f "$script" ]; then
-    # 시드 스크립트가 없는 도메인은 "시드할 것이 없다" 이다(iam 은 Flyway 가 전부 심는다).
+    # 시드 스크립트가 없는 도메인은 "시드할 것이 없다" 이다. (iam 의 계정·자격증명은 Flyway 가
+    # 심고, `seed-iam.sh` 는 최근 4주 로그인·잠금 이력만 넣는다 — TASK-MONO-820.)
     # 그래도 **목록에 남긴다** — 침묵은 커버리지 착시다.
     skipped+=("$d"); continue
   fi

@@ -312,6 +312,62 @@ EC_SKU_ID_BASE=2000
 EC_SKU_COUNT=86
 EC_QTY=100
 
+# =============================================================================
+# 1c) 최근 4주 과거 입출고 — «실적» 일별 그래프 · 운영자 개요 «지난 주» (TASK-MONO-820)
+# =============================================================================
+# 🔵 자리가 여기인 이유: API 를 부르지 않으므로 창고 id(위 상수)만 있으면 되고, 시드 단계 전체가
+#    demo-up.sh 의 POST_UP_BUDGET(240s) 안에 묶여 있다 — 아래 1b) 의 ASN 86건(신선 볼륨에서 수백
+#    호출) 뒤에 두면 예산에 잘려 안 돌 수 있다.
+# 1)·1b)·2) 는 전부 «오늘» 에 찍힌다. `/dashboard/metrics` 는 **읽기 모델**
+# `admin_putaway_fact.completed_at` · `admin_shipment_summary.shipped_at` 을 KST 일로 자른다
+# (WarehouseMetricsService — 테넌트 필터 없음). 그래서 이 단계는 원본(inbound/outbound)이 아니라
+# **읽기 모델**에 넣는다 — 원본 행은 이벤트를 거쳐야 투영되고, 원본 API 는 과거 시각을 못 찍는다.
+# `/dashboard/throughput` 의 일 카운터도 같은 사실로 맞춘다(입고 = 새 사실만 증분, 출고 =
+# `admin_rebuild_outbound_daily_kst()`). 규칙은 `lib-backfill.sh` 헤더와 README § 「시각 경계 —
+# 예외: 최근 4주 과거 이력」.
+# 🔵 출하 행의 order_id 는 어떤 outbound 주문도 아니다. 콘솔에서 출하 행은 링크가 없고
+#    (WmsRecentShipments · WmsShipmentsDataTable), orderId → shipmentId 역조회는 outbound 주문
+#    상세에서만 일어나므로 이 id 로 가는 화면 경로가 없다(404 를 볼 길이 없다). tenant_id 는
+#    NULL — 테넌트 소유 출하 목록(§1.3)에는 무제한 호출자에게만 보이고, 지표(창고 전역)에는 잡힌다.
+# shellcheck source=infra/demo/seed/lib-backfill.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib-backfill.sh"
+WMS_ADMIN_DB_PASSWORD="${ADMIN_DB_PASSWORD:-admin}"
+wms_backfill() {
+  local sql pp ps q bput bship aput aship
+  bf_init || { seed_fail "과거 입출고 — 창을 계산하지 못했습니다"; return 1; }
+  sql="$(bf_wms_sql "$WAREHOUSE_ID" "$WH_MAIN_ID")" || { seed_fail "과거 입출고 — SQL 생성 실패"; return 1; }
+  pp="$(bf_planned "$sql" admin_putaway_fact)"; ps="$(bf_planned "$sql" admin_shipment_summary)"
+  bf_id_range 4101; q="SELECT count(*) FROM admin_putaway_fact WHERE event_id BETWEEN '$BF_LO' AND '$BF_HI'"
+  bput="$(dbquery wms-postgres psql admin_db admin "$WMS_ADMIN_DB_PASSWORD" "$q" | tr -d ' \r\n')"
+  local q2; bf_id_range 4102; q2="SELECT count(*) FROM admin_shipment_summary WHERE shipment_id BETWEEN '$BF_LO' AND '$BF_HI'"
+  bship="$(dbquery wms-postgres psql admin_db admin "$WMS_ADMIN_DB_PASSWORD" "$q2" | tr -d ' \r\n')"
+  if ! dbexec --why "admin_putaway_fact·admin_shipment_summary 는 admin-service 의 Kafka 투영(InboundProjectionService · OutboundProjectionService)만 쓰는 읽기 모델이고 쓰기 API 가 없다. 원본(inbound/outbound) API 는 completed_at·shipped_at 을 지금으로 찍고, 원본 행은 이벤트로만 투영된다(토픽 보존 7일). /dashboard/metrics 가 그 두 표를 KST 일로 자르므로 «최근 28일» 막대는 과거 시각 읽기 모델 행으로만 생긴다(TASK-MONO-820 · README § 시각 경계 예외). /dashboard/throughput 일 카운터: 출고 = admin_rebuild_outbound_daily_kst(), 입고 = 이번에 새로 들어간 사실만 증분(admin_rebuild_inbound_daily_kst() 는 사실 < 카운터인 볼륨에서 거절하므로 부르지 않는다). id 는 KST 날짜에서 유도 → ON CONFLICT DO NOTHING 으로 수렴" \
+      wms-postgres psql admin_db admin "$WMS_ADMIN_DB_PASSWORD" <<<"$sql" >/dev/null; then
+    seed_fail "과거 입출고 INSERT 실패 — 트랜잭션 전체가 되돌려졌습니다(ON_ERROR_STOP)"
+    return 1
+  fi
+  aput="$(dbquery wms-postgres psql admin_db admin "$WMS_ADMIN_DB_PASSWORD" "$q" | tr -d ' \r\n')"
+  aship="$(dbquery wms-postgres psql admin_db admin "$WMS_ADMIN_DB_PASSWORD" "$q2" | tr -d ' \r\n')"
+  bf_day "$BF_FIRST"; local first="$BF_DATE"; bf_day "$BF_LAST"
+  if [ -n "$pp" ] && [ -n "$ps" ] && [ "${aput:-x}" = "$pp" ] && [ "${aship:-x}" = "$ps" ]; then
+    if [ $(( ${aput:-0} + ${aship:-0} )) -gt $(( ${bput:-0} + ${bship:-0} )) ] 2>/dev/null; then
+      SEED_CREATED=$((SEED_CREATED + 1)); seed_log "생성  과거 입출고 $first ~ $BF_DATE (KST) — 적치 $aput · 출하 $aship (이번에 +$(( aput - ${bput:-0} )) · +$(( aship - ${bship:-0} )))"
+    else
+      SEED_EXISTING=$((SEED_EXISTING + 1)); seed_log "존재  과거 입출고 $first ~ $BF_DATE (KST) — 적치 $aput · 출하 $aship (수렴, +0)"
+    fi
+  elif [ "${aput:-0}" -gt 0 ] 2>/dev/null && [ "${aship:-0}" -gt 0 ] 2>/dev/null; then
+    seed_warn "과거 입출고 — 창 안 적치 $aput/$pp · 출하 $aship/$ps. 같은 id 를 다른 생성기 판이 먼저 넣었을 수 있습니다(lib-backfill.sh 변경 후 첫 부팅이면 정상)"
+  else
+    seed_fail "과거 입출고 — INSERT 는 성공했는데 창 안 행이 적치 ${aput:-<읽기 실패>} · 출하 ${aship:-<읽기 실패>} 건입니다(계획 $pp · $ps)"
+  fi
+}
+if container_up wms-postgres; then
+  wms_backfill
+else
+  seed_warn "wms-postgres 컨테이너 미기동 — 과거 입출고를 건너뜁니다(«실적» 그래프가 하루치만 보입니다)"
+fi
+# ---- 1c) 끝 — 여기부터 다시 1b) (위 상수를 쓰는 ecommerce SKU 86종 입고) ----
+
 # re_get <변수> <ERE(그룹 1개)> — SEED_LAST_BODY 의 첫 매치를 변수에 넣는다.
 # 🔵 서브셸·파이프를 쓰지 않는다: 86 × 5 호출에 `$(printf | grep | head | sed)` 를 쓰면
 # 항목마다 프로세스 네 개다(msys 에서는 fork 가 비싸다). bash 정규식은 fork 0 이다.
@@ -508,5 +564,6 @@ if container_up wms-postgres; then
 else
   seed_warn "wms-postgres 컨테이너 미기동 — WH-MAIN 재고 검증을 건너뜁니다"
 fi
+
 
 seed_summary
