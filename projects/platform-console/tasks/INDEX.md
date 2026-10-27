@@ -92,7 +92,8 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-_(없음)_
+- `TASK-PC-FE-380-sample-previous-week-rows.md` — **익명 샘플 «지난 주»(9/7~8) 가 비어 운영자 개요 막대 3개의 지난 주가 늘 0** (READY 2026-10-27 UTC · 소유자 결정): wms 출고 · finance 이체 · ecommerce 실현 주문을 9/7~8 에 추가, 월간 상수는 손으로 다시 셈. 충돌 테스트(wms «이전 구간 = "0"») 는 월간 이전 구간(8월)을 비워 지키고 주간/월간 단언으로 분리. 분석=Opus 5.5 / 구현 권장=Sonnet.
+- `TASK-PC-FE-381-domain-health-summary-ratio-bar.md` — **«도메인 상태 요약» 에 정상 · 주의 · 점검 불가 비율 막대** (READY 2026-10-27 UTC · 소유자 채택): 공용 `StackedBar` 재사용, 배지와 같은 의미 색, `aria-hidden`, 개수 텍스트 불변. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 
