@@ -8,7 +8,7 @@ TASK-PC-FE-380
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -76,3 +76,12 @@ frontend
 
 - 월간 이전 구간(8월)에 행을 넣는다 → «키가 빠지지 않고 `"0"`» 를 지키는 표본이 사라진다(AC-2).
 - wms 출고 행만 넣고 saga·배송 교차 참조를 빠뜨린다 → 상세 화면 표본이 깨진다(374 가 쓴 시드 목록 패턴을 따른다).
+
+# Implementation Notes (2026-10-27 UTC)
+
+- 추가 행(전부 KST 9/7~8, 20:00 이전 · 8월 0건): wms `ord-sample-0011` SHIPPED 20(출고 KST 09-08 12:00 — `EXTRA_SHIPPED_SEEDS` 한 줄, saga · 피킹 · 배송 `ship-sample-0008` · `dispatch-sample-0008` 은 같은 시드 목록에서 파생) · finance `txn-sample-0013` TRANSFER 30,000(KST 09-08 13:02) + `txn-sample-0014` TOPUP 30,000(KST 09-07 17:03, 이미 충전이 있는 날 — `topupCount` 날짜 목록 불변) 로 **잔액 상쇄** · ecommerce `order-sample-0018` CONFIRMED `ECOBAG ×3` = 36,000(seller-sample-0002, 결제 KST 09-08 11:00).
+- **AC-1** 주간 previous: wms `qtyShipped` **20**(shipmentCount 1) · finance `transferAmount:KRW` **30,000** · ecommerce `revenue` **36,000**(units 3 · orders 1) — 손으로 센 값으로 단언.
+- **AC-2** `sample-wms-metrics.test.ts` 를 둘로: 주간 previous `[['qtyReceived','0'],['qtyShipped','20'],['shipmentCount','1']]` / 월간 previous `['0','0','0']`(키 존재). finance · ecommerce 에도 월간 previous 0 단언 추가.
+- **AC-3** 바뀐 월간 상수(손 합산): wms `qtyShipped` 175 → 195 · `shipmentCount` 7 → 8 · 출고 날 7 → 8 / finance 월 `['6','205000','4','125000',…]` → `['7','235000','5','155000',…]`, `topupCount` 날 6 그대로(≥ 6 유지) / ecommerce 월 매출 343,000 → 379,000 · units 14 → 17 · orders 10 → 11, 상품 랭킹 prod-3 36,000 → 72,000 · 주문 수 순위 prod-3 ↔ prod-2, 셀러 seller-2 36,000 → 72,000 · 3건(랭킹 4 · 3항목 유지). `sample-fixtures-schema-wms` 주문 10 → 11 · 배송 7 → 8.
+- **AC-4 (로컬)** vitest `tests/unit/sample` · `features/operator-overview` · `performance-format` 32 파일 604건 rc=0(메인 세션 재실행) · 구현 에이전트 전체 vitest 451 파일 5,585건 rc=0 · `tsc` rc=0 · `lint` rc=0.
+- **AC-5 열림** — 배포 뒤 운영 실측.
