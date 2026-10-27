@@ -138,6 +138,36 @@ describe('card renderer — the headline is its own cell', () => {
     expect(screen.getByTestId('operator-overview-card-iam-locked').textContent).toBe('3');
   });
 
+  it('TASK-PC-FE-379 — each headline metric draws «이번 주 · 지난 주» on its own scale, decorative and uncoloured by direction', () => {
+    const overview = overviewWith(okAll);
+    render(<OperatorOverviewScreen overview={overview} />, { wrapper: wrapper() });
+
+    const bar = (d: string, key: string, w: 'current' | 'previous') =>
+      screen.getByTestId(`operator-overview-card-${d}-headline-${key}-bars-${w}`);
+    const width = (d: string, key: string, w: 'current' | 'previous') => bar(d, key, w).style.width;
+
+    // Hand-computed from the fixture: iam 7 vs 4 · wms 640 vs 700 · erp 8 vs 8 · scm USD 12 vs 0.
+    expect(width('iam', 'loginFailure', 'current')).toBe('100%');
+    expect(parseFloat(width('iam', 'loginFailure', 'previous'))).toBeCloseTo((4 / 7) * 100, 6);
+    expect(parseFloat(width('wms', 'qtyShipped', 'current'))).toBeCloseTo((640 / 700) * 100, 6);
+    expect(width('wms', 'qtyShipped', 'previous')).toBe('100%');
+    expect(width('erp', 'approved', 'current')).toBe('100%');
+    expect(width('erp', 'approved', 'previous')).toBe('100%');
+    // Two currencies → two bar pairs, each on its own scale (USD previous 0 → empty).
+    expect(width('scm', 'poAmount:USD', 'current')).toBe('100%');
+    expect(width('scm', 'poAmount:USD', 'previous')).toBe('0%');
+    expect(bar('scm', 'poAmount:KRW', 'current')).toBeTruthy();
+
+    // Decorative: the numbers are already text; no direction colour (a rise in
+    // failed logins and a fall in shipments get the same hue as everything else).
+    const iamBars = screen.getByTestId('operator-overview-card-iam-headline-loginFailure-bars');
+    expect(iamBars).toHaveAttribute('aria-hidden', 'true');
+    for (const d of [['iam', 'loginFailure'], ['wms', 'qtyShipped']] as const) {
+      expect(bar(d[0], d[1], 'current').className).toContain('bg-primary/80');
+      expect(bar(d[0], d[1], 'previous').className).toContain('bg-primary/30');
+    }
+  });
+
   it('degraded / forbidden headline say so in words, show no number, and leave the card\'s own number', () => {
     const overview = overviewWith({
       ...okAll,
@@ -152,6 +182,9 @@ describe('card renderer — the headline is its own cell', () => {
     const erp = screen.getByTestId('operator-overview-card-erp-headline-forbidden');
     expect(erp.textContent).toContain('실적을 볼 권한이 없습니다');
     expect(screen.queryByTestId('operator-overview-card-erp-headline-approved-value')).toBeNull();
+    // TASK-PC-FE-379 AC-4 — no bars without an ok headline.
+    expect(screen.queryByTestId('operator-overview-card-wms-headline-qtyShipped-bars')).toBeNull();
+    expect(screen.queryByTestId('operator-overview-card-erp-headline-approved-bars')).toBeNull();
 
     expect(screen.getByTestId('operator-overview-card-wms-unshipped').textContent).toBe('14');
     expect(screen.getByTestId('operator-overview-card-erp-inbox').textContent).toBe('2');

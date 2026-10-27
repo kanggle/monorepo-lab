@@ -1,5 +1,6 @@
 import {
   PERIOD_LABEL,
+  comparisonBars,
   describeDelta,
   formatDelta,
   formatMetricValue,
@@ -22,6 +23,45 @@ import type { DomainKey } from '../api/operator-overview-types';
  * Direction is never colour-coded: a rise is good for revenue and bad for failed
  * logins, and the card does not know which (same rule as the domain strips).
  */
+/**
+ * «이번 주 · 지난 주» on one scale for ONE metric (TASK-PC-FE-379). Decorative
+ * (`aria-hidden`) — the values are already text above. Both bars are the same
+ * neutral hue (current solid, previous light): the bars show «more or less»,
+ * never «better or worse». The scale never spans metrics or cards (their units
+ * differ).
+ */
+function WeekComparisonBars({
+  testid,
+  current,
+  previous,
+}: {
+  testid: string;
+  current: string;
+  previous: string;
+}) {
+  const bars = comparisonBars(current, previous);
+  const rows = [
+    { label: '이번 주', percent: bars.currentPercent, tone: 'bg-primary/80', key: 'current' },
+    { label: '지난 주', percent: bars.previousPercent, tone: 'bg-primary/30', key: 'previous' },
+  ] as const;
+  return (
+    <div aria-hidden="true" data-testid={testid} className="mt-1 space-y-1">
+      {rows.map((r) => (
+        <div key={r.key} className="flex items-center gap-2">
+          <span className="w-10 shrink-0 text-[10px] text-muted-foreground">{r.label}</span>
+          <div className="h-1.5 flex-1 rounded bg-muted">
+            <div
+              data-testid={`${testid}-${r.key}`}
+              className={`h-1.5 rounded ${r.tone}`}
+              style={{ width: `${r.percent}%` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function DomainCardHeadline({
   domain,
   headline,
@@ -68,6 +108,7 @@ export function DomainCardHeadline({
               <span className="sr-only">{describeDelta(delta)}</span>
               <span className="ml-2">직전 {formatMetricValue(m.previous, m)}</span>
             </p>
+            <WeekComparisonBars testid={`${testid}-${m.key}-bars`} current={m.current} previous={m.previous} />
           </div>
         );
       })}

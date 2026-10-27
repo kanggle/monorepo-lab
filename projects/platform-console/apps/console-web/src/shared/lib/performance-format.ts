@@ -118,6 +118,29 @@ export interface SeriesBar {
   percent: number;
 }
 
+export interface ComparisonBars {
+  /** Width of the current-window bar, % of the larger of the two values. */
+  currentPercent: number;
+  /** Width of the previous-window bar, same scale. */
+  previousPercent: number;
+}
+
+/**
+ * Two windows of ONE metric on one scale (TASK-PC-FE-379 — the operator
+ * overview card headline). Same rules as {@link seriesBars}: scaled to the larger
+ * of the two, a 2% sliver for any positive value, 0 for zero, negative or
+ * undrawable values — so both 0 draws two empty bars, never NaN. Geometry only.
+ */
+export function comparisonBars(current: string, previous: string): ComparisonBars {
+  const [cur, prev] = [current, previous].map((v) => {
+    const m = chartMagnitude(v);
+    return m !== null && m > 0 ? m : 0;
+  });
+  const max = Math.max(cur, prev);
+  const pct = (m: number) => (max === 0 || m === 0 ? 0 : Math.max(2, (m / max) * 100));
+  return { currentPercent: pct(cur), previousPercent: pct(prev) };
+}
+
 /** One metric's daily bars, scaled to that metric's own max. */
 export function seriesBars(
   series: readonly PerformanceSeriesPoint[],
