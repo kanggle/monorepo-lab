@@ -8,7 +8,7 @@ Fix issue found in TASK-PC-FE-374 — 재무 개요 «실적» 그래프(충전 
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -86,3 +86,10 @@ frontend
 - **AC-2 · AC-3**: `vitest run tests/unit/sample` 24 파일 464건 rc=0(`sample-overview-cards-match-lists` · `sample-fixtures-schema-*` · `sample-label-rule` 포함) · `tsc` rc=0 · `lint` rc=0.
 - **AC-4 열림** — 배포 뒤 운영 샘플 실측.
 - 기록: 구현 에이전트가 사용 한도로 중단돼 남긴 diff 를 메인 세션이 읽고(날짜·합·상대 계좌 id 대조) 검증해 이어받았다.
+
+---
+
+## CORRECTION — AC-4 닫힘 · done (2026-10-27 UTC, 운영 실측)
+
+- **AC-4 ✅** — Vercel `Production – kanggle-console` 배포 id `7352965750`, sha `0c7e1d7a5…`(= 이 티켓의 squash 머지) `state=success` 2026-10-27T07:39:55Z. 그 뒤 `https://console.hubwang.com` 샘플 방문자(Playwright, `X-Vercel-Cache: MISS` · `Age: 0`): `/finance?period=month` 15열 중 0 아닌 막대 **6** = 09-01 · 03 · 05 · 07 · 12 · 15(AC-1 의 손 목록과 일치), `week` 2열 중 **1** = 09-15.
+- 4차원: impl PR #4581 `state=MERGED` · squash `0c7e1d7a5` ⊂ `origin/main` · 머지 시점 `statusCheckRollup` FAILURE 0 · AC-1~4 전부 닫힘 ⇒ **done**.
