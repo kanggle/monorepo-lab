@@ -464,6 +464,10 @@ const EXTRA_ORDERS: readonly OrderSeed[] = [
   { orderId: 'order-sample-0016', userId: 'user-sample-0002', status: 'PENDING', items: [ECOBAG(1)], shippingAddress: ADDRESS_MINJUN, createdAt: '2026-09-14T02:00:00Z', updatedAt: null },
   // CANCELLED — never counted
   { orderId: 'order-sample-0017', userId: 'user-sample-0001', status: 'CANCELLED', items: [ECOBAG(2)], shippingAddress: ADDRESS_HANA, createdAt: '2026-09-11T01:00:00Z', updatedAt: '2026-09-11T03:00:00Z' },
+  // TASK-PC-FE-380 — CONFIRMED, paid 09-08 KST 11:00 (inside the PREVIOUS-week window
+  // 09-07..09-08 20:00 KST, so the week «지난 주» revenue is non-zero) — 3 x 12000 = 36000
+  // (seller 2). Nothing is added in the previous-MONTH window (08-01..08-15).
+  { orderId: 'order-sample-0018', userId: 'user-sample-0001', status: 'CONFIRMED', items: [ECOBAG(3)], shippingAddress: ADDRESS_HANA, createdAt: '2026-09-08T01:30:00Z', updatedAt: '2026-09-08T02:00:00Z' },
 ];
 
 export const ECOMMERCE_ORDERS: readonly OrderSeed[] = [

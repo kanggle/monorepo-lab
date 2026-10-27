@@ -282,6 +282,30 @@ export const SAMPLE_FINANCE_TRANSACTIONS = [
     createdAt: '2026-09-12T05:00:00Z',
     settledAt: '2026-09-12T05:02:00Z', // KST 09-12
   },
+  // TASK-PC-FE-380 — a settled TRANSFER inside the PREVIOUS-week window (09-07..09-08
+  // 20:00 KST) so the week «지난 주» 이체 is non-zero, paired with an equal TOPUP (30000
+  // each) so the typed balance above is left untouched. The TOPUP lands on 09-07 KST —
+  // a day that already has a top-up (txn-0006) — so the topupCount day list gains no day.
+  {
+    transactionId: 'txn-sample-0013',
+    type: 'TRANSFER',
+    status: 'COMPLETED',
+    money: { amount: '30000', currency: 'KRW' },
+    counterpartyAccountId: 'sample-account-0002',
+    reversalOfTransactionId: null,
+    createdAt: '2026-09-08T04:00:00Z',
+    settledAt: '2026-09-08T04:02:00Z', // KST 09-08 13:02
+  },
+  {
+    transactionId: 'txn-sample-0014',
+    type: 'TOPUP',
+    status: 'COMPLETED',
+    money: { amount: '30000', currency: 'KRW' },
+    counterpartyAccountId: null,
+    reversalOfTransactionId: null,
+    createdAt: '2026-09-07T08:00:00Z',
+    settledAt: '2026-09-07T08:03:00Z', // KST 09-07 17:03
+  },
 ] as const;
 
 function transactionsFixture(path: string): unknown {
