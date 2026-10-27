@@ -83,10 +83,45 @@ describe('DomainHealthSummaryCard (TASK-PC-FE-061)', () => {
     expect(counts).toHaveTextContent('점검 불가 1');
   });
 
+  it('TASK-PC-FE-381 — the three counts as one ratio bar: widths = count / domains, status colours, decorative', () => {
+    render(
+      <DomainHealthSummaryCard
+        state={state([
+          ok('iam', 'UP'),
+          ok('wms', 'DOWN'),
+          ok('scm', 'OUT_OF_SERVICE'),
+          degraded('finance'),
+          ok('erp', 'UP'),
+        ])}
+      />,
+    );
+    const bar = screen.getByTestId('domain-health-summary-bar');
+    expect(bar).toHaveAttribute('aria-hidden', 'true');
+    const seg = (k: string) => bar.querySelector(`[data-segment="${k}"]`) as HTMLElement;
+    // Hand-counted: 2 healthy · 2 attention · 1 unknown of 5 domains.
+    expect(seg('healthy').style.width).toBe('40%');
+    expect(seg('attention').style.width).toBe('40%');
+    expect(seg('unknown').style.width).toBe('20%');
+    expect(seg('healthy').className).toContain('bg-green-500');
+    expect(seg('attention').className).toContain('bg-red-500');
+    expect(seg('unknown').className).toContain('bg-muted-foreground');
+    // The counts text stays — the bar never replaces it.
+    expect(screen.getByTestId('domain-health-summary-counts')).toHaveTextContent('정상 2');
+  });
+
+  it('TASK-PC-FE-381 — all healthy → one segment at 100%, the empty ones are not drawn', () => {
+    render(<DomainHealthSummaryCard state={state([ok('iam', 'UP'), ok('wms', 'UP'), ok('scm', 'UP')])} />);
+    const bar = screen.getByTestId('domain-health-summary-bar');
+    expect((bar.querySelector('[data-segment="healthy"]') as HTMLElement).style.width).toBe('100%');
+    expect(bar.querySelector('[data-segment="attention"]')).toBeNull();
+    expect(bar.querySelector('[data-segment="unknown"]')).toBeNull();
+  });
+
   it('null health (bff unavailable) → compact unavailable note, NO counts, link still present', () => {
     render(<DomainHealthSummaryCard state={state(null)} />);
     expect(screen.getByTestId('domain-health-summary-unavailable')).toBeInTheDocument();
     expect(screen.queryByTestId('domain-health-summary-counts')).toBeNull();
+    expect(screen.queryByTestId('domain-health-summary-bar')).toBeNull(); // TASK-PC-FE-381 AC-3
     // Degrade never blanks the bridge — the link still works.
     expect(screen.getByTestId('domain-health-summary-viewall')).toHaveAttribute(
       'href',

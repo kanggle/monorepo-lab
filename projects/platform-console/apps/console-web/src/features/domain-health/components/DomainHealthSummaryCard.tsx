@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { cn } from '@/shared/lib/cn';
+import { StackedBar } from '@/shared/ui/InlineBar';
 import { CARD_ORDER, type Card, type DomainKey } from '../api/types';
 import type { DomainHealthState } from '../api/domain-health-state';
 import { healthTone, type HealthTone } from '../lib/tone';
@@ -109,6 +110,18 @@ function SummaryBody({ cards }: { cards: ReadonlyArray<Card> }) {
         {' · '}점검 불가 {unknown}{' '}
         <span className="text-xs">/ {cards.length}개 도메인</span>
       </p>
+      {/* TASK-PC-FE-381 — the same three counts as one ratio bar. Decorative
+          (the counts above are the text); status colours mean what the badge
+          dots mean — health, unlike a metric's rise/fall, has a good side. */}
+      <StackedBar
+        testid="domain-health-summary-bar"
+        expected={cards.length}
+        segments={[
+          { key: 'healthy', value: healthy, tone: 'success' },
+          { key: 'attention', value: attention, tone: 'danger' },
+          { key: 'unknown', value: unknown, tone: 'neutral' },
+        ]}
+      />
       <ul
         className="flex flex-wrap gap-2"
         data-testid="domain-health-summary-badges"
