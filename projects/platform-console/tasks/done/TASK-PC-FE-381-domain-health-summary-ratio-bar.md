@@ -8,7 +8,7 @@ TASK-PC-FE-381
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -80,3 +80,10 @@ frontend
 - **AC-1 · AC-2 · AC-3** `domain-health-summary.test.tsx` 2셀 추가 + 1단언: 2/2/1 of 5 → 폭 `40%` · `40%` · `20%`(손 계산) · `aria-hidden` · 색 클래스(`bg-green-500` · `bg-red-500` · `bg-muted-foreground`) · 개수 텍스트 유지 / 전부 정상 → `healthy` 100% · 빈 구간 미렌더 / `health === null` → 막대 없음.
 - **AC-4 (로컬)** vitest `domain-health-summary` · `overview-catalog-fold` · `overview-page-parallel` 18건 rc=0 · `tsc` rc=0 · `lint` rc=0.
 - **AC-5 열림** — 배포 뒤 운영 샘플 실측.
+
+---
+
+## CORRECTION — AC-5 닫힘 · done (2026-10-27 UTC, 운영 실측)
+
+- **AC-5 ✅** — Vercel `Production – kanggle-console` 배포 id `7358443701`, sha `eb856b5ac…`(= 이 티켓 squash) `success`. 운영 `https://console.hubwang.com/dashboards/overview` 샘플 방문자(Playwright): `domain-health-summary-bar` 보임 · `aria-hidden="true"` · 구간 `healthy 100%`(샘플 6개 도메인 전부 정상 — 개수 텍스트 «정상 6 · 주의 0 · 점검 불가 0 / 6개 도메인» 과 일치), 1280px · 390px 모두 가로 넘침 없음(`scrollWidth` = 뷰포트).
+- 4차원: impl PR #4588 `state=MERGED` · squash `eb856b5ac` ⊂ `origin/main` · 머지 시점 `statusCheckRollup` FAILURE 0 · AC-1~5 전부 닫힘 ⇒ **done**.
