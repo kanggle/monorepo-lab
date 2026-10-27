@@ -8,7 +8,7 @@ TASK-PC-FE-379
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -83,3 +83,12 @@ frontend
 - 증감에 초록/빨강을 칠한다 → 로그인 실패 증가를 «좋음» 으로 보이게 하는 거짓말(렌더러 주석이 금지).
 - 정수 문자열을 `Number()` 로 직접 바꾼다 → F5 가드 빨강(허용 파일 밖 강제 변환).
 - 6개 카드 막대를 한 눈금으로 맞춘다 → 단위가 다른 지표의 길이 비교. 눈금은 **metric 하나 안에서만**.
+
+# Implementation Notes (2026-10-27 UTC)
+
+- **AC-3** `shared/lib/performance-format.ts` `comparisonBars(current, previous)` → `{ currentPercent, previousPercent }` — `chartMagnitude` 만 사용(새 강제 변환 0, `f5-chart-geometry-exception` 초록), `seriesBars` 와 같은 규칙(큰 쪽 = 100%, 양수 최소 2%, 0·음수·읽을 수 없는 값 = 0). 단위 시험 `performance-format.test.ts` `comparisonBars` 4셀(7/4 · 640/700 · 8/8 · 12/0 · 0/0 · 1/100000 → 2% · `-5` · `abc`/`1e400` · 21자리 정수 문자열).
+- **AC-1 · AC-2 · AC-4** `DomainCardHeadline.tsx` — 각 `ok` metric 의 텍스트 아래 `WeekComparisonBars`(`…-headline-<key>-bars`, `-current` · `-previous`), `aria-hidden`, 색 `bg-primary/80`(이번 주) · `bg-primary/30`(지난 주) 고정 — 방향 무관. 통화별 metric 은 자기 쌍. 기존 텍스트·testid 불변. `headline-metric.test.tsx`: 폭 손계산 단언(iam 100%/57.14% · wms 91.43%/100% · erp 100/100 · scm USD 100/0) · `aria-hidden` · 색 클래스 · degraded/forbidden 에 막대 없음.
+- **AC-5 (로컬)** vitest `performance-format` · `features/operator-overview` · `f5-chart-geometry-exception` · `tests/unit/sample` 33 파일 612건 rc=0 · `tsc` rc=0 · `lint` rc=0.
+- **브라우저(로컬 `next dev` 샘플 방문자, Playwright)**: 1280px 막대 쌍 6 · 가로 넘침 없음, 390px 막대 쌍 6 · `scrollWidth` 390.
+- 🔵 **관찰(범위 밖)**: 샘플 세계의 «지난 주» 창이 대부분 0 이라(374 가 «이전 창은 전부 0» 테스트 의도를 지키려 비워 둠) wms · finance · ecommerce 카드는 지난 주 막대가 빈다(이번 주 100% / 지난 주 0%). 라이브 데이터에는 해당 없음. 샘플에 지난 주 행을 넣을지는 별도 결정.
+- **AC-6 열림** — 배포 뒤 운영 샘플 실측.

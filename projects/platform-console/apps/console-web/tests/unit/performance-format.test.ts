@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  comparisonBars,
   describeDelta,
   formatDelta,
   formatMetricValue,
@@ -85,6 +86,32 @@ describe('seriesBars', () => {
 
   it('an all-zero series draws nothing (no divide-by-zero)', () => {
     expect(seriesBars([{ date: '2026-10-01', values: { a: '0' } }], 'a')[0].percent).toBe(0);
+  });
+});
+
+/** TASK-PC-FE-379 — the operator overview headline's «이번 주 · 지난 주» bars. */
+describe('comparisonBars', () => {
+  it('scales both windows to the larger of the two', () => {
+    expect(comparisonBars('7', '4')).toEqual({ currentPercent: 100, previousPercent: (4 / 7) * 100 });
+    expect(comparisonBars('640', '700')).toEqual({ currentPercent: (640 / 700) * 100, previousPercent: 100 });
+    expect(comparisonBars('8', '8')).toEqual({ currentPercent: 100, previousPercent: 100 });
+  });
+
+  it('a zero is an empty bar, both zero is two empty bars — never NaN', () => {
+    expect(comparisonBars('12', '0')).toEqual({ currentPercent: 100, previousPercent: 0 });
+    expect(comparisonBars('0', '0')).toEqual({ currentPercent: 0, previousPercent: 0 });
+  });
+
+  it('a tiny positive value keeps a visible 2% sliver', () => {
+    expect(comparisonBars('1', '100000')).toEqual({ currentPercent: 2, previousPercent: 100 });
+  });
+
+  it('negative or undrawable values draw nothing; big integer strings stay finite', () => {
+    expect(comparisonBars('-5', '10')).toEqual({ currentPercent: 0, previousPercent: 100 });
+    expect(comparisonBars('abc', '1e400')).toEqual({ currentPercent: 0, previousPercent: 0 });
+    const big = comparisonBars('900000000000000000000', '450000000000000000000');
+    expect(big.currentPercent).toBe(100);
+    expect(big.previousPercent).toBeCloseTo(50, 10);
   });
 });
 
