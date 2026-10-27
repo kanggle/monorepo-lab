@@ -8,7 +8,7 @@ TASK-MONO-820
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -94,3 +94,17 @@ devops
 - IAM 행을 «지우고 다시» 하려 한다 → 트리거가 막아 시드 실패(부팅 실패).
 - 모든 날 같은 값 → 막대가 같아 보인다(`TASK-PC-FE-380`).
 - `--why` 없는 직접 `docker exec psql` → 가드 (y) 빨강.
+
+# Implementation Notes (2026-10-28 UTC)
+
+- **AC-0 재확인 — 정정 5건(나머지 일치):** ① IAM 귀속: 데모 운영자 demo@ · requester@ 의 콘솔 자격증명은 tenant `iam`(auth `R__01_seed_demo_single_identity_credentials.sql` · `R__seed_demo_second_operator_credential.sql`)이라 demo-corp 지표에 안 잡힌다 → demo-corp 의 유일한 실재 계정 `newhire@demo-corp.example`(`0199de70-0000-7000-8000-00000000ad07`, account `R__07`)에 귀속, 가짜 계정 0. ② WMS 입고 재구성 함수는 **있다**(`admin_rebuild_inbound_daily_kst()`, `V6…:106-152`) — 단 사실 < 카운터인 볼륨에서 `RAISE EXCEPTION` 이라 부팅 경로에선 부르지 않고 «새로 들어간 사실만» CTE `RETURNING` 으로 증분. ③ `admin_shipment_summary.tenant_id` 열 존재(V3) — 목록은 거르고 지표는 안 거른다. ④ **ERP 시드 결함 발견·수선(범위 확장, 같은 원인):** 결재 목록은 정렬 없는 `PageRequest.of(page,size)` 인데 `seed-erp.sh` 가 `?size=100` 한 번 조회로 «제목 탐지» 와 §9 «대기 행 수 = 결재함 원소 수» 를 했다 — 백필로 100건을 넘으면 중복 생성 · 거짓 실패 → `erp_requests_all`(전 페이지 + id 중복 제거), 목록을 못 읽으면 POST 대신 `seed_fail`. ⑤ **시간 예산:** 시드 전체가 `demo-up.sh:190` `POST_UP_BUDGET=240s` 하나(순서 iam → wms → scm → finance → erp) — 백필을 각 시드 끝이 아니라 필요한 id 가 준비되는 가장 이른 자리에 둠(scm §0b · erp §4c · wms §1c), IAM Flyway 대기 60s.
+- **구현:** 신규 `infra/demo/seed/lib-backfill.sh`(생성기 + `--self-test`) · `infra/demo/seed/seed-iam.sh`; 수정 `seed-scm.sh` §0b · `seed-erp.sh` §4c + `erp_requests_all` · `seed-wms.sh` §1c · `seed.sh`(주석 — 디스패치는 파일 존재로 자동) · `README.md`(§ 시각 경계 — 예외) · `verify-demo-wrapper.sh` (y2). 창 = KST(+9h 고정 산술) 어제까지 28일, 행 내용 = 그 행의 KST 날짜 + 그날 순번만으로 결정, 마지막 사건까지 어제 이전인 행만, headline 일별 ≥ 1 · 날마다 다름 · 주간 증감 혼재. UUID 꼴 id `00000820-<코드>-YYYY-MMDD-<순번12>`(36자 — `login_history.event_id VARCHAR(36)` 에 맞음, 메인 세션이 생성 줄로 확인). 넣은 뒤 창 안 행 수를 계획 수와 대조해 로그(생성 / 존재 +0 / ⚠ / ✗).
+  - SCM: `purchase_orders` + `purchase_order_lines` + `po_status_history`(`PoStatusMachine` 허용 경로만), 하루 1~4건, 상태 SUBMITTED · ACKNOWLEDGED · CONFIRMED · RECEIVED(다음 날 SYSTEM) · CANCELED(대조군), `po_number` = `PO-BF-YYYYMMDD-NN`, `origin` OPERATOR, 목적지 컬럼 NULL(V4 CHECK 허용) — 메인 세션이 Flyway V1 · V2 · V4 · V5 와 컬럼·제약 대조. 아웃박스 우회(의도 — 옛 PO 가 wms inbound-expected 를 만들지 않음).
+  - ERP: `approval_request` + `approval_route_stage` + `approval_action`, 하루 1~3건(순번 0 = APPROVED), 상신자 이운영 · 결재자 김본부 사원, UTC DATETIME(6). 감사 로그 · 아웃박스 행 없음.
+  - IAM: `login_history`(SUCCESS 2~7 · FAILURE 1~3/일) · `account_lock_history`(약 9일에 1회), `INSERT IGNORE` on `event_id`. **누적 상한(README):** 하루 ≤ 11행, 총량 ≤ 11 × (28 + 첫~마지막 부팅 사이 날 수).
+  - WMS: `admin_putaway_fact` · `admin_shipment_summary` 하루 1~3건씩 두 창고, 출고 카운터 `admin_rebuild_outbound_daily_kst()` · 입고 카운터 새 사실 증분. 콘솔 출하 행은 링크가 없어(`WmsRecentShipments.tsx` · `WmsShipmentsDataTable.tsx`) 원본 없는 id 로 404 에 닿는 경로 없음.
+- **`--why`(네 도메인)** — 각 «과거 시각으로 X 하는 API 가 없다 + 지표가 어느 열을 KST 일로 자르는가 + 수렴 방식» 형식으로 시드에 원문(SCM `PurchaseOrderApplicationService` 서버 시계 · ERP `ApprovalApplicationService` · IAM Kafka 소비자 전용 + tenant `iam` 사정 · WMS Kafka 투영 전용 · 토픽 7일).
+- **검증(로컬, Docker 데몬 없음 — 실제 DB 미실행):** `lib-backfill.sh --self-test` rc=0 44칸(메인 세션 재실행 PASS) — 달력(윤년, 800일 왕복) · KST 자정 경계 · 같은 부팅 시각 → 다른 프로세스에서도 SQL 바이트 동일 · 3일 뒤 부팅도 겹치는 날 행 동일 · 모든 INSERT 에 수렴 절 · 계획 수 = INSERT 수 · headline 매일 ≥ 1 · 증감 혼재 · 빈/자기결재 인자 거절. bite 변형 6종(RANDOM · 오늘 포함 · 증분을 전체 표로 · IAM 실패 상수화 · 부팅 날짜 의존 번호 · 수렴 절 제거) 전부 rc=1. DB 스텁 하네스: 1회 생성 → 2회 +0 → 3일 뒤 새 날짜만, KST 자정 직후 부팅 동일. `bash -n` 변경 sh 전부 rc=0(메인 세션 재실행). 자바 `ScmInboundExpectedDemoSeedShapeDltTest` 4/4 · `EcommerceSeedParityTest` 5/5(`--offline --rerun-tasks`). scripts/ 가드 7개 rc=0(scripts/ 파일 추가 없음, 새 Gradle 입력 없음). 전체 `verify-demo-wrapper.sh` 는 Docker 필요 — (y)+(y2) 구간만 rc=0.
+- 🔴 **측정 조건(AC-2 · AC-6):** `period=month` 는 **달력월** — «0 아닌 날 ≥ 10» 은 매월 11일 이후에만 성립한다. 지난달 창(약 59일 전까지)은 28일 백필로 대부분 비어 있다. 지난 주 비교 창은 같은 경과 시각에서 끊겨 월요일 01시(IAM · WMS) / 07시(SCM · ERP) KST 이전엔 «지난 주» 가 0 일 수 있다.
+- **AC-1 ~ AC-5 상태:** 로컬 증거로 닫을 수 있는 칸(생성기 결정성 · 수렴 · README · 가드)은 위 증거, **실제 DB 실행 · 행 수 불변 · 화면 값은 다음 굽기 뒤 창**(`TASK-MONO-672` § Order 21 에 등록). ⇒ review 에 둔다.
+- **남은 위험:** IAM 행은 지울 수 없어 생성기를 나중에 바꾸면 옛 판 행이 남는다(사후 대조 ⚠). 백필 ACKNOWLEDGED PO 를 콘솔에서 확정하면 실제 아웃박스가 나간다(API 시드 PO 와 같은 동작). ERP 목록 무정렬 페이지 경계에서 «빠짐» 은 못 막는다(겹침은 id 중복 제거로 막음). `dbexec` mysql 경로는 stderr 를 버려 ERP/IAM 실패 원인은 SQL 을 손으로 다시 흘려야 보인다.
