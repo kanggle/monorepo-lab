@@ -8,7 +8,7 @@ TASK-PC-FE-381
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -73,3 +73,10 @@ frontend
 
 - 새 색 체계를 만든다 → `StatusTone` 팔레트 재사용 규칙 위반.
 - 막대만 남기고 개수 텍스트를 지운다 → 색·길이만으로 읽히는 접근성 실패.
+
+# Implementation Notes (2026-10-27 UTC)
+
+- `DomainHealthSummaryCard.tsx` `SummaryBody` — 개수 텍스트 바로 아래 `StackedBar`(`domain-health-summary-bar`, `expected = cards.length`, 구간 `healthy → success` · `attention → danger` · `unknown → neutral`). 개수 텍스트 · 배지 · 기존 testid 불변.
+- **AC-1 · AC-2 · AC-3** `domain-health-summary.test.tsx` 2셀 추가 + 1단언: 2/2/1 of 5 → 폭 `40%` · `40%` · `20%`(손 계산) · `aria-hidden` · 색 클래스(`bg-green-500` · `bg-red-500` · `bg-muted-foreground`) · 개수 텍스트 유지 / 전부 정상 → `healthy` 100% · 빈 구간 미렌더 / `health === null` → 막대 없음.
+- **AC-4 (로컬)** vitest `domain-health-summary` · `overview-catalog-fold` · `overview-page-parallel` 18건 rc=0 · `tsc` rc=0 · `lint` rc=0.
+- **AC-5 열림** — 배포 뒤 운영 샘플 실측.
