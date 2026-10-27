@@ -248,6 +248,40 @@ export const SAMPLE_FINANCE_TRANSACTIONS = [
     createdAt: '2026-09-15T01:00:00Z',
     settledAt: '2026-09-15T01:04:00Z', // KST 09-15 (week window)
   },
+  // TASK-PC-FE-378 — the 개요 «실적» chart draws `topupCount` ONLY, so TOPUP days
+  // (not the TOPUP-or-TRANSFER union) must reach 6+ in the month window. Two more
+  // TOPUP days (09-05, 09-12 KST). Added top-ups (10000 + 15000) and the added
+  // transfer (25000) net to zero, so the typed balance above is left untouched.
+  {
+    transactionId: 'txn-sample-0010',
+    type: 'TOPUP',
+    status: 'COMPLETED',
+    money: { amount: '10000', currency: 'KRW' },
+    counterpartyAccountId: null,
+    reversalOfTransactionId: null,
+    createdAt: '2026-09-05T02:00:00Z',
+    settledAt: '2026-09-05T02:03:00Z', // KST 09-05
+  },
+  {
+    transactionId: 'txn-sample-0011',
+    type: 'TOPUP',
+    status: 'COMPLETED',
+    money: { amount: '15000', currency: 'KRW' },
+    counterpartyAccountId: null,
+    reversalOfTransactionId: null,
+    createdAt: '2026-09-12T03:00:00Z',
+    settledAt: '2026-09-12T03:04:00Z', // KST 09-12
+  },
+  {
+    transactionId: 'txn-sample-0012',
+    type: 'TRANSFER',
+    status: 'COMPLETED',
+    money: { amount: '25000', currency: 'KRW' },
+    counterpartyAccountId: 'sample-account-0002',
+    reversalOfTransactionId: null,
+    createdAt: '2026-09-12T05:00:00Z',
+    settledAt: '2026-09-12T05:02:00Z', // KST 09-12
+  },
 ] as const;
 
 function transactionsFixture(path: string): unknown {

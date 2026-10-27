@@ -8,7 +8,7 @@ Fix issue found in TASK-PC-FE-374 — 재무 개요 «실적» 그래프(충전 
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -77,3 +77,12 @@ frontend
 
 - 합집합(TOPUP ∪ TRANSFER)으로 다시 세면 이번 결함이 그대로 초록 — AC-1 은 **그리는 지표**로 센다.
 - TOPUP 만 더하고 잔액 짝을 안 맞추면 계좌 화면의 잔액·요약이 어긋난다 → AC-2.
+
+# Implementation Notes (2026-10-27 UTC)
+
+- 추가 행(`finance.ts`): `txn-sample-0010` TOPUP 10,000 (KST 09-05) · `0011` TOPUP 15,000 (KST 09-12) · `0012` TRANSFER 25,000 → `sample-account-0002` (KST 09-12). **잔액 불변**: 추가 충전 합 25,000 = 추가 이체 25,000 — 374 와 같은 상쇄 방식(`finance.ts:189-190` 주석).
+- **AC-1** `topupCount` 0 아닌 날(손 목록): 09-01 · 03 · 05 · 07 · 12 · 15 = **6**, 주간 09-15 = 1. `sample-finance-metrics.test.ts` 에 합집합 단언과 **분리된** «그리는 지표» 단언 추가(날짜 배열 + `>= 6`) — 옛 픽스처(4일)에서는 날짜 배열이 달라 빨강.
+- 기대값(손 합산): 월 `['4','180000','3','100000','0','0']` → `['6','205000','4','125000','0','0']`(충전 80,000+50,000+30,000+20,000+10,000+15,000 · 이체 40,000+25,000+35,000+25,000), 주 불변. 합집합 날짜 7 → 9.
+- **AC-2 · AC-3**: `vitest run tests/unit/sample` 24 파일 464건 rc=0(`sample-overview-cards-match-lists` · `sample-fixtures-schema-*` · `sample-label-rule` 포함) · `tsc` rc=0 · `lint` rc=0.
+- **AC-4 열림** — 배포 뒤 운영 샘플 실측.
+- 기록: 구현 에이전트가 사용 한도로 중단돼 남긴 diff 를 메인 세션이 읽고(날짜·합·상대 계좌 id 대조) 검증해 이어받았다.
