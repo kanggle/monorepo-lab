@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-379-operator-overview-headline-week-comparison-bars.md` — **운영자 통합 개요 카드 headline 에 «이번 주 vs 지난 주» 막대 두 개** (READY 2026-10-27 UTC · 소유자 채택): 이미 받는 `current`·`previous` 로 metric 하나 안에서 같은 눈금 · 중립 색(증감 색칠 금지) · `aria-hidden` · 순수 기하 함수(`chartMagnitude`, F5 가드 유지). 계약·서버·호출 불변. 스파크라인은 계약·기간 결정 선행이라 범위 밖. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 
 
@@ -126,6 +126,7 @@ _(없음)_
 ## review
 
 
+- `TASK-PC-FE-379-operator-overview-headline-week-comparison-bars.md` — **운영자 통합 개요 카드 headline 에 «이번 주 · 지난 주» 막대** (REVIEW 2026-10-27 UTC · AC-1~5 닫음 / AC-6 운영 실측 열림): 순수 `comparisonBars`(`chartMagnitude`, F5 유지) · 중립 색 · `aria-hidden` · 통화별 쌍 · 계약 불변. 🔵 샘플 «지난 주» 가 대부분 0 이라 3개 카드는 지난 주 막대가 빈다(범위 밖). 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-377-replenishment-table-reorder-point-bar.md` — **`/scm/replenishment` 표가 «재주문점 · 발동 재고 · 제안» 을 한 줄 막대로** (REVIEW 2026-10-26 UTC · AC-1~6 닫음 / AC-7 라이브 열림): 계약 먼저 → `SuggestionSchema.reorderPointAtTrigger` · 「트리거 가용재고」 칸을 막대+텍스트 칸으로 대체 · 순수 `reorderBarGeometry` · 샘플 0003 키 생략. 🔴 390px 에서 표가 페이지를 넘치는 것은 main 에서도 그렇다(554px, 스크롤 감싸개 없음) — 이 티켓은 증가분을 +82px 로 줄였고 감싸개는 범위 밖. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-PC-FE-373-wms-alert-row-key-id-vs-alertid-degrades-overview.md` — **로그인 `/wms` 개요가 경보 행 1건만 있어도 통째로 «일시적으로 불러올 수 없습니다»** (REVIEW 2026-10-25 UTC · 35차 창 라이브 발견 · AC-0~7 닫음 / AC-8 라이브 열림): 콘솔 `AlertRowSchema` 는 `alertId` 를 필수로 요구하는데 wms admin-service `AlertLogResponse` 는 `id` 로 내보낸다 → zod 파싱 throw → `wms-state` catch-all 이 개요 전체를 degraded 로 접는다. ack 버튼도 `alertId`(=undefined)로 호출, 생산자는 `acknowledged`·`message` 도 안 보내 확인된 경보가 «미확인» 으로 나온다. 표본 픽스처가 `alertId` 를 써서 익명 화면이 가렸다. 계약 § 1.6 은 필드 이름이 없다 → 필드 목록을 먼저 고정(같은 PR)하고 콘솔이 생산자에 맞춘다(생산자 불변). 경보 목록 한정 행 단위 관용 포함, `wmsPage()` 전면 관용은 범위 밖. 분석=Opus 5.5 / 구현 권장=Sonnet. 🔵 구현: 계약 § 1.6 `AlertLog` 12필드 고정(앞선 커밋) → `AlertRowSchema.id` · 경보 목록 한정 행 단위 `safeParse`(`excludedRows`) · 확인됨=`acknowledgedAt` 파생 · 내용 열=`현재/임계/위치` · 픽스처 생산자 모양.
 - `TASK-PC-FE-364-operator-overview-business-kpis.md` — **운영자 통합 개요 카드 여섯을 업무 지표로 — 잠긴 계정 · 미출고 주문 · 제출 대기 발주 · 미해소 대사 차이 · 내 결재 대기 · 출고 대기 주문** — 카드당 호출 1개 그대로(1:1 교체) · 서버 변경 없음 · 계약 § 2.4.9.1 먼저 · 소유자 결정 2026-10-22 KST (REVIEW, 2026-10-22 UTC · 문구 · 권한 표 소유자 승인 · 콘솔 nightly · federation e2e success · AC-3 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ❌ — WMS 출고 · SCM 발주 카드 `DOWNSTREAM_ERROR` · «WMS 점검 불가» → `TASK-PC-FE-369`.
