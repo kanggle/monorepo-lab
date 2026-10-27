@@ -100,15 +100,19 @@ describe('sample iam /api/admin/metrics (TASK-MONO-811)', () => {
     }
     expect(sawNonZero).toBe(true);
 
-    // The month (hand-counted): 8 successes (09-02 03 06 09 10 12 14 15), 4 failures
-    // (09-04 08 12 15), 3 locks (09-07 09-10 09-14); every seed account predates the
+    // The month (hand-counted): 8 successes (09-02 03 06 09 10 12 14 15), 6 failures
+    // (09-04 07 08 08 12 15; TASK-PC-FE-380 added login-0013 09-07 and login-0014 09-08), 3 locks (09-07 09-10 09-14); every seed account predates the
     // windows, so 신규 계정 is honestly 0.
     const month = await metrics('month');
-    expect(month.metrics.map((x) => x.current)).toEqual(['8', '4', '3', '0']);
+    expect(month.metrics.map((x) => x.current)).toEqual(['8', '6', '3', '0']);
     // The week window (09-14..15 KST): 2 successes, 1 failure (UTC 09-14 15:30 = KST 09-15),
     // 1 lock (09-14).
     const week = await metrics('week');
     expect(week.metrics.map((x) => x.current)).toEqual(['2', '1', '1', '0']);
+    // TASK-PC-FE-380 — the PREVIOUS week (09-07..08 20:00 KST), hand-counted: failures
+    // login-0013 (09-07 12:00) + login-0007 (09-08 19:00) + login-0014 (09-08 11:30) = 3;
+    // successes 0; the 09-07 lock (audit-0003, UTC 04:00 = KST 13:00) = 1; no new account.
+    expect(week.metrics.map((x) => x.previous)).toEqual(['0', '3', '1', '0']);
   });
 
   it('TASK-PC-FE-374 — the bars are spread over the month (KST days listed by hand)', async () => {
@@ -121,8 +125,9 @@ describe('sample iam /api/admin/metrics (TASK-MONO-811)', () => {
       '2026-09-10', '2026-09-12', '2026-09-14', '2026-09-15',
     ]);
     expect(days(month, 'loginFailure')).toEqual([
-      '2026-09-04', '2026-09-08', '2026-09-12', '2026-09-15',
+      '2026-09-04', '2026-09-07', '2026-09-08', '2026-09-12', '2026-09-15',
     ]);
+    expect(month.series.find((s) => s.date === '2026-09-08')?.values.loginFailure).toBe('2');
     expect(days(month, 'accountLocked')).toEqual(['2026-09-07', '2026-09-10', '2026-09-14']);
     expect(days(week, 'loginSuccess')).toEqual(['2026-09-14', '2026-09-15']);
   });

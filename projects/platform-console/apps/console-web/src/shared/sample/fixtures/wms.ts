@@ -583,7 +583,7 @@ const EXTRA_SHIPPED_SEEDS: readonly ExtraShippedSeed[] = [
   { n: 10, createdAt: '2026-09-12T01:00:00Z', shippedAt: '2026-09-13T05:00:00Z', skuIdx: 2, qty: 10 }, // KST 09-13
   // TASK-PC-FE-380 — shipped inside the PREVIOUS-week window (09-07..09-08 20:00 KST) so
   // the week «지난 주» 출고 is non-zero. Nothing is added in the previous-MONTH window.
-  { n: 11, createdAt: '2026-09-07T01:00:00Z', shippedAt: '2026-09-08T03:00:00Z', skuIdx: 0, qty: 20 }, // KST 09-08
+  { n: 11, createdAt: '2026-09-07T01:00:00Z', shippedAt: '2026-09-08T03:00:00Z', skuIdx: 0, qty: 45 }, // KST 09-08
 ];
 
 const EXTRA_SHIPPED_ORDERS: readonly OutboundOrder[] = EXTRA_SHIPPED_SEEDS.map((s) => ({

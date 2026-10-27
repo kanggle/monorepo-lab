@@ -85,3 +85,15 @@ frontend
 - **AC-3** 바뀐 월간 상수(손 합산): wms `qtyShipped` 175 → 195 · `shipmentCount` 7 → 8 · 출고 날 7 → 8 / finance 월 `['6','205000','4','125000',…]` → `['7','235000','5','155000',…]`, `topupCount` 날 6 그대로(≥ 6 유지) / ecommerce 월 매출 343,000 → 379,000 · units 14 → 17 · orders 10 → 11, 상품 랭킹 prod-3 36,000 → 72,000 · 주문 수 순위 prod-3 ↔ prod-2, 셀러 seller-2 36,000 → 72,000 · 3건(랭킹 4 · 3항목 유지). `sample-fixtures-schema-wms` 주문 10 → 11 · 배송 7 → 8.
 - **AC-4 (로컬)** vitest `tests/unit/sample` · `features/operator-overview` · `performance-format` 32 파일 604건 rc=0(메인 세션 재실행) · 구현 에이전트 전체 vitest 451 파일 5,585건 rc=0 · `tsc` rc=0 · `lint` rc=0.
 - **AC-5 열림** — 배포 뒤 운영 실측.
+
+---
+
+## CORRECTION — 머지 전 재조정: 지난 주 값을 «눈에 띄게 다르게» (2026-10-27 UTC, 소유자 결정)
+
+- **왜:** 소유자가 운영 샘플 화면에서 «막대 차이가 없다» 를 지적했다. 실측(운영, 이 PR 머지 전): iam `loginFailure` 1 vs 1 · erp `approved` 1 vs 1 로 두 막대가 같았고, 위 구현의 wms 행(qty 20)은 머지되면 wms 도 20 vs 20 으로 **같게** 만들 것이었다(메인 세션이 위 검증에서 놓친 점). 막대는 값을 맞게 그렸고 문제는 샘플 숫자였다.
+- **소유자 결정(2026-10-27):** 이번 주 값은 그대로 두고 **지난 주(9/7~8)만** 바꿔 증가 · 감소가 섞이게. 자동 머지 폴러를 멈추고 PR #4590 을 draft 로 돌려 그 사이 머지를 막았다.
+- **바꾼 행:** wms `ord-sample-0011` qty 20 → **45** · finance `txn-sample-0013` TRANSFER · `txn-sample-0014` TOPUP 30,000 → **12,000**(짝 유지, 잔액 불변) · iam 로그인 실패 `login-sample-0013`(KST 09-07 12:00) · `login-sample-0014`(KST 09-08 11:30) 추가 · erp APPROVED `appr-sample-0013`(확정 KST 09-07 10:00) · `appr-sample-0014`(확정 KST 09-08 11:00) 추가 — `approved` 는 `finalizedAt` 으로 센다, 제출은 둘 다 이전 구간 전이라 주간 `submitted` previous 불변. 이번 주 · 월간 이전 구간(8월) 행 추가 0.
+- **결과(로컬 샘플 Playwright 실측, 이번 주 / 지난 주 · 막대 폭):** iam 1 / 3 (33% / 100%) · wms 20 / 45 (44% / 100%) · scm ₩77,500 / ₩87,500 (89% / 100%, 불변) · finance ₩35,000 / ₩12,000 (100% / 34%) · erp 1 / 3 (33% / 100%) · ecommerce ₩48,000 / ₩36,000 (100% / 75%, 불변) — 감소 4 · 증가 2.
+- **바뀐 상수(손 합산):** wms 월 `qtyShipped` 195 → 220, 주간 previous 20 → 45 / finance 월 `['7','235000','5','155000',…]` → `['7','217000','5','137000',…]`, 주간 previous `['2','60000','1','30000',…]` → `['2','42000','1','12000',…]`, `topupCount` 날 6 유지 / iam 월 `['8','4','3','0']` → `['8','6','3','0']`, 주간 previous `['0','3','1','0']` 신설, 실패 날 4 → 5(하한 5 를 **겨우** 충족) / erp APPROVED 4 → 6, 월 `['10','3','2']` → `['12','5','2']`, 상신 날 10 → 11, 주간 previous 상신 1 · 승인 3 · 반려 0 신설.
+- **검증:** 메인 세션 재실행 vitest `tests/unit/sample` · `features/operator-overview` · `performance-format` 32 파일 604건 rc=0 · `tsc` rc=0 · 에이전트 전체 vitest 451 파일 5,587건 rc=0 · `lint` rc=0.
+- AC-5(운영 실측)는 여전히 열림 — 이 재조정이 머지·배포된 뒤 잰다.

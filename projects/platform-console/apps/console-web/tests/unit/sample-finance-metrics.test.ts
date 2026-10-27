@@ -104,18 +104,18 @@ describe('sample finance /api/finance/accounts/metrics (TASK-MONO-812)', () => {
     expect(sawNonZero).toBe(true);
 
     // The month (hand-summed): 7 top-ups 80,000 + 50,000 + 30,000 + 20,000 + 10,000 + 15,000
-    // + 30,000 (TASK-PC-FE-380 pair) = 235,000 원 and 5 transfers 40,000 + 25,000 + 35,000 + 25,000
-    // + 30,000 (TASK-PC-FE-380) = 155,000 원; the ACTIVE hold and the FAILED transfer move
+    // + 12,000 (TASK-PC-FE-380 pair) = 217,000 원 and 5 transfers 40,000 + 25,000 + 35,000 + 25,000
+    // + 12,000 (TASK-PC-FE-380) = 137,000 원; the ACTIVE hold and the FAILED transfer move
     // nothing — the control group, visible on the sample screen.
     const month = await metrics('month');
-    expect(month.metrics.map((x) => x.current)).toEqual(['7', '235000', '5', '155000', '0', '0']);
+    expect(month.metrics.map((x) => x.current)).toEqual(['7', '217000', '5', '137000', '0', '0']);
     // The week window (09-14..15 KST): the 09-14 transfer 35,000 + the 09-15 top-up 20,000.
     const week = await metrics('week');
     expect(week.metrics.map((x) => x.current)).toEqual(['1', '20000', '1', '35000', '0', '0']);
     // TASK-PC-FE-380 — the PREVIOUS week window (09-07..08 KST), hand-counted: top-ups
-    // 30,000 (txn-0006, 09-07 14:03 KST) + 30,000 (txn-0014, 09-07 17:03 KST) = 60,000 over 2;
-    // one transfer 30,000 (txn-0013, 09-08 13:02 KST). The balance pair nets to zero.
-    expect(week.metrics.map((x) => x.previous)).toEqual(['2', '60000', '1', '30000', '0', '0']);
+    // 30,000 (txn-0006, 09-07 14:03 KST) + 12,000 (txn-0014, 09-07 17:03 KST) = 42,000 over 2;
+    // one transfer 12,000 (txn-0013, 09-08 13:02 KST). The balance pair nets to zero.
+    expect(week.metrics.map((x) => x.previous)).toEqual(['2', '42000', '1', '12000', '0', '0']);
     // The previous MONTH window (08-01..15) stays empty.
     expect(month.metrics.map((x) => x.previous)).toEqual(['0', '0', '0', '0', '0', '0']);
   });
@@ -141,10 +141,10 @@ describe('sample finance /api/finance/accounts/metrics (TASK-MONO-812)', () => {
       '2026-09-01', '2026-09-03', '2026-09-05', '2026-09-06', '2026-09-07', '2026-09-08',
       '2026-09-10', '2026-09-12', '2026-09-14', '2026-09-15',
     ]);
-    // TASK-PC-FE-380: 09-07 now holds two top-ups (30,000 + 30,000), 09-08 the 30,000 transfer.
+    // TASK-PC-FE-380: 09-07 now holds two top-ups (30,000 + 12,000), 09-08 the 12,000 transfer.
     expect(month.series.find((s) => s.date === '2026-09-07')?.values.topupCount).toBe('2');
-    expect(month.series.find((s) => s.date === '2026-09-07')?.values['topupAmount:KRW']).toBe('60000');
-    expect(month.series.find((s) => s.date === '2026-09-08')?.values['transferAmount:KRW']).toBe('30000');
+    expect(month.series.find((s) => s.date === '2026-09-07')?.values['topupAmount:KRW']).toBe('42000');
+    expect(month.series.find((s) => s.date === '2026-09-08')?.values['transferAmount:KRW']).toBe('12000');
     // TASK-PC-FE-378: the chart draws `topupCount` ONLY (FinanceOverviewScreen
     // chartKey) — count THAT metric's non-zero days, separate from the union above.
     const topupDays = month.series.filter((s) => s.values.topupCount !== '0').map((s) => s.date);

@@ -119,9 +119,9 @@ describe('sample wms /dashboard/metrics (TASK-MONO-808)', () => {
       '2026-09-12', '2026-09-13', '2026-09-14',
     ]);
     expect(shippedDays(week)).toEqual(['2026-09-14']);
-    // Month: 25 + 40 + 20 (ord-0011, 09-08) + 15 + 35 + 30 + 10 + 20 (ord-0003) = 195 over 8 shipments;
+    // Month: 25 + 40 + 45 (ord-0011, 09-08) + 15 + 35 + 30 + 10 + 20 (ord-0003) = 220 over 8 shipments;
     // week: 20 over 1.
-    expect(month.metrics.find((x) => x.key === 'qtyShipped')?.current).toBe('195');
+    expect(month.metrics.find((x) => x.key === 'qtyShipped')?.current).toBe('220');
     expect(month.metrics.find((x) => x.key === 'shipmentCount')?.current).toBe('8');
     expect(week.metrics.find((x) => x.key === 'qtyShipped')?.current).toBe('20');
     expect(week.metrics.find((x) => x.key === 'shipmentCount')?.current).toBe('1');
@@ -144,13 +144,13 @@ describe('sample wms /dashboard/metrics (TASK-MONO-808)', () => {
     expect(week.series.find((s) => s.date === '2026-09-15')?.values.shipmentCount).toBe('0');
   });
 
-  it('TASK-PC-FE-380 — the PREVIOUS week window (09-07..08 KST) holds one shipment: 20 units', async () => {
+  it('TASK-PC-FE-380 — the PREVIOUS week window (09-07..08 KST) holds one shipment: 45 units', async () => {
     const m = await metrics('week');
-    // Hand-counted: ord-sample-0011 shipped 09-08 12:00 KST, qty 20. No ASN is put away
+    // Hand-counted: ord-sample-0011 shipped 09-08 12:00 KST, qty 45. No ASN is put away
     // on 09-07..08 (closed 09-06 and 09-10), so 입고 stays "0".
     expect(m.metrics.map((x) => [x.key, x.previous])).toEqual([
       ['qtyReceived', '0'],
-      ['qtyShipped', '20'],
+      ['qtyShipped', '45'],
       ['shipmentCount', '1'],
     ]);
   });
