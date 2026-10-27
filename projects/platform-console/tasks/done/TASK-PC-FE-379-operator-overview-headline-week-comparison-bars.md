@@ -8,7 +8,7 @@ TASK-PC-FE-379
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -92,3 +92,10 @@ frontend
 - **브라우저(로컬 `next dev` 샘플 방문자, Playwright)**: 1280px 막대 쌍 6 · 가로 넘침 없음, 390px 막대 쌍 6 · `scrollWidth` 390.
 - 🔵 **관찰(범위 밖)**: 샘플 세계의 «지난 주» 창이 대부분 0 이라(374 가 «이전 창은 전부 0» 테스트 의도를 지키려 비워 둠) wms · finance · ecommerce 카드는 지난 주 막대가 빈다(이번 주 100% / 지난 주 0%). 라이브 데이터에는 해당 없음. 샘플에 지난 주 행을 넣을지는 별도 결정.
 - **AC-6 열림** — 배포 뒤 운영 샘플 실측.
+
+---
+
+## CORRECTION — AC-6 닫힘 · done (2026-10-27 UTC, 운영 실측)
+
+- **AC-6 ✅** — Vercel `Production – kanggle-console` 배포 id `7355816493`, sha `4d50abd0a…`(= 이 티켓 squash) `success`. 운영 `https://console.hubwang.com/dashboards/overview` 샘플 방문자(Playwright): 1280px 막대 쌍 **6**(iam 100/100 · wms 100/0 · scm KRW 88.57/100 · finance 100/0 · erp 100/100 · ecommerce 100/0 — 로컬과 동일), 가로 넘침 없음 · 390px 막대 쌍 6 · `scrollWidth` 390.
+- 4차원: impl PR #4585 `state=MERGED` · squash `4d50abd0a` ⊂ `origin/main` · 머지 시점 `statusCheckRollup` FAILURE 0 · AC-1~6 전부 닫힘 ⇒ **done**.
