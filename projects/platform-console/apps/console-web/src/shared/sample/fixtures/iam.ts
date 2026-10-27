@@ -332,6 +332,26 @@ const IAM_AUDIT_LOGIN_ROWS = [
     geoCountry: 'KR',
     occurredAt: '2026-09-15T00:20:00Z', // KST 09-15 (week window)
   },
+  // TASK-PC-FE-380 — two more FAILUREs inside the PREVIOUS-week window (09-07..09-08
+  // 20:00 KST) so the week «지난 주» 로그인 실패 reads 3 (with login-sample-0007).
+  {
+    source: 'login_history',
+    eventId: 'login-sample-0013',
+    accountId: 'acc-sample-0003',
+    outcome: 'FAILURE',
+    ipMasked: '45.33.***.**',
+    geoCountry: 'US',
+    occurredAt: '2026-09-07T03:00:00Z', // KST 09-07 12:00
+  },
+  {
+    source: 'login_history',
+    eventId: 'login-sample-0014',
+    accountId: 'acc-sample-0004',
+    outcome: 'FAILURE',
+    ipMasked: '198.51.***.**',
+    geoCountry: 'KR',
+    occurredAt: '2026-09-08T02:30:00Z', // KST 09-08 11:30
+  },
 ] as const;
 
 const IAM_AUDIT_SUSPICIOUS_ROWS = [

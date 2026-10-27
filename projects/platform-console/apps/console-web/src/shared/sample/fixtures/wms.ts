@@ -562,9 +562,10 @@ function pad4(n: number): string {
  * TASK-PC-FE-374 — six more SHIPPED orders (ord-sample-0005..0010) shipped on
  * Sept 2 / 4 / 9 / 10 / 12 / 13 (KST), so the «실적» strip's 출고 bars read across
  * the month. Generated from this one seed list so the order, its saga, its
- * picking request and its shipment can never disagree. None is shipped inside
- * the previous-week window (09-07..08) or in the week window other than the
- * existing ord-sample-0003 (09-14), keeping the «quiet day is "0"» control.
+ * picking request and its shipment can never disagree. None is shipped in the
+ * week window other than the existing ord-sample-0003 (09-14), keeping the
+ * «quiet day is "0"» control. (TASK-PC-FE-380 added n=11 inside the previous-week
+ * window 09-07..08; the previous-MONTH window stays empty.)
  */
 interface ExtraShippedSeed {
   n: number;
@@ -580,6 +581,9 @@ const EXTRA_SHIPPED_SEEDS: readonly ExtraShippedSeed[] = [
   { n: 8, createdAt: '2026-09-09T01:00:00Z', shippedAt: '2026-09-10T07:00:00Z', skuIdx: 0, qty: 35 }, // KST 09-10
   { n: 9, createdAt: '2026-09-11T01:00:00Z', shippedAt: '2026-09-12T03:00:00Z', skuIdx: 1, qty: 30 }, // KST 09-12
   { n: 10, createdAt: '2026-09-12T01:00:00Z', shippedAt: '2026-09-13T05:00:00Z', skuIdx: 2, qty: 10 }, // KST 09-13
+  // TASK-PC-FE-380 — shipped inside the PREVIOUS-week window (09-07..09-08 20:00 KST) so
+  // the week «지난 주» 출고 is non-zero. Nothing is added in the previous-MONTH window.
+  { n: 11, createdAt: '2026-09-07T01:00:00Z', shippedAt: '2026-09-08T03:00:00Z', skuIdx: 0, qty: 45 }, // KST 09-08
 ];
 
 const EXTRA_SHIPPED_ORDERS: readonly OutboundOrder[] = EXTRA_SHIPPED_SEEDS.map((s) => ({

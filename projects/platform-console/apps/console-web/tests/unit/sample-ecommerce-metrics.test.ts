@@ -36,38 +36,41 @@ describe('sample ecommerce /orders/metrics (TASK-MONO-807)', () => {
     }
   });
 
-  it('counts only realised sales — the September month is the ten CONFIRMED/SHIPPED orders', async () => {
+  it('counts only realised sales — the September month is the eleven CONFIRMED/SHIPPED orders', async () => {
     const m = PerformanceMetricsSchema.parse(
       await (await get('/api/admin/orders/metrics?period=month')).json(),
     );
     // Hand-summed. Realised, paid inside 09-01..09-15 20:00 KST (revenue, units):
     // order-2 09-02 45000 (1) · order-7 09-03 38000 (2) · order-8 09-04 28000 (1) ·
-    // order-9 09-06 24000 (2) · order-10 09-09 45000 (1) · order-11 09-10 56000 (2) ·
-    // order-12 09-12 31000 (2) · order-13 09-13 28000 (1) · order-14 09-14 20000 (1) ·
-    // order-15 09-15 28000 (1)  =>  343000 over 14 units in 10 orders. The PENDING
-    // order-1/-16, the CANCELLED order-17 and the BACKORDERED order-6 are seeded in the
-    // same weeks and must not appear; the August realised orders (3, 5) are outside.
+    // order-9 09-06 24000 (2) · order-18 09-08 36000 (3) · order-10 09-09 45000 (1) ·
+    // order-11 09-10 56000 (2) · order-12 09-12 31000 (2) · order-13 09-13 28000 (1) ·
+    // order-14 09-14 20000 (1) · order-15 09-15 28000 (1)  =>  379000 over 17 units in
+    // 11 orders. The PENDING order-1/-16, the CANCELLED order-17 and the BACKORDERED
+    // order-6 are seeded in the same weeks and must not appear; the August realised
+    // orders (3, 5) are outside (previous MONTH stays 0 — nothing is seeded 08-01..15).
     expect(m.metrics).toEqual([
-      { key: 'revenue', unit: 'money', currency: 'KRW', current: '343000', previous: '0' },
-      { key: 'units', unit: 'count', currency: null, current: '14', previous: '0' },
-      { key: 'orders', unit: 'count', currency: null, current: '10', previous: '0' },
+      { key: 'revenue', unit: 'money', currency: 'KRW', current: '379000', previous: '0' },
+      { key: 'units', unit: 'count', currency: null, current: '17', previous: '0' },
+      { key: 'orders', unit: 'count', currency: null, current: '11', previous: '0' },
     ]);
     expect(m.series.find((s) => s.date === '2026-09-02')?.values.revenue).toBe('45000');
+    expect(m.series.find((s) => s.date === '2026-09-08')?.values.revenue).toBe('36000');
     expect(m.series.find((s) => s.date === '2026-09-12')?.values.revenue).toBe('31000');
     expect(m.series.filter((s) => s.values.revenue !== '0').map((s) => s.date)).toEqual([
-      '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-06', '2026-09-09',
+      '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-06', '2026-09-08', '2026-09-09',
       '2026-09-10', '2026-09-12', '2026-09-13', '2026-09-14', '2026-09-15',
     ]);
   });
 
-  it('the week window (09-14..15) holds order-14 (20000) and order-15 (28000)', async () => {
+  it('the week window (09-14..15) holds order-14 (20000) and order-15 (28000); the previous week order-18 (36000)', async () => {
     const w = PerformanceMetricsSchema.parse(
       await (await get('/api/admin/orders/metrics?period=week')).json(),
     );
+    // previous (09-07..08 KST): order-18 only, paid 09-08 11:00 KST — 3 x 12000 = 36000, 3 units.
     expect(w.metrics).toEqual([
-      { key: 'revenue', unit: 'money', currency: 'KRW', current: '48000', previous: '0' },
-      { key: 'units', unit: 'count', currency: null, current: '2', previous: '0' },
-      { key: 'orders', unit: 'count', currency: null, current: '2', previous: '0' },
+      { key: 'revenue', unit: 'money', currency: 'KRW', current: '48000', previous: '36000' },
+      { key: 'units', unit: 'count', currency: null, current: '2', previous: '3' },
+      { key: 'orders', unit: 'count', currency: null, current: '2', previous: '1' },
     ]);
     expect(w.series.map((s) => [s.date, s.values.revenue])).toEqual([
       ['2026-09-14', '20000'],
@@ -88,32 +91,32 @@ describe('sample ecommerce /orders/metrics (TASK-MONO-807)', () => {
     expect(all.topProductsByRevenue.map((r) => r.id).sort()).toEqual(
       ['prod-sample-0001', 'prod-sample-0002', 'prod-sample-0003', 'prod-sample-0004'],
     );
-    // Month rankings (hand-summed from the ten realised September orders):
+    // Month rankings (hand-summed from the eleven realised September orders):
     // revenue  prod-4 28000+56000+28000+28000=140000 · prod-2 45000+45000=90000 ·
-    //          prod-1 38000+19000+20000=77000 · prod-3 24000+12000=36000
+    //          prod-1 38000+19000+20000=77000 · prod-3 24000+12000+36000=72000
     expect(month.topProductsByRevenue.map((r) => [r.id, r.value])).toEqual([
       ['prod-sample-0004', 140000],
       ['prod-sample-0002', 90000],
       ['prod-sample-0001', 77000],
-      ['prod-sample-0003', 36000],
+      ['prod-sample-0003', 72000],
     ]);
-    // orders   prod-4 in 4 · prod-1 in 3 · prod-2 in 2 · prod-3 in 2 (tie -> id order)
+    // orders   prod-4 in 4 · prod-1 in 3 · prod-3 in 3 (tie -> id order) · prod-2 in 2
     expect(month.topProductsByOrderCount.map((r) => [r.id, r.value])).toEqual([
       ['prod-sample-0004', 4],
       ['prod-sample-0001', 3],
+      ['prod-sample-0003', 3],
       ['prod-sample-0002', 2],
-      ['prod-sample-0003', 2],
     ]);
-    // sellers: revenue s1 167000 · s4 140000 · s2 36000; orders s1 5 · s4 4 · s2 2
+    // sellers: revenue s1 167000 · s4 140000 · s2 24000+12000+36000=72000; orders s1 5 · s4 4 · s2 3
     expect(month.topSellersByRevenue.map((r) => [r.id, r.value])).toEqual([
       ['seller-sample-0001', 167000],
       ['seller-sample-0004', 140000],
-      ['seller-sample-0002', 36000],
+      ['seller-sample-0002', 72000],
     ]);
     expect(month.topSellersByOrderCount.map((r) => [r.id, r.value])).toEqual([
       ['seller-sample-0001', 5],
       ['seller-sample-0004', 4],
-      ['seller-sample-0002', 2],
+      ['seller-sample-0002', 3],
     ]);
   });
 });

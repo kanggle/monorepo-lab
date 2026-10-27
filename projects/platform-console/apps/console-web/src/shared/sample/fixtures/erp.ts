@@ -951,6 +951,43 @@ export const ERP_APPROVAL_REQUESTS: readonly ApprovalRequestSeed[] = [
       },
     ],
   },
+  // TASK-PC-FE-380 — two more APPROVED requests finalized inside the PREVIOUS-week
+  // window (09-07..09-08 20:00 KST) so the week «지난 주» 승인 reads 3 (with
+  // appr-0007). Both were submitted BEFORE that window, so 상신 «지난 주» is unchanged.
+  {
+    // Terminal — APPROVED (submitted 09-05 KST, finalized 09-07 10:00 KST).
+    id: 'appr-sample-0013',
+    status: 'APPROVED',
+    subjectType: 'DEPARTMENT',
+    subjectId: 'dept-sample-0003',
+    title: `개발1팀 교육 예산 승인${SUFFIX}`,
+    approverId: 'emp-sample-0003',
+    submitterId: 'emp-sample-0004',
+    createdAt: '2026-09-05T01:00:00Z',
+    submittedAt: '2026-09-05T02:00:00Z',
+    finalizedAt: '2026-09-07T01:00:00Z',
+    history: [
+      { transition: 'submit', actor: 'emp-sample-0004', at: '2026-09-05T02:00:00Z' },
+      { transition: 'approve', actor: 'emp-sample-0003', at: '2026-09-07T01:00:00Z' },
+    ],
+  },
+  {
+    // Terminal — APPROVED (submitted 09-06 KST, finalized 09-08 11:00 KST).
+    id: 'appr-sample-0014',
+    status: 'APPROVED',
+    subjectType: 'EMPLOYEE',
+    subjectId: 'emp-sample-0003',
+    title: `박지훈 근무지 이동 승인${SUFFIX}`,
+    approverId: 'emp-sample-0002',
+    submitterId: ME,
+    createdAt: '2026-09-06T00:00:00Z',
+    submittedAt: '2026-09-06T01:00:00Z',
+    finalizedAt: '2026-09-08T02:00:00Z',
+    history: [
+      { transition: 'submit', actor: ME, at: '2026-09-06T01:00:00Z' },
+      { transition: 'approve', actor: 'emp-sample-0002', at: '2026-09-08T02:00:00Z' },
+    ],
+  },
 ];
 
 const NON_TERMINAL_STATUSES = new Set(['SUBMITTED', 'IN_REVIEW']);

@@ -79,6 +79,8 @@ const ORDER_IDS = [
   'ord-sample-0008',
   'ord-sample-0009',
   'ord-sample-0010',
+  // TASK-PC-FE-380 — one more SHIPPED order (previous-week window).
+  'ord-sample-0011',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -157,14 +159,14 @@ describe('AC-1 — wms admin read-model (surface `wms`) parses with production s
     const res = admin('/api/v1/admin/dashboard/orders?page=0&size=20');
     expect(res.status).toBe(200);
     const page = OrderPageSchema.parse(await json(res));
-    expect(page.content.length).toBe(10);
+    expect(page.content.length).toBe(11); // 4 base + 6 (TASK-PC-FE-374) + 1 (TASK-PC-FE-380)
   });
 
   it('GET /dashboard/shipments', async () => {
     const res = admin('/api/v1/admin/dashboard/shipments?page=0&size=20');
     expect(res.status).toBe(200);
     const page = ShipmentPageSchema.parse(await json(res));
-    expect(page.content.length).toBe(7); // ord-0003 + the six TASK-PC-FE-374 SHIPPED orders
+    expect(page.content.length).toBe(8); // ord-0003 + six (TASK-PC-FE-374) + one (TASK-PC-FE-380) SHIPPED orders
   });
 
   it('GET /dashboard/asns (list) + /dashboard/asns/{id}/inspection (both branches)', async () => {
@@ -241,7 +243,7 @@ describe('AC-1 — wms outbound-service order lifecycle (surface `wms_outbound`)
     const res = outbound('/api/v1/outbound/orders?page=0&size=20');
     expect(res.status).toBe(200);
     const page = OutboundOrderPageSchema.parse(await json(res));
-    expect(page.content.length).toBe(10);
+    expect(page.content.length).toBe(11);
   });
 
   it('GET /orders/{id} (detail) for every order', async () => {
@@ -541,7 +543,7 @@ describe('Cross-view — admin read-model orders agree with outbound-service ord
   it('the SHIPPED order’s shipment (admin) references the SAME order as the dispatch (logistics)', async () => {
     const shipRes = admin('/api/v1/admin/dashboard/shipments?page=0&size=20');
     const shipPage = ShipmentPageSchema.parse(await json(shipRes));
-    expect(shipPage.content.length).toBe(7);
+    expect(shipPage.content.length).toBe(8);
     // Newest shipment first (shippedAt,desc) = ord-sample-0003 (09-14 18:00 KST).
     const shipment = shipPage.content[0];
     expect(shipment.orderId).toBe('ord-sample-0003');

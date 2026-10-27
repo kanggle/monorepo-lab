@@ -109,19 +109,20 @@ describe('sample wms /dashboard/metrics (TASK-MONO-808)', () => {
     expect(damaged.totalQtyExpected).toBe(83);
   });
 
-  it('TASK-PC-FE-374 — 출고 bars: 7 KST days in the month (hand-listed), 1 in the week', async () => {
+  it('TASK-PC-FE-374/380 — 출고 bars: 8 KST days in the month (hand-listed), 1 in the week', async () => {
     const month = await metrics('month');
     const week = await metrics('week');
     const shippedDays = (m: typeof month) =>
       m.series.filter((s) => s.values.shipmentCount !== '0').map((s) => s.date);
     expect(shippedDays(month)).toEqual([
-      '2026-09-02', '2026-09-04', '2026-09-09', '2026-09-10',
+      '2026-09-02', '2026-09-04', '2026-09-08', '2026-09-09', '2026-09-10',
       '2026-09-12', '2026-09-13', '2026-09-14',
     ]);
     expect(shippedDays(week)).toEqual(['2026-09-14']);
-    // Month: 25 + 40 + 15 + 35 + 30 + 10 + 20 (ord-0003) = 175 over 7 shipments; week: 20 over 1.
-    expect(month.metrics.find((x) => x.key === 'qtyShipped')?.current).toBe('175');
-    expect(month.metrics.find((x) => x.key === 'shipmentCount')?.current).toBe('7');
+    // Month: 25 + 40 + 45 (ord-0011, 09-08) + 15 + 35 + 30 + 10 + 20 (ord-0003) = 220 over 8 shipments;
+    // week: 20 over 1.
+    expect(month.metrics.find((x) => x.key === 'qtyShipped')?.current).toBe('220');
+    expect(month.metrics.find((x) => x.key === 'shipmentCount')?.current).toBe('8');
     expect(week.metrics.find((x) => x.key === 'qtyShipped')?.current).toBe('20');
     expect(week.metrics.find((x) => x.key === 'shipmentCount')?.current).toBe('1');
   });
@@ -143,11 +144,20 @@ describe('sample wms /dashboard/metrics (TASK-MONO-808)', () => {
     expect(week.series.find((s) => s.date === '2026-09-15')?.values.shipmentCount).toBe('0');
   });
 
-  it('the previous window (same length, a period earlier) holds no sample movement → "0", not missing', async () => {
-    for (const p of METRICS_PERIODS) {
-      const m = await metrics(p);
-      expect(m.metrics.map((x) => x.previous), p).toEqual(['0', '0', '0']);
-    }
+  it('TASK-PC-FE-380 — the PREVIOUS week window (09-07..08 KST) holds one shipment: 45 units', async () => {
+    const m = await metrics('week');
+    // Hand-counted: ord-sample-0011 shipped 09-08 12:00 KST, qty 45. No ASN is put away
+    // on 09-07..08 (closed 09-06 and 09-10), so 입고 stays "0".
+    expect(m.metrics.map((x) => [x.key, x.previous])).toEqual([
+      ['qtyReceived', '0'],
+      ['qtyShipped', '45'],
+      ['shipmentCount', '1'],
+    ]);
+  });
+
+  it('the previous MONTH window (08-01..15) holds no sample movement → "0", not missing', async () => {
+    const m = await metrics('month');
+    expect(m.metrics.map((x) => x.previous)).toEqual(['0', '0', '0']);
   });
 
   it('an unknown warehouseId narrows to nothing; the sample warehouse equals warehouse-global', async () => {
