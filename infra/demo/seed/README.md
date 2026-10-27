@@ -155,6 +155,8 @@ DEMO_DOMAIN=local bash infra/demo/seed/seed-ecommerce.sh
   적치 지시=`putawayLineId`) — 틀리면 URL 이 조용히 깨져 curl 이 **상태코드조차 못 낸다**.
 - Git Bash(msys)에는 `/proc/sys/kernel/random/uuid` 가 **없다**. UUID 는 `openssl` 로 만든다.
 - 현재시각 기준 경계(정산 기간 등)도 같은 이유로 **고정 리터럴**로 둔다.
+  🔵 **예외 하나** — 「최근 4주 과거 이력」(아래 § 시각 경계 — 예외). 그 예외는 이 규칙의 이유
+  (2회차가 다른 창을 만들어 멱등이 깨진다)를 **날짜 유도 id** 로 해소하고 들어간다.
 - **자연키가 있어도 목록에서 먼저 찾아라.** 서버가 중복을 409 로 거절하는 것은 맞지만
   **409 응답에는 id 가 없다.** 그 id 로 하위 개체를 만들어야 한다면(부서 → 코스트센터
   → 사원) 2회차 실행이 통째로 무너진다. `seed-erp.sh` 의 `ensure_master` 가 그래서
@@ -162,6 +164,59 @@ DEMO_DOMAIN=local bash infra/demo/seed/seed-ecommerce.sh
 - **JSON 배열은 객체 단위로 잘라서 파싱하라.** `json_objects()`(`}` `,` `{` 사이에 줄바꿈)
   로 쪼갠 뒤 그 한 줄 안에서 필드를 찾으면 greedy `.*` 함정도, **필드 순서 의존**도
   함께 사라진다.
+
+### 시각 경계 — 예외: 최근 4주 과거 이력 (TASK-MONO-820)
+
+**대상.** SCM · ERP · IAM · WMS 의 «실적» 지표가 읽는 **과거 이력 행** 만:
+
+| 도메인 | 시드 | 표 | 지표가 자르는 시각 |
+|---|---|---|---|
+| scm | `seed-scm.sh` §0b | `purchase_orders` · `purchase_order_lines` · `po_status_history` | `submitted_at` · RECEIVED 이력 `occurred_at` |
+| erp | `seed-erp.sh` §4c | `approval_request` · `approval_route_stage` · `approval_action` | `submitted_at` · `finalized_at` |
+| iam | `seed-iam.sh` | `login_history` · `account_lock_history` | `occurred_at` |
+| wms | `seed-wms.sh` §1c | 읽기 모델 `admin_putaway_fact` · `admin_shipment_summary` (+ 일 카운터) | `completed_at` · `shipped_at` |
+
+정산 기간 · 위임 유효기간 같은 **업무 경계**는 여전히 고정 리터럴이다. 이 예외는 그것을 바꾸지 않는다.
+
+**이유.** 그 그래프들의 창이 «요청 시각 기준 최근 N일»(이번 주 · 이번 달, 그리고 «같은 경과 시각» 까지의
+지난 주)이다. 시드의 API 행은 전부 부팅한 오늘에 찍히고, 고정 리터럴 날짜는 몇 주 뒤 창 밖으로 밀려
+다시 빈다. 그래서 날짜를 **부팅 시각에서** 계산한다. 과거 시각으로 상신 · 로그인 · 출하하는 API 는
+어느 도메인에도 없으므로 네 단계 모두 `dbexec --why` 다(사유 문자열은 각 호출부에 있다).
+
+**수렴 규칙** (구현은 `lib-backfill.sh` 하나 — 네 시드가 같은 생성기를 쓴다):
+
+1. 창 = KST «오늘 − 28일» ~ «어제». **오늘은 넣지 않는다**(오늘 막대는 API 행 몫). KST 는 고정 +9h 로
+   계산한다 — 시드 셸은 UTC 호스트에서 돌고, 00:00–09:00 KST 에는 UTC 날짜가 하루 늦다.
+2. 행의 id · 수량 · 상태 · 시각은 전부 **그 행의 KST 날짜(+ 그날 안의 순번)만의 함수**다. 부팅 날짜는
+   «어느 날짜를 넣을지» 만 정한다. ⇒ 같은 날 재실행 = 같은 SQL, 다음 날 부팅 = 겹치는 날짜의 행이
+   글자 그대로 같다. 그래서 `ON CONFLICT DO NOTHING` / `INSERT IGNORE` / `WHERE NOT EXISTS` 만으로 수렴한다.
+3. 행의 마지막 사건이 **전부 어제 이전**일 때만 낸다(다음 날 입고되는 발주는 그날이 지난 뒤의 부팅에서 처음
+   나타난다). 그렇지 않으면 같은 행이 부팅 날짜에 따라 다른 상태로 박힌다.
+4. 하루 건수는 날짜 해시로 변한다 — **모든 날이 같은 값이면 막대가 같아 보인다**(TASK-PC-FE-380).
+   headline 지표(`poAmount:*` · `approved` · `loginFailure` · `qtyShipped`)는 매일 ≥1 건이고 그날 첫 건은
+   이른 시각이다 — «지난 주» 창은 같은 경과 시각에서 끊기므로 월요일 아침에도 지난 월요일 몫이 0 이 되지 않게.
+5. 각 단계는 넣은 뒤 **창 안 행 수를 다시 세어** 생성기의 계획 수와 대조한다(«썼다» 가 아니라 «있다»).
+
+**IAM 은 누적된다.** `login_history` 는 트리거가 UPDATE/DELETE 를 막는다(security V0002 · V0010) — 지울 수도
+날짜를 옮길 수도 없다. 그래서 행은 `event_id` 로만 수렴하고, 창 밖으로 밀린 옛 날짜는 **그대로 남는다**.
+상한: 하루 ≤ 11행(성공 ≤ 7 · 실패 ≤ 3 · 잠금 ≤ 1). 날짜당 한 번만 들어가므로 볼륨의 총량은
+**≤ 11 × (28 + 첫 부팅과 마지막 부팅 사이의 날 수)** 이고, 한 번의 부팅이 더하는 양은
+**≤ 11 × min(28, 직전 부팅 이후 지난 날 수)** 이다(같은 날 재부팅 = +0). 가짜 계정은 만들지 않는다 — 이력은
+demo-corp 의 유일한 계정(account `R__07` newhire)에 귀속한다. 데모 운영자 로그인은 자격증명 테넌트가 `iam`
+이라 demo-corp 지표에 원래 안 잡힌다. SCM · ERP · WMS 의 옛 날짜 행도 남지만(지우지 않는다) 날짜당 고정
+개수라 같은 식으로 묶인다.
+
+**배포.** 시드는 AMI 에 구워진 클론에서 부팅 때 돈다(부팅 때 git pull 없음). 이 규칙이나 생성기를 바꾸면
+**다음 AMI 재굽기 뒤에야** 데모에 반영된다. 생성기를 바꾼 뒤 첫 부팅에서는 같은 id 의 옛 판 행이 이미 있어
+사후 대조가 ⚠ 로 어긋날 수 있다(INSERT IGNORE 는 덮어쓰지 않는다) — 그것은 경고이지 실패가 아니다.
+🔴 시드 단계 전체는 `demo-up.sh` 의 `POST_UP_BUDGET`(240초) 하나에 묶여 있고 도메인 순서는
+iam → wms → scm → finance → erp 다. 그래서 과거 이력 단계는 각 시드의 **맨 끝이 아니라 필요한 id 가
+준비되는 가장 이른 자리**에 있다(scm = 공급사 직후 · erp = 사원 ↔ 계정 연결 직후 · wms = ASN 86건 앞 ·
+iam = 첫 도메인). 예산에 잘린 도메인은 그 부팅에서 하루치 그래프로 남는다 — 다음 부팅이 수렴시킨다.
+
+**시험.** `bash infra/demo/seed/lib-backfill.sh --self-test` — Docker 없이 생성기의 성질(같은 부팅 시각 = 다른
+프로세스에서도 바이트 동일 · 모든 시각이 창 안 · 3일 뒤 부팅이 겹치는 날짜의 행을 그대로 냄 · 모든 INSERT 의
+수렴 절 · 일별 값의 변화)을 잰다. CI 는 `verify-demo-wrapper.sh` 의 (y2) 가 돌린다.
 
 ### 🔴 알려진 제품 결함을 시드의 실패와 구별하라
 

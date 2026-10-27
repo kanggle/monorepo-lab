@@ -9,8 +9,9 @@
 #   /erp/approval    ← approval-service 결재 요청 목록  ⚠ 결재함(inbox)은 아래 참조
 #   /erp/delegation  ← approval-service 위임 + read-model 위임 프로젝션
 #
-# 전량 실제 API 다. 직접-DB 0건 — erp 는 다섯 마스터 전부에 생성 엔드포인트가 있고
-# 운영자 토큰이 그것을 연다(실측: `POST /api/erp/masterdata/departments` → 201).
+# 전량 실제 API 다. erp 는 다섯 마스터 전부에 생성 엔드포인트가 있고 운영자 토큰이 그것을
+# 연다(실측: `POST /api/erp/masterdata/departments` → 201). 🔵 예외 하나(TASK-MONO-820):
+# §4c 의 «최근 4주 과거 결재» 만 `dbexec --why` 다 — 과거 시각으로 상신하는 API 가 없다.
 #
 # -----------------------------------------------------------------------------
 # ✅ 결재함(inbox)이 찬다 — 사유가 **전부** 해소됐다 (TASK-MONO-519, 2026-08-12)
@@ -394,6 +395,56 @@ verify_me "승인자 demo@"      "$SEED_TOKEN"      "$APPROVER_EMP"
 verify_me "상신자 requester@" "$REQUESTER_TOKEN" "$SUBMITTER_EMP"
 
 # =============================================================================
+# 4c. 최근 4주 과거 결재 — «실적» 일별 그래프 · 운영자 개요 «지난 주» (TASK-MONO-820)
+# =============================================================================
+# 🔵 자리가 여기인 이유: 사원·부서 id(§2·§4)와 계정 연결(§4b)만 있으면 되고, 시드 단계 전체가
+#    demo-up.sh 의 POST_UP_BUDGET(240s) 안에 묶여 있어 맨 끝에 두면 예산에 잘려 안 돌 수 있다.
+# 아래 §6 의 결재는 전부 «오늘» 에 상신된다 — `/api/erp/approval/metrics` 는 submitted_at 과
+# finalized_at(APPROVED/REJECTED)을 KST 일로 자르므로(ApprovalMetricsService) 그래프는 막대
+# 하나였다. 과거 시각으로 상신·확정하는 API 가 없으므로 이 단계만 직접-DB 다. 규칙(창 · 날짜
+# 유도 id · 수렴)은 `lib-backfill.sh` 헤더와 README § 「시각 경계 — 예외: 최근 4주 과거 이력」.
+#
+# 🔵 실제 흐름이 만드는 모양 그대로다: 상신자 = 이운영(SUBMITTER_EMP), 승인자 = 김본부
+#    (APPROVER_EMP — demo@ 와 연결), 1단계 라우트 행(approval_route_stage) + 전이 이력
+#    (approval_action, actor = 사원 id). 그래서 대기(SUBMITTED)로 남긴 소수는 demo@ 의 결재함에
+#    **실제로 뜨고 승인 버튼이 동작한다** — §9 의 등식이 그것까지 잰다. 대상(subject)은 §2·§4 의
+#    실재 마스터다. 아웃박스·감사 로그 행은 넣지 않는다(이벤트 없음 ⇒ 알림·read-model 은 이 과거
+#    행을 모른다 — 지표와 목록·상세는 approval_request · route_stage · action 만 읽는다).
+# shellcheck source=infra/demo/seed/lib-backfill.sh
+. "$HERE/lib-backfill.sh"
+ERP_MY_C="erp-platform-mysql"; ERP_MY_DB="erp_approval_db"; ERP_MY_U="${MYSQL_USER:-erp}"; ERP_MY_P="${MYSQL_PASSWORD:-erp}"
+erp_backfill() {
+  local sql planned before after q
+  bf_init || { seed_fail "과거 결재 — 창을 계산하지 못했습니다"; return 1; }
+  sql="$(bf_erp_sql demo-corp "$SUBMITTER_EMP" "$APPROVER_EMP" \
+          "${DEPT[OPS]:-}" "${DEPT[FIN]:-}" "${DEPT[HQ]:-}" "${EMP[EMP-0003]:-}" "${EMP[EMP-0004]:-}")" \
+    || { seed_fail "과거 결재 — SQL 생성 실패(사원·부서 id 가 비었거나 상신자 = 승인자). 위 §2·§4·§4b 실패를 먼저 보십시오"; return 1; }
+  planned="$(bf_planned "$sql" approval_request)"
+  bf_day "$BF_FIRST"; local first_ymd="$BF_YMD" first="$BF_DATE"
+  bf_day "$BF_LAST"
+  q="SELECT count(*) FROM approval_request WHERE tenant_id = 'demo-corp' AND id BETWEEN 'appr-bf-${first_ymd}-00' AND 'appr-bf-${BF_YMD}-99'"
+  before="$(dbquery "$ERP_MY_C" mysql "$ERP_MY_DB" "$ERP_MY_U" "$ERP_MY_P" "$q" | tr -d ' \r\n')"
+  if ! dbexec --why "과거 시각으로 결재를 상신·승인·반려하는 API 가 없다 — approval-service 의 POST /api/erp/approval/requests 와 /{id}/submit|approve|reject 는 created_at·submitted_at·finalized_at 을 서버 시계(지금)로 찍는다(ApprovalApplicationService). /api/erp/approval/metrics 는 submitted_at·finalized_at 을 KST 일로 자르므로 «최근 28일» 막대는 과거 시각 행으로만 생긴다(TASK-MONO-820 · README § 시각 경계 예외). 행 id 는 KST 날짜에서 유도 → INSERT IGNORE / WHERE NOT EXISTS 로 수렴" \
+      "$ERP_MY_C" mysql "$ERP_MY_DB" "$ERP_MY_U" "$ERP_MY_P" <<<"$sql" >/dev/null; then
+    seed_fail "과거 결재 INSERT 실패(mysql rc≠0 — 오류 본문은 dbexec 가 버린다; 같은 SQL 을 손으로 흘려 확인하십시오)"
+    return 1
+  fi
+  after="$(dbquery "$ERP_MY_C" mysql "$ERP_MY_DB" "$ERP_MY_U" "$ERP_MY_P" "$q" | tr -d ' \r\n')"
+  if [ -n "$planned" ] && [ "${after:-x}" = "$planned" ]; then
+    if [ "${after:-0}" -gt "${before:-0}" ] 2>/dev/null; then
+      SEED_CREATED=$((SEED_CREATED + 1)); seed_log "생성  과거 결재 $first ~ $BF_DATE (KST) — 창 안 $after 건 (이번에 +$(( after - ${before:-0} )))"
+    else
+      SEED_EXISTING=$((SEED_EXISTING + 1)); seed_log "존재  과거 결재 $first ~ $BF_DATE (KST) — 창 안 $after 건 (수렴, +0)"
+    fi
+  elif [ "${after:-0}" -gt 0 ] 2>/dev/null; then
+    seed_warn "과거 결재 — 창 안 $after 건, 계획 $planned 건. 같은 id 를 다른 생성기 판이 먼저 넣었을 수 있습니다(lib-backfill.sh 변경 후 첫 부팅이면 정상)"
+  else
+    seed_fail "과거 결재 — INSERT 는 성공했는데 창 안 행이 ${after:-<읽기 실패>} 건입니다(계획 $planned)"
+  fi
+}
+erp_backfill
+
+# =============================================================================
 # 5. 거래처 — partnerType/paymentTerms.method 는 enum 이다(코드가 권위):
 #    PartnerType = CUSTOMER|SUPPLIER|BOTH,
 #    PaymentMethod = BANK_TRANSFER|CREDIT_CARD|CASH|CHECK.
@@ -417,15 +468,49 @@ ensure_master "거래처 겸업사"     /api/erp/masterdata/business-partners co
 #    🔵 상태를 셋 만든다 — DRAFT 1 · SUBMITTED 2. 목록 화면이 상태 필터를 가지므로
 #       한 가지 상태만 넣으면 필터가 아무것도 증명하지 못한다.
 # =============================================================================
+# erp_requests_all — 결재 요청 목록을 **전 페이지** 읽어 ERP_REQ_ALL 에 객체 한 줄씩 담는다.
+#
+# 🔴 왜 `?size=100` 한 번으로 안 되나 (TASK-MONO-820): §4c 가 최근 4주 과거 결재를 하루 1~3건
+#    넣고, 그 행은 부팅마다 새 날짜만큼 늘어난다(지우지 않는다). 목록은 정렬이 없는
+#    `PageRequest.of(page, size)` 라 100건을 넘는 순간 시드의 제목 탐지가 자기 행을 첫
+#    페이지에서 못 찾아 **같은 결재를 다시 만들고**, §9 의 «대기 행 수 = 결재함 원소 수» 등식이
+#    한쪽만 잘려 **거짓 실패**가 된다. WMS 1b) 가 ASN 목록에서 같은 이유로 전 페이지를 읽는다.
+# 🔵 id 로 중복을 걷는다 — 정렬 없는 LIMIT/OFFSET 은 이론상 페이지 경계에서 행을 겹치게 낼 수 있다.
+# 반환 0 = 전부 읽음. 1 = 어느 페이지든 비-2xx(호출자는 «모른다» 로 다룬다 — «없다» 가 아니다).
+ERP_REQ_ALL=""
+erp_requests_all() {
+  ERP_REQ_ALL=""
+  local page=0 total="" got=0 objs line rid
+  local -A seen=()
+  while [ "$page" -lt 50 ]; do
+    http GET "$ERP/api/erp/approval/requests?size=100&page=$page" || return 1
+    [ -n "$total" ] || total="$(printf '%s' "$SEED_LAST_BODY" | grep -oE '"totalElements":[0-9]+' | head -1 | cut -d: -f2)"
+    objs="$(json_objects "$SEED_LAST_BODY" | grep -F '"status":"')"
+    [ -n "$objs" ] || break
+    while IFS= read -r line; do
+      rid="$(field "$line" id)"
+      [ -n "$rid" ] && [ -z "${seen[$rid]:-}" ] || continue
+      seen[$rid]=1; got=$((got + 1))
+      ERP_REQ_ALL+="$line"$'\n'
+    done <<<"$objs"
+    [ -n "$total" ] && [ "$got" -ge "$total" ] && break
+    page=$((page + 1))
+  done
+  return 0
+}
+
 ensure_request() { # ensure_request <라벨> <제목> <subjectType> <subjectId> <approverId> <submit?>
   local label="$1" title="$2" stype="$3" sid="$4" approver="$5" do_submit="$6"
   [ -n "$sid" ] && [ -n "$approver" ] || { seed_fail "$label — subjectId/approverId 가 비어 있습니다"; return 1; }
   local id="" status="" had_approver=""
-  if http GET "$ERP/api/erp/approval/requests?size=100"; then
-    local o; o="$(obj_by "$SEED_LAST_BODY" title "$title")"
-    id="$(field "$o" id)"; status="$(field "$o" status)"
-    had_approver="$(field "$o" approverId)"
+  # 🔴 목록을 못 읽었으면 만들지 않는다 — 모르는 채 POST 하면 이미 있는 결재가 하나 더 생긴다.
+  if ! erp_requests_all; then
+    seed_fail "$label — 결재 목록을 읽지 못했습니다(HTTP $SEED_LAST_STATUS). 이미 있는지 모르는 채로 만들지 않습니다"
+    return 1
   fi
+  local o; o="$(printf '%s' "$ERP_REQ_ALL" | grep -F "\"title\":\"$title\"" | head -1)"
+  id="$(field "$o" id)"; status="$(field "$o" status)"
+  had_approver="$(field "$o" approverId)"
 
   # 🔴 이미 있는 행의 승인자가 **기대와 다르면 실패로 센다.**
   # 🔵 TASK-MONO-776: 이번에는 반대 방향이다 — 776 이전 시드는 승인자에 **계정 UUID** 를
@@ -519,6 +604,7 @@ ensure_delegation() { # ensure_delegation <라벨> <피위임자 id>
 }
 ensure_delegation "위임 이운영에게 전결" "$SUBMITTER_EMP"
 
+
 # =============================================================================
 # 8. 프로젝션 대기 (AC-3) — `/erp/orgview` 는 read-model-service 를 읽는다.
 #    프로듀서만 시드하고 판정하면 "방금 넣은 것이 아직 안 보인다" 를 빈 화면으로
@@ -572,8 +658,10 @@ fi
 # 🔵 TASK-MONO-776: «승인자가 나» = 승인자가 **나와 연결된 사원**(APPROVER_EMP). 결재함 응답의
 #    `meta.actorEmployeeId` 도 그 사원이어야 한다 — «연결이 결재함까지 닿았다» 의 증거다.
 inbox_expected=""
-if http GET "$ERP/api/erp/approval/requests?size=100"; then
-  inbox_expected="$(json_objects "$SEED_LAST_BODY" \
+# 🔵 전 페이지로 센다(TASK-MONO-820 — §4c 가 행을 100건 너머로 늘린다; `erp_requests_all` 주석).
+#    §4c 의 대기(SUBMITTED) 과거 결재도 승인자 = 김본부라 결재함에 실제로 뜬다 — 이 등식이 그것까지 잰다.
+if erp_requests_all; then
+  inbox_expected="$(printf '%s' "$ERP_REQ_ALL" \
     | grep -F "\"approverId\":\"$APPROVER_EMP\"" \
     | grep -cE '"status":"(SUBMITTED|IN_REVIEW)"' || true)"
 fi

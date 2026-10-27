@@ -1966,6 +1966,11 @@ The console (Vercel) has nothing to do with the bake. PC-FE-338 a `56a15be8b` ·
       - `TASK-PC-FE-373` AC-8 (impl #4565 `a733cac85`, console on Vercel) — logged-in `/wms` overview with ≥ 1 alert row renders (no whole-overview degrade) and the acknowledge button acts on the row `id`; needs a wms alert row (step 3 of the 35th preparation creates one).
       - `TASK-FAN-FE-033` AC-6 (impl #4562 `eabc96810`, web on Vercel) — click a pressed reaction again → it is removed (DELETE) and the press clears; click a different type → it switches.
       - **One shared ≥ 35-min idle run:** `TASK-FE-106` AC-2 · AC-3 (AC-0 is ⚪ — owner decision 2026-10-26 UTC, see that ticket's CORRECTION) + `TASK-FAN-FE-027` AC-1 — idle the store and fan sessions together, return, and record both; run alongside other work.
+21. 🆕 **`TASK-MONO-820` — demo-seed backfill of the past 28 KST days (SCM · ERP · IAM login · WMS read model)** (added 2026-10-28 UTC). 🔴 **Needs a bake** — the seed change (impl branch `task/mono-820-seed-backfill`) reaches the demo only through the next AMI. Measurement targets only — the ticket stays in `review/` and owns them:
+    - The SQL really runs on the live DBs: seed log shows «생성» on the first boot and «존재 … +0» on a same-day second boot for all four domains (Postgres data-modifying CTE + `ON CONFLICT` on admin_db · MySQL `INSERT … SELECT … WHERE NOT EXISTS` · the `dbexec` users `security_user` / `account_user` / `admin` / `erp`). The four seeds still finish inside the 240 s `POST_UP_BUDGET` — erp runs last and is the one that can be cut.
+    - 820 AC-2 / AC-6: logged-in `demo-corp` SCM · ERP · IAM · WMS overview «실적» bars ≥ 10 days and the operator-overview «지난 주» bars > 0 for 발주 금액 · 승인 · 로그인 실패 · 출고 수량. 🔴 `period=month` is the **calendar** month — «≥ 10 days» only holds on or after the 11th; measure then, or read the last-28-day series directly.
+    - 820 AC-3: WMS `/dashboard/throughput` daily counters equal `/dashboard/metrics` on the same days.
+    - ERP inbox equality (§9) includes the one pending backfilled request.
 
 ### Not measured, and owned by no open AC (recorded so the gap is visible — not carried)
 
