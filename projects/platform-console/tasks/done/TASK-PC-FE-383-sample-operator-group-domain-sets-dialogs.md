@@ -8,7 +8,7 @@ TASK-PC-FE-383
 
 # Status
 
-review
+done (2026-10-28 UTC — 4-dim verified · impl PR #4610 squash `49fb0abfc` · AC-5 라이브)
 
 # Owner
 
@@ -60,7 +60,7 @@ frontend
 - [x] **AC-2** 배정 행의 모든 `setId` 가 `TASK-PC-FE-382` 의 세트 목록 픽스처에 있다는 단언 · 그룹 출처 행의 운영자는 그 그룹 멤버라는 단언. 픽스처 필드명 ↔ 생산자 계약 필드명 대조표를 구현 보고에 둔다. 없는 id 응답이 **계약 원문과 같다**(원문 인용).
 - [x] **AC-3** 쿠키 없는 렌더(단위 또는 로컬 `next dev` + Playwright)에서 운영자 «도메인 접근» 대화상자와 그룹 상세 세트 칸에 «준비 중» 이 없고 배정 행이 보인다. 대조군: 아직 `pending` 인 화면(`/fan`)에서 같은 술어가 «준비 중» 을 잡는다.
 - [x] **AC-4** console-web `lint` · `tsc` · vitest(`--maxWorkers=2 --minWorkers=1`) 전체 초록 · 샘플 격리 · 라벨 가드 초록.
-- [ ] **AC-5 (라이브, 배포 뒤)** Vercel Production 배포 뒤 로그아웃 상태로 `console.hubwang.com/operators` 의 «도메인 접근» 과 그룹 상세를 열어 «준비 중» 이 없음을 확인(대조군 `/fan` 함께).
+- [x] **AC-5 (라이브, 배포 뒤)** Vercel Production 배포 뒤 로그아웃 상태로 `console.hubwang.com/operators` 의 «도메인 접근» 과 그룹 상세를 열어 «준비 중» 이 없음을 확인(대조군 `/fan` 함께).
 
 # Related Specs
 
@@ -140,3 +140,14 @@ frontend
 ## 남은 것
 
 AC-5 (배포 뒤 Vercel Production 에서 로그아웃 상태로 `console.hubwang.com/operators` «도메인 접근» · 그룹 상세 · 대조군 `/fan`) — 미체크.
+
+---
+
+## Close (2026-10-28 UTC)
+
+- **AC-5 ✅ (라이브).** `Production – kanggle-console` 이 `49fb0abfc` 로 배포(12:11:54Z, `merge-base --is-ancestor` 확인). 쿠키 없는 Playwright 로 `console.hubwang.com`:
+  - `/operators` → `action-domain-access-op-sample-0002` 클릭: `sample-screen-not-ready` 0 · «준비 중» 0 · «직접» 4 · «그룹: …» 2 (출처 두 종류가 보인다)
+  - `/operator-groups` → `groups-row-select-group-sample-0001`: not-ready 0 · «준비 중» 0 · `group-domain-set-row-*` 1
+  - **대조군** `/fan`(원장 `pending`): not-ready **1** · «준비 중» **1** — 같은 술어가 «준비 중» 을 잡으므로 위의 0 은 «없음» 이다.
+- 없는 id 응답의 계약 원문(메인 세션이 대조): `admin-api.md:4202` «| 404 | `OPERATOR_NOT_FOUND` | `operatorId` 미존재 …» · `:4288` «**Errors**: … 404 `GROUP_NOT_FOUND`.» — 픽스처와 같다.
+- 4차원: (a) #4610 MERGED · (b) `49fb0abfc` 는 origin/main 조상 · (c) #4610 실패·취소 0(프런트 단위 · E2E smoke SUCCESS) · (d) AC-0 ~ AC-5 전부 닫힘.
