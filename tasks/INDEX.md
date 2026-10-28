@@ -219,9 +219,10 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-819-capture-self-test-skipped-on-script-only-prs.md` — **`capture-portfolio.mjs --self-test` 가 그 스크립트만 고친 PR 에서 한 번도 안 돈다** (REVIEW 2026-10-25 UTC · AC-2 = 이 PR 의 CI): 호스트 잡 `frontend-e2e-smoke` 의 `if:` 가 그 스크립트를 담은 필터(`capture-route-staleness`)를 안 읽는다(#4526). `if:` 한 줄 + 배선 가드. 분석=Opus 5.5 / 구현 권장=Sonnet.
+(empty)
 
 ## done
+- ✅ `TASK-MONO-819-capture-self-test-skipped-on-script-only-prs.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4550(`dfd7ad75f`, 실패 0) · AC-2 = 스크립트만 바꾼 PR #4602 에서 `capture-route-staleness` 출력 하나로 `Frontend E2E smoke` 가 돌고 self-test 단계 success(다른 필터 전부 false).
 - ✅ `TASK-MONO-820-demo-seed-backfill-four-weeks-history.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4593(`0777e56ea`, 실패 0) · AC-1 라이브 수렴(+0) · AC-2 · AC-3 · AC-6 36차 창 ✅ · AC-4 impl PR CI 실패 0 · AC-5 ✅ 라이브 IAM 행 로그인 178 + 잠금 6 = 184 ≤ 상한 11 × 28 = 308, 두 번째 시드 실행 +0
 - ✅ `TASK-MONO-818-demo-seed-ships-ecommerce-orders-through-wms.md` — **DONE 2026-10-25 UTC (4-dim verified)** — impl PR #4547(`53a9227fb`, 실패 0) · AC-1 · AC-3 35차 창 라이브 ✅(슬롯 4·5 wms SHIPPED · 송장 = wms shipmentNo · 슬롯 5 DELIVERED) · AC-2 `Demo wrapper smoke` SUCCESS · AC-4 ⚪(wms 없는 부팅 미도달 — AC 가 사유 있는 ⚪ 허용). 기록 = 티켓 끝 `## CORRECTION — 35차 창` · `TASK-MONO-672` § 35th.
 - ✅ `TASK-MONO-815-wms-throughput-card-kst-window-with-bake.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4534(`3cea93ad0`, 실패 0) · WMS 처리량 카드를 한국 시간 창 · «한국 시간 기준» 문구로 · 소유자 화면 `/wms` 카드 «최근 14일 · 한국 시간 기준 (2026-10-12 ~ 2026-10-25)», 마지막 날 = KST 오늘.
