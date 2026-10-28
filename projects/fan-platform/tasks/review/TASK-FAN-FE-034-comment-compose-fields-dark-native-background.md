@@ -62,7 +62,7 @@ OS 가 다크 모드여도 댓글 입력란과 글쓰기 폼의 제목 · 본문
 - [x] **AC-1 (배선, 수정 전 빨강)** — 단위 시험: 렌더한 `CommentPanel`(로그인 뷰어) 의 `comment-input` 과 `ComposeForm` 의 제목 · 본문 칸 className 에 `bg-white` 와 `[color-scheme:light]` 가 있다. 수정 전 코드에서 빨강임을 확인해 구현 보고에 적는다.
 - [x] **AC-2 (계산값) ⚪** — 로컬 브라우저(Playwright `colorScheme: 'dark'`)에서 세 칸 중 하나 이상의 계산된 `background-color` 가 흰색 · `color` 가 `ink-900` 이다. 로그인이 필요한 화면이라 렌더할 수 없으면 ⚪ + 사유와 함께 AC-1 배선으로 갈음한다(`TASK-FAN-FE-026` AC-2 와 같은 처리).
 - [x] **AC-3 (회귀)** — `tsc --noEmit` · `next lint` · vitest 전체 · `next build` rc=0 (각각 따로 실행, rc 직접 확인).
-- [ ] **AC-4 (라이브)** — Vercel Production 배포 후 OS 다크 모드 브라우저에서 팬 상세 화면 댓글 입력란이 흰 바탕 · 검은 글씨로 보인다(소유자). 못 재면 ⚪ + 사유.
+- [x] **AC-4 (라이브)** — Vercel Production 배포 후 OS 다크 모드 브라우저에서 팬 상세 화면 댓글 입력란이 흰 바탕 · 검은 글씨로 보인다(소유자). 못 재면 ⚪ + 사유.
 
 # Related Specs
 
@@ -96,3 +96,9 @@ OS 가 다크 모드여도 댓글 입력란과 글쓰기 폼의 제목 · 본문
 - **AC-3 ✅** — 각각 따로 실행, rc 직접 확인: `tsc --noEmit` 0 · `next lint` 0 · vitest 0 (50 files / 435 tests) · `next build` 0.
   - 🔴 첫 게이트 실행은 **무효로 버렸다**: 실행 도중 같은 worktree 에서 `git stash -u`(main 병합용)를 해서 새 시험 파일이 잠깐 사라졌고, vitest 가 그 파일을 «Cannot find module» 로 1 failed 처리했다. 최종 트리에서 새 로그 경로로 네 게이트를 다시 돌린 값이 위 숫자다.
 - **AC-4** — 열림. Vercel Production 배포 후 소유자가 OS 다크 브라우저에서 확인(굽기 불필요).
+
+---
+
+## CORRECTION — 36차 창 라이브 결과 (2026-10-28 UTC)
+
+- **AC-4 ✅.** 구현 PR #4597 (squash `563c02501`), Vercel `Production – kanggle-fan` 이 04:07:01Z 에 563c02501 을 배포했다. 소유자가 댓글 입력칸이 밝은 바탕에 어두운 글씨로 보이는 것을 확인했다.

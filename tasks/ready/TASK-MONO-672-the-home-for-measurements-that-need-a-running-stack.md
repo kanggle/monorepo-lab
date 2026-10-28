@@ -1966,11 +1966,13 @@ The console (Vercel) has nothing to do with the bake. PC-FE-338 a `56a15be8b` ·
       - `TASK-PC-FE-373` AC-8 (impl #4565 `a733cac85`, console on Vercel) — logged-in `/wms` overview with ≥ 1 alert row renders (no whole-overview degrade) and the acknowledge button acts on the row `id`; needs a wms alert row (step 3 of the 35th preparation creates one).
       - `TASK-FAN-FE-033` AC-6 (impl #4562 `eabc96810`, web on Vercel) — click a pressed reaction again → it is removed (DELETE) and the press clears; click a different type → it switches.
       - **One shared ≥ 35-min idle run:** `TASK-FE-106` AC-2 · AC-3 (AC-0 is ⚪ — owner decision 2026-10-26 UTC, see that ticket's CORRECTION) + `TASK-FAN-FE-027` AC-1 — idle the store and fan sessions together, return, and record both; run alongside other work.
+    - 🟢 36th window (2026-10-28 UTC): measured — see § 36th window — results.
 21. 🆕 **`TASK-MONO-820` — demo-seed backfill of the past 28 KST days (SCM · ERP · IAM login · WMS read model)** (added 2026-10-28 UTC). 🔴 **Needs a bake** — the seed change (impl branch `task/mono-820-seed-backfill`) reaches the demo only through the next AMI. Measurement targets only — the ticket stays in `review/` and owns them:
     - The SQL really runs on the live DBs: seed log shows «생성» on the first boot and «존재 … +0» on a same-day second boot for all four domains (Postgres data-modifying CTE + `ON CONFLICT` on admin_db · MySQL `INSERT … SELECT … WHERE NOT EXISTS` · the `dbexec` users `security_user` / `account_user` / `admin` / `erp`). The four seeds still finish inside the 240 s `POST_UP_BUDGET` — erp runs last and is the one that can be cut.
     - 820 AC-2 / AC-6: logged-in `demo-corp` SCM · ERP · IAM · WMS overview «실적» bars ≥ 10 days and the operator-overview «지난 주» bars > 0 for 발주 금액 · 승인 · 로그인 실패 · 출고 수량. 🔴 `period=month` is the **calendar** month — «≥ 10 days» only holds on or after the 11th; measure then, or read the last-28-day series directly.
     - 820 AC-3: WMS `/dashboard/throughput` daily counters equal `/dashboard/metrics` on the same days.
     - ERP inbox equality (§9) includes the one pending backfilled request.
+    - 🟢 36th window (2026-10-28 UTC): measured — see § 36th window — results.
 
 ### Not measured, and owned by no open AC (recorded so the gap is visible — not carried)
 
@@ -2293,3 +2295,41 @@ The 34th window left five ACs ⚪ because the demo volume did not hold the state
 - The live ACs of the three new defect tickets, once they are filed and merged.
 - Owner decision (not a measurement): pruning the older 33rd-generation AMI.
 
+## 36th window — results (2026-10-28 UTC, 02:54Z–04:46Z · budget 2019 → 2128 / 2400)
+
+**Bake (item 18, continued):** `bake.sh --ref bake-0777e56ea`, packer rc=0, 52 min 47 s, AMI `ami-0bb9778ca4a73e75c`, tag RepoCommit `0777e56ea` → provenance `ami-tag`. Pre-checks: open PRs 0 · remote task branches 0 · `main` CI and Nightly E2E success at `0777e56ea` · dry-run rc=0 · demo host stopped. Pin PR #4594 (squash `5b91bffc6`). Owner `terraform apply`: 1 add · 2 change · 1 destroy → instance `i-02489b46109b29714`, Lambda `AMI_REPO_COMMIT=0777e56ea`; `check-ami-generation.sh --with-aws` rc=0. The 34th-generation AMI was pruned (#4595, owner decision). **Window:** opened 02:54:31Z with nine bundles in one `/bundle/start` request, all ready; closed 04:46Z with `/stop`, EC2 `stopped` and the control API `/status` `stopped` both confirmed; used_minutes 2019 → 2128 of 2400. Agent checks ran over SSM `AWS-RunShellScript`; the owner used the browser on Vercel production.
+
+**Boot gate.** 97 containers Up, 3 Exited (0) init containers (`ecommerce-minio-init`, `wms-kafka-init`, `iam-kafka-init`); seed ✗ lines 0; the only ⚠ is the known minio image-seed warning; journal line «[seed] 모든 도메인 시드 완료».
+
+**Results.** The evidence is in each ticket's `## CORRECTION — 36차 창 라이브 결과 (2026-10-28 UTC)` section. Nothing moved between queues; the four-dimension close chore comes later.
+
+| Ticket | AC | Result | Where it goes |
+|---|---|---|---|
+| `TASK-BE-661` | AC-4 | ✅ `SKU-APPLE-001` available 85 → −80 → 5 (201, 03:11:17Z); within ~4 s scm suggestion `c873edf0…` `SUGGESTED` source `ALERT` with `"warehouseCode":"WH01"`, `reorderPointAtTrigger` 10, `triggerAvailableQty` 5, `suggestedQty` 50; inventory-service log `inventory.low-stock-detected emitted … available=5 threshold=10`. The suggestion's `warehouseId` still holds the LOCATION id (35th side finding, unchanged). Console «창고» column shows WH01 (owner) | close chore |
+| `TASK-FAN-BE-053` | AC-8 | ✅ account `…ec01`, post `01a1807a-e70a…`: before detail 0 / feed 0, key `feed:v3:fan-platform:<account>:0:10` ttl 245; PUT LOVE 200 → detail 1 (LOVE) and feed 1 at ttl 244; DELETE 204 → 0 / 0, ttl 244 (key not evicted — counts are overlaid at read). 35th measured 1 vs 0 | close chore |
+| `TASK-PC-FE-373` | AC-8 | ✅ logged-in `/wms` (demo-corp) with 1 alert row rendered the whole overview; row «LOW_STOCK 현재 5 / 임계 10 · 위치 01910000-0000-7000-8000-000000001001»; «확인 처리» → «확인됨»; server alert `01a1807d-98a2-…` `acknowledgedAt 2026-10-28T03:26:57.810517Z` `acknowledgedBy 0199de70-0000-7000-8000-00000000ad03` | close chore |
+| `TASK-PC-FE-377` | AC-7 | ✅ `/scm/replenishment` row SKU-APPLE-001 · WH01 · SUP-001 · 50 shows «재주문점 10 · 발동 5 · 제안 50»; owner confirmed the bar is drawn | close chore |
+| `TASK-MONO-820` | AC-1 (extra evidence) | first boot: `[seed:wms]` 적치 50 · 출하 52, `[seed:scm]` 창 안 60 건, `[seed:erp]` 창 안 49 건, `[seed:iam]` 로그인 178 · 잠금 6; second same-day `seed.sh iam wms scm erp` rc=0 in 10 s, all four «존재 … (수렴, +0)» (PO rows stayed 63) | recorded in the ticket |
+| `TASK-MONO-820` | AC-2 | ✅ API (demo-corp token), period=month: SCM poAmount:KRW nonzero days 28, ERP approved 27, WMS qtyShipped 28; previous week: SCM 11,497,000, ERP 4, WMS qtyShipped 201. IAM computed by SQL on `login_history` (admin API 401 `TOKEN_INVALID`: IAM admin-service pins `ADMIN_OIDC_ISSUER=https://auth.hubwang.com`, a measurement-route issue): failure days 27, week current 11/3, previous 10/4 | recorded in the ticket |
+| `TASK-MONO-820` | AC-3 | ✅ WH01 + WH-MAIN `/dashboard/throughput` summed per day vs `/dashboard/metrics?period=month`: 28 days compared, 0 mismatches | recorded in the ticket |
+| `TASK-MONO-820` | AC-6 | ✅ (owner) WMS «출고 수량 · 일별» 10/1–10/28 all nonzero and equal to the API; SCM · ERP · IAM monthly bars ≥ 10 days; operator cards: 로그인 실패 3 (직전 4), 출고 수량 138 (직전 201), 발주 금액 ₩1,064,800 (직전 ₩11,497,000), 승인 3 (직전 4) | close chore (AC-4 · AC-5 untouched) |
+| `TASK-MONO-820` | ERP inbox §9 bullet | not measured | open |
+| `TASK-BE-624` | AC-4 | ✅ owner signed up `be624-1028@example.com` (store, incognito) and logged in; IAM account `613e0a5d-88b5-4605-ba90-1b0b4e963a19` ACTIVE 04:41:26Z; `user_db.user_profiles` row with the same user_id has that email (created 04:41:27Z, updated 04:41:49Z — not blanked). `GET /api/users/me` itself was not called; the row it reads was inspected | close chore |
+| `TASK-FAN-FE-033` | AC-6 | ✅ (owner) re-clicking the pressed reaction removed it | close chore |
+| `TASK-FE-106` · `TASK-FAN-FE-027` | AC-2 / AC-1 | ✅ owner logged into store and fan, idled from 03:33:59Z, returned after 04:09Z: both sessions stayed logged in; Traefik: `POST /oauth2/token` 200 from Vercel at 04:10:15Z (2388 bytes) and 04:10:16Z (2255 bytes) = the two rotations at return; auth-service log since 03:33Z: no `replay` / `reuse detected`. A first idle start at 03:07:50Z was void (owner not logged in). FE-106 AC-0 stays ⚪ (earlier owner decision) | close chore |
+| `TASK-FE-106` | AC-3 | ✅ fan client refresh token A → 200, rotated to B; 40 s later (> 30 s grace) A → 400 `invalid_grant` «Refresh token reuse detected — all sessions have been revoked.»; then B → 400 `invalid_grant`; log `SAS_REFRESH: reuse detected — revoking the refresh-token family. account=0199de70-0000-7000-8000-00000000ec01, children=1`. Side effect: that demo fan account's sessions were revoked | close chore |
+| `TASK-FAN-FE-034` | AC-4 | ✅ impl PR #4597 (squash `563c02501`); Vercel `Production – kanggle-fan` deployed `563c02501` at 04:07:01Z; owner confirmed light background with dark text in the comment input | close chore |
+| `TASK-PC-FE-364` | AC-3 | ⚪ not measured again — needs operators holding single permission sets; the seed has none | stays `review` |
+
+**Findings:**
+1. `TASK-PC-FE-373` side finding: the alert table's location column shows the raw location UUID, not the code, because the alert row carries no `locationCode`. Recorded, not ticketed.
+2. `TASK-MONO-820`: the IAM admin metrics API cannot be measured with a token minted inside the host via `iam.<ip>.sslip.io` (401 `TOKEN_INVALID`), because IAM admin-service pins `ADMIN_OIDC_ISSUER=https://auth.hubwang.com`. A measurement-route limit, not a defect; IAM was computed by SQL instead.
+3. `TASK-BE-661`: the suggestion's `warehouseId` still holds the LOCATION id (35th side finding, unchanged).
+
+**Left behind on the demo volume:** wms alert `01a1807d…` acknowledged; suggestion `c873edf0…` `DISMISSED`; `SKU-APPLE-001` available 85 (adjustments −80 / +80); new account `be624-1028@example.com`; fan account `…ec01` refresh-token family revoked; a second seed run of `iam wms scm erp`.
+
+**Still open → next window:**
+- `TASK-PC-FE-364` AC-3 — single-permission operators.
+- `TASK-MONO-820` — the ERP inbox §9 bullet.
+- `TASK-MONO-648` — capture window.
+- `TASK-MONO-819` AC-2 — script-only PR.

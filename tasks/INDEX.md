@@ -219,7 +219,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-820-demo-seed-backfill-four-weeks-history.md` — **라이브 데모 시드에 부팅 기준 최근 4주 과거 행 (SCM · ERP · IAM 로그인 · WMS 읽기 모델)** (REVIEW 2026-10-28 UTC · 로컬 증거 = 생성기 자기시험 44칸 · bite 6 · 스텁 수렴 · bash -n · 시드 파싱 시험 · 가드 / 실제 DB · 화면 = 다음 굽기 뒤 창, `TASK-MONO-672` § Order 21): `lib-backfill.sh` 결정적 생성기 + `dbexec --why`, IAM 은 demo-corp newhire 귀속 · 누적 상한, ERP 시드 목록 조회 결함(size=100) 함께 수선. 🔴 월간 «≥ 10일» 은 매월 11일 이후 측정. 분석=Opus 5.5 / 구현 권장=Opus.
+- `TASK-MONO-820-demo-seed-backfill-four-weeks-history.md` — **라이브 데모 시드에 부팅 기준 최근 4주 과거 행 (SCM · ERP · IAM 로그인 · WMS 읽기 모델)** (REVIEW 2026-10-28 UTC · 로컬 증거 = 생성기 자기시험 44칸 · bite 6 · 스텁 수렴 · bash -n · 시드 파싱 시험 · 가드 / 실제 DB · 화면 = 다음 굽기 뒤 창, `TASK-MONO-672` § Order 21): `lib-backfill.sh` 결정적 생성기 + `dbexec --why`, IAM 은 demo-corp newhire 귀속 · 누적 상한, ERP 시드 목록 조회 결함(size=100) 함께 수선. 🔴 월간 «≥ 10일» 은 매월 11일 이후 측정. 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **2026-10-28 UTC 36차 창:** AC-2 ✅ · AC-3 ✅ (28일 불일치 0) · AC-6 ✅ (소유자) · 두 번째 시드 수렴 +0 · ERP inbox §9 항목은 미측정
 - `TASK-MONO-819-capture-self-test-skipped-on-script-only-prs.md` — **`capture-portfolio.mjs --self-test` 가 그 스크립트만 고친 PR 에서 한 번도 안 돈다** (REVIEW 2026-10-25 UTC · AC-2 = 이 PR 의 CI): 호스트 잡 `frontend-e2e-smoke` 의 `if:` 가 그 스크립트를 담은 필터(`capture-route-staleness`)를 안 읽는다(#4526). `if:` 한 줄 + 배선 가드. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 ## done

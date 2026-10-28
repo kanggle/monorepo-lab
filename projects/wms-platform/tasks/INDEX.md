@@ -89,7 +89,7 @@ _(없음)_
 
 ## review
 
-- `TASK-BE-661-inventory-seed-lacks-wh01-warehouse-snapshot.md` — **REVIEW (2026-10-26 UTC · AC-4 = 굽기 뒤 라이브).** inventory 시드에 WH01 `warehouse_snapshot` 행 추가(`ON CONFLICT (id) DO NOTHING`) + 로케이션→창고 폐포 parity 셀(`EcommerceSeedParityTest`) — 수정 전 빨강 · 수정 후 초록. 구현 권장 Sonnet.
+- `TASK-BE-661-inventory-seed-lacks-wh01-warehouse-snapshot.md` — **REVIEW (2026-10-26 UTC · AC-4 = 굽기 뒤 라이브).** inventory 시드에 WH01 `warehouse_snapshot` 행 추가(`ON CONFLICT (id) DO NOTHING`) + 로케이션→창고 폐포 parity 셀(`EcommerceSeedParityTest`) — 수정 전 빨강 · 수정 후 초록. 구현 권장 Sonnet. · 🔵 **2026-10-28 UTC 36차 창:** AC-4 ✅ (available 85 → 5 뒤 약 4초 안에 제안에 warehouseCode WH01)
 
 ## done
 

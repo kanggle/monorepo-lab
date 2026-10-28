@@ -65,11 +65,11 @@ devops
 
 - **AC-0** 위 사실을 착수 시점 코드로 file:line 재확인하고, 어긋난 것이 있으면 이 절에 정정 기록 후 진행(어긋남이 범위를 바꾸면 STOP · 보고).
 - **AC-1** SCM · ERP · IAM · WMS 시드가 부팅 시각 기준 지난 28일(어제까지) 과거 행을 `dbexec --why` 로 넣고, 같은 날 두 번 돌려도 행 수가 같다(수렴 — 시험 또는 로컬 두 번 실행 증거).
-- **AC-2** 각 도메인 metrics 응답(`period=month`)이 그 테넌트에서 0 아닌 날 ≥ 10, `period=week` 의 `previous` 가 해당 headline 지표(`poAmount:*` · `approved` · `loginFailure` · `qtyShipped`)에서 0 이 아니다 — 로컬 데모 스택(가능하면) 또는 SQL 로 계산한 기대값으로.
-- **AC-3** WMS `/dashboard/throughput` 의 일 카운터가 metrics 와 같은 날에 같은 값(출고 재구성 · 입고 증분).
+- **AC-2** 각 도메인 metrics 응답(`period=month`)이 그 테넌트에서 0 아닌 날 ≥ 10, `period=week` 의 `previous` 가 해당 headline 지표(`poAmount:*` · `approved` · `loginFailure` · `qtyShipped`)에서 0 이 아니다 — 로컬 데모 스택(가능하면) 또는 SQL 로 계산한 기대값으로. ✅ 36차 창 — 아래 CORRECTION
+- **AC-3** WMS `/dashboard/throughput` 의 일 카운터가 metrics 와 같은 날에 같은 값(출고 재구성 · 입고 증분). ✅ 36차 창 — 아래 CORRECTION
 - **AC-4** README 예외 절이 있고 각 `--why` 가 검증 가능한 사유를 적는다. 가드 (y) · `bash -n` 스윕 · 시드 파싱 시험 초록, CI 초록.
 - **AC-5** IAM 누적량이 README 에 적힌 상한 안이다(부팅 n 회 → 행 수 식).
-- **AC-6 (라이브, 다음 굽기 뒤 창)** 로그인 콘솔 `demo-corp`: SCM · ERP · IAM · WMS 개요 «실적» 월간 막대 ≥ 10일, 운영자 개요 네 카드의 «지난 주» 막대 폭 > 0. 못 재면 ⚪ + 사유. `TASK-MONO-672` 에 등록.
+- **AC-6 (라이브, 다음 굽기 뒤 창)** 로그인 콘솔 `demo-corp`: SCM · ERP · IAM · WMS 개요 «실적» 월간 막대 ≥ 10일, 운영자 개요 네 카드의 «지난 주» 막대 폭 > 0. 못 재면 ⚪ + 사유. `TASK-MONO-672` 에 등록. ✅ 36차 창 (소유자) — 아래 CORRECTION
 
 # Related Specs
 
@@ -108,3 +108,14 @@ devops
 - 🔴 **측정 조건(AC-2 · AC-6):** `period=month` 는 **달력월** — «0 아닌 날 ≥ 10» 은 매월 11일 이후에만 성립한다. 지난달 창(약 59일 전까지)은 28일 백필로 대부분 비어 있다. 지난 주 비교 창은 같은 경과 시각에서 끊겨 월요일 01시(IAM · WMS) / 07시(SCM · ERP) KST 이전엔 «지난 주» 가 0 일 수 있다.
 - **AC-1 ~ AC-5 상태:** 로컬 증거로 닫을 수 있는 칸(생성기 결정성 · 수렴 · README · 가드)은 위 증거, **실제 DB 실행 · 행 수 불변 · 화면 값은 다음 굽기 뒤 창**(`TASK-MONO-672` § Order 21 에 등록). ⇒ review 에 둔다.
 - **남은 위험:** IAM 행은 지울 수 없어 생성기를 나중에 바꾸면 옛 판 행이 남는다(사후 대조 ⚠). 백필 ACKNOWLEDGED PO 를 콘솔에서 확정하면 실제 아웃박스가 나간다(API 시드 PO 와 같은 동작). ERP 목록 무정렬 페이지 경계에서 «빠짐» 은 못 막는다(겹침은 id 중복 제거로 막음). `dbexec` mysql 경로는 stderr 를 버려 ERP/IAM 실패 원인은 SQL 을 손으로 다시 흘려야 보인다.
+
+---
+
+## CORRECTION — 36차 창 라이브 결과 (2026-10-28 UTC)
+
+- **(a) 첫 부팅 시드 (AC-1 의 라이브 증거).** `[seed:wms] 생성 과거 입출고 2026-09-30 ~ 2026-10-27 (KST) — 적치 50 · 출하 52`, `[seed:scm] 생성 과거 발주 … 창 안 60 건`, `[seed:erp] 생성 과거 결재 … 창 안 49 건`, `[seed:iam] 생성 로그인 이력 … 로그인 178 · 잠금 6`. 같은 날 두 번째 `seed.sh iam wms scm erp` rc=0, 10 초: 네 도메인 모두 「존재 … (수렴, +0)」 (scm 요약의 「생성 3」 은 공급자 SUP-001 이 같은 id 로 재-upsert 된 것과 매핑·정책 「반영」 이다. 발주 행은 63 그대로). AC-1 의 수렴 증거로 더한다.
+- **(b) AC-2 ✅.** demo-corp 운영자 토큰으로 API, period=month (창 10-01 00:00 – 10-28 12:08 KST): SCM poAmount:KRW 0 아닌 날 28, ERP approved 27, WMS qtyShipped 28. period=week 의 previous: SCM poAmount:KRW 11,497,000, ERP approved 4, WMS qtyShipped 201. IAM `/api/admin/metrics` 는 호스트 안에서 `iam.<ip>.sslip.io` 로 발급한 토큰에 401 `TOKEN_INVALID` 「Operator token invalid」 를 돌려줬다 — IAM admin-service 가 `ADMIN_OIDC_ISSUER=https://auth.hubwang.com` 을 고정하기 때문이다 (측정 경로 문제이지 결함이 아니다). 그래서 IAM 은 security_db.login_history (tenant_id 또는 site_tenant_id = demo-corp) 를 SQL 로 계산했다: 10월 실패가 있는 날 27 (성공 27), 이번 주 성공 11 / 실패 3, 직전 주 성공 10 / 실패 4; account_lock_history 10월 5행 5일.
+- **(c) AC-3 ✅.** WH01 + WH-MAIN 의 `/dashboard/throughput` 을 일별로 합산해 `/dashboard/metrics?period=month` 시리즈와 비교: 28일 비교, 불일치 0 (qtyReceived · qtyShipped · shipmentCount).
+- **(d) AC-6 ✅ (소유자).** 로그인 WMS 개요 「출고 수량 · 일별」 10/1–10/28 이 모두 0 이 아니고 API 값과 같다. SCM · ERP · IAM 개요 월간 막대는 소유자가 ≥ 10일을 확인했다. 운영자 개요 카드: 로그인 실패 3 (직전 4), 출고 수량 138 (직전 201), 발주 금액 ₩1,064,800 (직전 ₩11,497,000), 승인 3 (직전 4) — 모든 「직전」 이 0 보다 크고 API 와 같다.
+- **측정 안 함:** 「ERP inbox equality (§9) 가 백필된 대기 결재 1건을 포함한다」 (`TASK-MONO-672` § Order 21 항목).
+- AC-4 · AC-5 는 라이브 AC 가 아니므로 그대로 둔다. 이 티켓의 AC 는 체크박스가 없는 목록이라 AC-2 · AC-3 · AC-6 줄 끝에 ✅ 를 덧붙였다.
