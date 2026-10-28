@@ -1533,7 +1533,7 @@ fi
 # ---------------------------------------------------------------------------
 # (y2) 최근 4주 과거 이력 생성기가 결정적이고 창 안에 머무는가 (TASK-MONO-820)
 # ---------------------------------------------------------------------------
-# SCM · ERP · IAM · WMS 시드는 «오늘 − 28일 ~ 어제»(KST) 의 과거 행을 `lib-backfill.sh` 가
+# SCM · ERP · IAM · WMS · FINANCE(TASK-MONO-821) 시드는 «오늘 − 28일 ~ 어제»(KST) 의 과거 행을 `lib-backfill.sh` 가
 # 만든 SQL 로 넣고, 매 부팅 `ON CONFLICT DO NOTHING` / `INSERT IGNORE` 로 **수렴한다고 믿는다.**
 # 그 믿음의 전제는 «SQL 이 날짜만의 함수다» 인데, 그것이 깨지면(난수 · 부팅 시각 의존) 라이브에서
 # 보이는 증상은 «매 부팅 행이 늘어난다» 뿐이고 — IAM 은 **지울 수 없는 표**라 되돌릴 수도 없다.
@@ -1541,11 +1541,12 @@ fi
 # 자기시험이 재는 것: 같은 부팅 시각 = 다른 프로세스에서도 바이트 동일 · 같은 KST 날의 다른 시각
 # = 동일 · 모든 시각의 KST 날짜가 창 안(오늘 0) · 3일 뒤 부팅이 겹치는 날짜의 행을 글자 그대로 냄 ·
 # 모든 INSERT 의 수렴 절 · WMS 입고 카운터가 새 사실(RETURNING)만 더함 · headline 일별 값이 매일 ≥1
-# 이고 변함 · KST 자정 경계.
-echo "[verify] (y2) 과거 이력 생성기(lib-backfill.sh)의 자기시험 (TASK-MONO-820)"
+# 이고 변함 · KST 자정 경계. finance 는 더해서: 잔액 보정이 ROW_COUNT(새 행)에서만 옴 · 계좌 A 의 시점별
+# 잔액 ≥ 0 · 백필 금액 ≠ 시드 판정 금액 · 스텁 DB 에서 같은 날 2회차 +0 (TASK-MONO-821).
+echo "[verify] (y2) 과거 이력 생성기(lib-backfill.sh)의 자기시험 (TASK-MONO-820 · 821)"
 y2_lib="$ROOT/infra/demo/seed/lib-backfill.sh"
-[ -f "$y2_lib" ] || fail "(y2) infra/demo/seed/lib-backfill.sh 가 없습니다 — 네 시드가 source 하는 생성기가 사라졌습니다"
-for y2_s in seed-scm.sh seed-erp.sh seed-iam.sh seed-wms.sh; do
+[ -f "$y2_lib" ] || fail "(y2) infra/demo/seed/lib-backfill.sh 가 없습니다 — 다섯 시드가 source 하는 생성기가 사라졌습니다"
+for y2_s in seed-scm.sh seed-erp.sh seed-iam.sh seed-wms.sh seed-finance.sh; do
   grep -q 'lib-backfill\.sh' "$ROOT/infra/demo/seed/$y2_s" \
     || fail "(y2) $y2_s 가 lib-backfill.sh 를 source 하지 않습니다 — 과거 이력 단계가 빠졌습니다(«실적» 그래프가 하루치로 돌아갑니다)"
 done
@@ -1558,7 +1559,7 @@ if [ "$y2_rc" != 0 ]; then
   fail "(y2) lib-backfill.sh --self-test rc=$y2_rc — 위 FAIL 줄을 보십시오"
 fi
 y2_n="$(printf '%s\n' "$y2_out" | grep -c '^  ok: ' || true)"
-ok "과거 이력 생성기 자기시험 통과 (ok ${y2_n}칸 · 네 시드 전부 source)"
+ok "과거 이력 생성기 자기시험 통과 (ok ${y2_n}칸 · 다섯 시드 전부 source)"
 
 # ---------------------------------------------------------------------------
 echo "[verify] (z) 도메인 헬스 스냅샷 발행 경로가 끊기지 않았는가"

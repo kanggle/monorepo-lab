@@ -5,7 +5,8 @@
 # 콘솔의 «실적» 일별 그래프와 운영자 개요의 «이번 주 vs 지난 주» 는 **요청 시각 기준
 # 최근 N일**을 그린다. 시드가 API 로 만드는 행은 전부 «부팅한 오늘» 에 찍히므로 그래프는
 # 하루치 막대 하나뿐이고 «지난 주» 는 0 이다. 이 파일은 SCM · ERP · IAM · WMS 시드가
-# `dbexec --why` 로 흘려 넣을 **과거 행 SQL** 을 만든다.
+# `dbexec --why` 로 흘려 넣을 **과거 행 SQL** 을 만든다. FINANCE 는 TASK-MONO-821(소유자 결정
+# 2026-10-28 UTC — 820 의 «finance 제외» 를 뒤집었다)이 더했다: 거래 행 + 같은 트랜잭션의 잔액 보정.
 #
 # 이 파일은 SQL 을 **만들기만** 한다 — DB 에 아무것도 쓰지 않는다(`dbexec` 는 각
 # seed-<domain>.sh 가 부른다). 그래서 Docker 없이 `--self-test` 로 전부 잴 수 있다.
@@ -32,6 +33,7 @@
 #   UUID 꼴   00000820-<도메인 코드 4자리>-<YYYY>-<MMDD>-<순번 12자리>   (16진 숫자만 — 유효한 UUID)
 #               0101 scm 발주 · 0102 scm 발주 라인 · 2101 iam 로그인 성공 · 2102 iam 로그인 실패
 #               2103 iam 잠금 · 4101 wms 적치 사실 · 4102 wms 출하 · 4103 wms 출하의 주문 id
+#               6101 finance 입금(TOPUP) · 6102 finance 이체(TRANSFER A→B)
 #   erp       appr-bf-<YYYYMMDD>-<순번 2자리> · ars-bf-<YYYYMMDD>-<순번 2자리>
 #
 # 각 생성기는 SQL 맨 앞에 `-- bf-planned <table> <n>` 주석을 찍는다 — 호출자가 넣은 뒤
@@ -385,6 +387,86 @@ bf_wms_sql() {
 }
 
 # =============================================================================
+# FINANCE — transactions + balances.ledger_minor (finance_db, account-service MySQL) (TASK-MONO-821)
+# =============================================================================
+# 지표: topupCount · transferAmount:KRW … = transactions 의 type ∈ TOPUP·TRANSFER·CAPTURE,
+#       status ∈ SETTLED·COMPLETED, settled_at 을 KST 일로 자른다(TransactionMetricsService ·
+#       TransactionJpaRepository#findSettledIn). balances · 원장은 읽지 않는다.
+# 🔴 그러나 /finance/accounts 는 잔액과 거래 목록을 **나란히** 보인다 — 거래만 넣으면 둘이 갈라진다
+#    (TASK-MONO-820 이 finance 를 뺀 이유). 그래서 같은 트랜잭션에서 balances.ledger_minor 를
+#    **이번에 실제로 들어간 행만큼** 보정한다: 각 INSERT IGNORE 바로 뒤에서 ROW_COUNT()(새 행 1 ·
+#    이미 있던 id 0)를 받아 계좌별 증분 변수에 더하고, 끝에서 그 변수만큼 UPDATE 한다.
+#    ⇒ 재실행은 ROW_COUNT() 가 전부 0 이라 +0. 🔴 그 UPDATE 를 «계획 합계» 로 바꾸면 매 부팅 잔액이
+#    부푼다(자기시험 (7c) · (11) 이 그것을 문다).
+# 🔴 잔액 비음수(ck_balances_non_negative: ledger ≥ 0 · ledger − held ≥ 0): 이체(A→B)가 있는 날은
+#    순번 0 입금이 **계좌 A 로 07시대**에, 이체는 08시대에 오고, 이체 금액(≤ 75,000)은 입금 금액의
+#    최솟값(80,000)보다 작다 ⇒ 하루 안의 모든 시점에서 A 의 그날 누계 ≥ 0, 하루 순증 ≥ 0. 그래서
+#    **어느 날부터 세든**(옛 창의 날짜가 볼륨에 남아 있어도) A 는 음수가 되지 않고, 보정은 잔액을
+#    줄이지 않으므로 ledger − held 도 이전보다 작아지지 않는다. B 는 받기만 한다.
+# 🔴 금액 집합은 시드의 판정 금액과 **겹치지 않는다**: TOPUP_MINOR(500000) · TRANSFER_MINOR(100000).
+#    seed-finance.sh 의 입금 술어(topup_txns)는 «그 금액의 TOPUP 이 있는가» 이므로 같은 금액의 백필
+#    행이 있으면 오늘 입금이 실패해도 «있음» 으로 읽힌다.
+# 하루 입금 0~3건(날마다 다름) · 이체는 매주 월요일(«지난 주» 비교 창이 같은 경과 시각에서 끊겨도
+#   지난 월요일 08시대 몫이 들어가게) + 해시로 약 1/4 의 날. status COMPLETED · created_at = settled_at.
+# outbox · audit_log · 원장(ledger-service)은 쓰지 않는다 — outbox 행은 원장이 **오늘 시각**으로
+#   분개하게 만든다(PostFromTransactionUseCase 가 clock.now() 로 찍는다). 그래서 /ledger 에는 이
+#   과거 거래의 분개가 없다(README § 시각 경계 — 예외의 한계).
+BF_FIN_TOPUP_AMOUNTS=(80000 120000 150000 200000 250000 300000 350000)
+BF_FIN_TRANSFER_AMOUNTS=(20000 40000 60000 75000)
+bf_finance_sql() {
+  local tenant="$1" acc_a="$2" acc_b="$3"
+  if [ -z "$tenant" ] || [ -z "$acc_a" ] || [ -z "$acc_b" ]; then
+    echo "bf_finance_sql: tenant/계좌 A/계좌 B 가 비었습니다" >&2; return 2
+  fi
+  [ "$acc_a" != "$acc_b" ] || { echo "bf_finance_sql: 계좌 A = 계좌 B (자기 이체)" >&2; return 2; }
+  local cols="id, tenant_id, account_id, type, status, amount_minor, currency, counterparty_account_id, hold_id, reversal_of_transaction_id, failure_code, reason, created_at, settled_at, version"
+  local why="'데모 이력(시드 백필 — TASK-MONO-821)'"
+  local body="" day n i h dow xfer acc amt sec da db ntop=0 nxfer=0
+  for (( day=BF_FIRST; day<=BF_LAST; day++ )); do
+    dow=$(( (day + 3) % 7 ))   # 0 = 월요일 (epoch-day 0 = 1970-01-01 목요일)
+    bf_hash "$day" 0 51; n=$(( BF_H % 4 ))
+    bf_hash "$day" 0 52; xfer=0
+    if [ "$dow" -eq 0 ] || [ $(( BF_H % 4 )) -eq 0 ]; then xfer=1; fi
+    [ "$xfer" = 1 ] && [ "$n" -eq 0 ] && n=1
+    for (( i=0; i<n; i++ )); do
+      bf_hash "$day" "$i" 53; h=$BF_H
+      amt=${BF_FIN_TOPUP_AMOUNTS[$(( (h >> 4) % ${#BF_FIN_TOPUP_AMOUNTS[@]} ))]}
+      acc=$acc_a; [ $(( (h >> 8) % 2 )) -eq 1 ] && acc=$acc_b
+      if [ "$i" -eq 0 ]; then
+        sec=$(( 7 * 3600 + h % 3600 ))            # 07:00–07:59 — 그날 첫 건
+        [ "$xfer" = 1 ] && acc=$acc_a             # 이체의 재원은 같은 날 더 이른 A 입금
+      else
+        bf_sec "$h" day; sec=$BF_SEC              # 09:00–20:59
+      fi
+      bf_at "$day" "$sec"; bf_ts "$BF_AT"; bf_uuid 6101 "$day" "$i"
+      da=0; db=0; if [ "$acc" = "$acc_a" ]; then da=$amt; else db=$amt; fi
+      body+="INSERT IGNORE INTO transactions ($cols) VALUES ('$BF_UUID', '$tenant', '$acc', 'TOPUP', 'COMPLETED', $amt, 'KRW', NULL, NULL, NULL, NULL, $why, '$BF_MY', '$BF_MY', 0);"$'\n'
+      body+="SET @bf_r = ROW_COUNT();"$'\n'
+      body+="SET @bf_n = @bf_n + @bf_r, @bf_da = @bf_da + @bf_r * ($da), @bf_db = @bf_db + @bf_r * ($db);"$'\n'
+      ntop=$(( ntop + 1 ))
+    done
+    if [ "$xfer" = 1 ]; then
+      bf_hash "$day" 0 54; h=$BF_H
+      amt=${BF_FIN_TRANSFER_AMOUNTS[$(( h % ${#BF_FIN_TRANSFER_AMOUNTS[@]} ))]}
+      sec=$(( 8 * 3600 + (h >> 4) % 3600 ))       # 08:00–08:59 — 순번 0 입금(07시대) 뒤
+      bf_at "$day" "$sec"; bf_ts "$BF_AT"; bf_uuid 6102 "$day" 0
+      body+="INSERT IGNORE INTO transactions ($cols) VALUES ('$BF_UUID', '$tenant', '$acc_a', 'TRANSFER', 'COMPLETED', $amt, 'KRW', '$acc_b', NULL, NULL, NULL, $why, '$BF_MY', '$BF_MY', 0);"$'\n'
+      body+="SET @bf_r = ROW_COUNT();"$'\n'
+      body+="SET @bf_n = @bf_n + @bf_r, @bf_da = @bf_da + @bf_r * (-$amt), @bf_db = @bf_db + @bf_r * ($amt);"$'\n'
+      nxfer=$(( nxfer + 1 ))
+    fi
+  done
+  printf -- '-- bf-planned transactions %d\n-- bf-planned transactions_topup %d\n-- bf-planned transactions_transfer %d\n' \
+    $(( ntop + nxfer )) "$ntop" "$nxfer"
+  printf 'SET NAMES utf8mb4;\nSTART TRANSACTION;\nSET @bf_n = 0, @bf_da = 0, @bf_db = 0;\n%s' "$body"
+  # 🔴 증분은 변수(= 이번에 새로 들어간 행)에서만 온다 — 리터럴 합계를 쓰지 마라(재실행마다 누적).
+  printf "UPDATE balances SET ledger_minor = ledger_minor + @bf_da, updated_at = UTC_TIMESTAMP(6), version = version + 1 WHERE tenant_id = '%s' AND account_id = '%s' AND currency = 'KRW' AND @bf_da <> 0;\n" "$tenant" "$acc_a"
+  printf "UPDATE balances SET ledger_minor = ledger_minor + @bf_db, updated_at = UTC_TIMESTAMP(6), version = version + 1 WHERE tenant_id = '%s' AND account_id = '%s' AND currency = 'KRW' AND @bf_db <> 0;\n" "$tenant" "$acc_b"
+  printf 'SELECT @bf_n AS bf_inserted, @bf_da AS bf_delta_a, @bf_db AS bf_delta_b;\n'
+  printf 'COMMIT;\n'
+}
+
+# =============================================================================
 # --self-test — Docker 없이 생성기의 성질을 잰다 (CI: verify-demo-wrapper.sh (y2))
 # =============================================================================
 _bf_t_fail=0
@@ -395,6 +477,9 @@ _BF_T_SCM=(demo-corp 0199aaaa-0000-7000-8000-000000000001 0199de70-0000-7000-800
 _BF_T_ERP=(demo-corp emp-sub emp-app dept-ops dept-fin dept-hq emp-3 emp-4)
 _BF_T_IAM=(demo-corp 0199de70-0000-7000-8000-00000000ad07)
 _BF_T_WMS=(01910000-0000-7000-8000-000000000001 01910000-0000-7000-8000-000000000002)
+_BF_T_FINANCE=(demo-corp 019a2b3c-0000-7000-8000-00000000f0a1 019a2b3c-0000-7000-8000-00000000f0b2)
+# seed-finance.sh 의 판정 금액 — 백필 금액이 이것과 겹치면 시드의 입금 술어가 오염된다(셀 (11)).
+_BF_T_FIN_SEED_AMOUNTS="500000 100000"
 
 _bf_gen() { # _bf_gen <domain> <epoch>
   bf_init "$2" || return 2
@@ -403,7 +488,58 @@ _bf_gen() { # _bf_gen <domain> <epoch>
     erp) bf_erp_sql "${_BF_T_ERP[@]}" ;;
     iam) bf_iam_sql "${_BF_T_IAM[@]}" ;;
     wms) bf_wms_sql "${_BF_T_WMS[@]}" ;;
+    finance) bf_finance_sql "${_BF_T_FINANCE[@]}" ;;
   esac
+}
+
+# _bf_fin_rows <sql> → 표준출력에 «UTC 시각|행 KST 날|type|계좌|금액|상대 계좌» 한 줄씩 (transactions INSERT 만)
+_bf_fin_rows() {
+  local line re="^INSERT( IGNORE)? INTO transactions \\([^)]*\\) VALUES \\('([^']+)', '[^']*', '([^']+)', '([A-Z]+)', '[A-Z]+', ([0-9]+), 'KRW', (NULL|'([^']+)'), NULL, NULL, NULL, '[^']*', '([^']+)', '([^']+)', [0-9]+\\);$"
+  while IFS= read -r line; do
+    [[ $line =~ $re ]] || continue
+    local id="${BASH_REMATCH[2]}" acc="${BASH_REMATCH[3]}" typ="${BASH_REMATCH[4]}" amt="${BASH_REMATCH[5]}" cp="${BASH_REMATCH[7]}" ts="${BASH_REMATCH[8]}"
+    _bf_row_day "$id"
+    printf '%s|%s|%s|%s|%s|%s\n' "$ts" "$_RD" "$typ" "$acc" "$amt" "$cp"
+  done <<<"$1"
+}
+
+# _bf_fin_apply <sql> — **스텁 MySQL**: 생성기가 내는 문장 꼴만 해석해 _BFS_IDS(있는 거래 id) ·
+# _BFS_LEDGER[계좌] 에 적용한다. INSERT IGNORE 의 중복 = ROW_COUNT 0, 그냥 INSERT 의 중복 = 오류,
+# 잔액이 음수가 되면 CHECK 위반 = 오류. 오류면 아무것도 바꾸지 않고(롤백) rc=1. 모르는 문장도 rc=1
+# (생성기가 바뀌었는데 스텁이 조용히 건너뛰면 수렴 시험이 공허해진다).
+_bf_fin_apply() {
+  local line rc=0 r=-1 n=0 da=0 db=0 ign k
+  local -A ids=() led=()
+  for k in "${!_BFS_IDS[@]}"; do ids[$k]=1; done
+  for k in "${!_BFS_LEDGER[@]}"; do led[$k]=${_BFS_LEDGER[$k]}; done
+  local re_ins="^INSERT( IGNORE)? INTO transactions \\([^)]*\\) VALUES \\('([^']+)'"
+  local re_set="^SET @bf_n = @bf_n \\+ @bf_r, @bf_da = @bf_da \\+ @bf_r \\* \\((-?[0-9]+)\\), @bf_db = @bf_db \\+ @bf_r \\* \\((-?[0-9]+)\\);$"
+  local re_upd="^UPDATE balances SET ledger_minor = ledger_minor \\+ @bf_(da|db), .* AND account_id = '([^']+)' AND currency = 'KRW' AND @bf_(da|db) <> 0;$"
+  while IFS= read -r line; do
+    case "$line" in ''|--*|'SET NAMES utf8mb4;'|'START TRANSACTION;'|'COMMIT;'|'SELECT @bf_n '*) continue ;;
+      'SET @bf_n = 0, @bf_da = 0, @bf_db = 0;') n=0; da=0; db=0; continue ;;
+      'SET @bf_r = ROW_COUNT();') continue ;;
+    esac
+    if [[ $line =~ $re_ins ]]; then
+      ign="${BASH_REMATCH[1]}"
+      if [ -n "${ids[${BASH_REMATCH[2]}]:-}" ]; then
+        [ -n "$ign" ] || { echo "    stub: 중복 키 (INSERT, IGNORE 없음) ${BASH_REMATCH[2]}" >&2; return 1; }
+        r=0
+      else ids[${BASH_REMATCH[2]}]=1; r=1; fi
+    elif [[ $line =~ $re_set ]]; then
+      [ "$r" -ge 0 ] || { echo "    stub: ROW_COUNT 를 받기 전에 증분" >&2; return 1; }
+      n=$(( n + r )); da=$(( da + r * BASH_REMATCH[1] )); db=$(( db + r * BASH_REMATCH[2] )); r=-1
+    elif [[ $line =~ $re_upd ]]; then
+      local v; if [ "${BASH_REMATCH[1]}" = da ]; then v=$da; else v=$db; fi
+      led[${BASH_REMATCH[2]}]=$(( ${led[${BASH_REMATCH[2]}]:-0} + v ))
+      [ "${led[${BASH_REMATCH[2]}]}" -ge 0 ] || { echo "    stub: ck_balances_non_negative 위반" >&2; return 1; }
+    else
+      echo "    stub: 모르는 문장: ${line:0:80}" >&2; return 1
+    fi
+  done <<<"$1"
+  _BFS_IDS=(); for k in "${!ids[@]}"; do _BFS_IDS[$k]=1; done
+  for k in "${!led[@]}"; do _BFS_LEDGER[$k]=${led[$k]}; done
+  _BFS_N=$n
 }
 
 # 한 줄의 «행 날짜»(id 에서) → _RD (epoch-day) 또는 빈 값
@@ -447,7 +583,7 @@ bf_self_test() {
 
   local self; self="${BASH_SOURCE[0]}"
   local dom a b c line lines_a missing=0 ts bad_ts=0 later
-  for dom in scm erp iam wms; do
+  for dom in scm erp iam wms finance; do
     a="$(_bf_gen "$dom" "$E1")"; local rc=$?
     [ "$rc" = 0 ] && [ -n "$a" ] || { _bf_t fail "$dom: 생성 실패 rc=$rc"; continue; }
     # (4) 같은 부팅 시각 두 번 = 같은 SQL — **다른 프로세스**에서(전역 상태·난수 누수 배제)
@@ -504,10 +640,30 @@ bf_self_test() {
         && _bf_t ok "wms: 입고 일 카운터는 RETURNING 된 새 사실만 더한다 (재실행 = +0)" \
         || _bf_t fail "wms: 입고 일 카운터 증분이 새 사실(FROM ins)에 묶이지 않았습니다 — 매 부팅 누적됩니다"
     fi
+    # (7c) finance 의 잔액 보정은 «이번에 새로 들어간 행»(ROW_COUNT)에서만 오고, 쓰는 표는 둘뿐이다
+    if [ "$dom" = finance ]; then
+      local prev="" nrc=0 nnorc=0 nupd=0 nlit=0 other=0
+      while IFS= read -r line; do
+        if [[ $prev == "INSERT IGNORE INTO transactions "* || $prev == "INSERT INTO transactions "* ]]; then
+          if [ "$line" = 'SET @bf_r = ROW_COUNT();' ]; then nrc=$(( nrc + 1 )); else nnorc=$(( nnorc + 1 )); fi
+        fi
+        if [[ $line == "UPDATE balances "* ]]; then
+          nupd=$(( nupd + 1 ))
+          [[ $line =~ ledger_minor\ =\ ledger_minor\ \+\ @bf_d[ab], ]] || nlit=$(( nlit + 1 ))
+        fi
+        case "$line" in *outbox*|*audit_log*|*journal*|*ledger_account*) other=$(( other + 1 )) ;; esac
+        prev="$line"
+      done <<<"$a"
+      if [ "$nrc" -gt 0 ] && [ "$nnorc" = 0 ] && [ "$nupd" = 2 ] && [ "$nlit" = 0 ] && [ "$other" = 0 ]; then
+        _bf_t ok "finance: INSERT $nrc 문마다 바로 뒤 ROW_COUNT() · 잔액 UPDATE 2문은 그 증분 변수만 더함 · outbox/audit/원장 0"
+      else
+        _bf_t fail "finance: ROW_COUNT 짝 없는 INSERT $nnorc · 잔액 UPDATE $nupd 문(기대 2) 중 변수 아닌 증분 $nlit · outbox/audit/원장 언급 $other"
+      fi
+    fi
 
     # (8) 계획 수 주석이 실제 행 수와 같은가 (호출자의 사후 대조가 이 숫자를 믿는다)
     local tbl pl cnt
-    case "$dom" in scm) tbl=purchase_orders ;; erp) tbl=approval_request ;; iam) tbl=login_history ;; wms) tbl=admin_shipment_summary ;; esac
+    case "$dom" in scm) tbl=purchase_orders ;; erp) tbl=approval_request ;; iam) tbl=login_history ;; wms) tbl=admin_shipment_summary ;; finance) tbl=transactions ;; esac
     pl="$(bf_planned "$a" "$tbl")"
     cnt=0; while IFS= read -r line; do case "$line" in "INSERT INTO $tbl "*|"INSERT IGNORE INTO $tbl "*) cnt=$(( cnt + 1 )) ;; esac; done <<<"$a"
     [ -n "$pl" ] && [ "$pl" = "$cnt" ] && _bf_t ok "$dom: bf-planned $tbl = $pl = 실제 INSERT 수" || _bf_t fail "$dom: bf-planned $tbl='$pl' · 실제 $cnt"
@@ -549,6 +705,100 @@ bf_self_test() {
   bf_init "$E1"
   if bf_scm_sql demo-corp "" x y >/dev/null 2>&1; then _bf_t fail "bf_scm_sql 이 빈 supplier 를 받아들였습니다"; else _bf_t ok "빈 인자 거절 (scm)"; fi
   if bf_erp_sql demo-corp same same a b c d e >/dev/null 2>&1; then _bf_t fail "bf_erp_sql 이 자기결재를 받아들였습니다"; else _bf_t ok "자기결재 인자 거절 (erp)"; fi
+  if bf_finance_sql demo-corp "" x >/dev/null 2>&1; then _bf_t fail "bf_finance_sql 이 빈 계좌 A 를 받아들였습니다"; else _bf_t ok "빈 계좌 인자 거절 (finance)"; fi
+  if bf_finance_sql demo-corp same same >/dev/null 2>&1; then _bf_t fail "bf_finance_sql 이 A = B 를 받아들였습니다"; else _bf_t ok "자기 이체 인자 거절 (finance)"; fi
+
+  # (11) finance 성질 — 부팅 날짜 21개(E1 부터 매일)에 걸쳐: 금액 분리 · A 의 시점별 잔액 ≥ 0 ·
+  #      이체 방향 · 입금 0 아닌 날 ≥ 10 · 날마다 다름 · 지난 달력 주에 이체 ≥ 1
+  local A="${_BF_T_FINANCE[1]}" B="${_BF_T_FINANCE[2]}" fb k2 rows ts rd typ acc amt cp s dlt mon
+  local bad_amt=0 neg=0 dir=0 thin=0 flat=0 noprev=0 minnz=999 nrows=0
+  local -A topd=()
+  for (( k2=0; k2<21; k2++ )); do
+    fb=$(( E1 + k2 * 86400 ))
+    sqlv="$(_bf_gen finance "$fb")"
+    bf_init "$fb"
+    rows="$(_bf_fin_rows "$sqlv" | LC_ALL=C sort)"
+    mon=$(( BF_TODAY - (BF_TODAY + 3) % 7 ))       # 이번 주 월요일 (KST epoch-day)
+    topd=()
+    local runA=0 dayA=0 curd="" xprev=0
+    while IFS='|' read -r ts rd typ acc amt cp; do
+      [ -n "$ts" ] || continue
+      nrows=$(( nrows + 1 ))
+      for s in $_BF_T_FIN_SEED_AMOUNTS; do [ "$amt" = "$s" ] && bad_amt=$(( bad_amt + 1 )); done
+      [ "$rd" = "$curd" ] || { curd=$rd; dayA=0; }
+      dlt=0
+      case "$typ" in
+        TOPUP)
+          topd[$rd]=$(( ${topd[$rd]:-0} + 1 ))
+          { [ "$acc" = "$A" ] || [ "$acc" = "$B" ]; } && [ -z "$cp" ] || dir=$(( dir + 1 ))
+          [ "$acc" = "$A" ] && dlt=$amt ;;
+        TRANSFER)
+          { [ "$acc" = "$A" ] && [ "$cp" = "$B" ]; } || dir=$(( dir + 1 ))
+          dlt=$(( -amt ))
+          [ "$rd" -ge $(( mon - 7 )) ] && [ "$rd" -le $(( mon - 1 )) ] && xprev=$(( xprev + 1 )) ;;
+        *) dir=$(( dir + 1 )) ;;
+      esac
+      runA=$(( runA + dlt )); dayA=$(( dayA + dlt ))
+      { [ "$runA" -ge 0 ] && [ "$dayA" -ge 0 ]; } || neg=$(( neg + 1 ))
+    done <<<"$rows"
+    local nz=0 dv="" v
+    for (( k=BF_FIRST; k<=BF_LAST; k++ )); do
+      v=${topd[$k]:-0}; [ "$v" -gt 0 ] && nz=$(( nz + 1 ))
+      case " $dv " in *" $v "*) ;; *) dv="$dv $v" ;; esac
+    done
+    [ "$nz" -lt "$minnz" ] && minnz=$nz
+    [ "$nz" -ge 10 ] || thin=$(( thin + 1 ))
+    set -- $dv; [ "$#" -ge 2 ] || flat=$(( flat + 1 ))
+    [ "$xprev" -ge 1 ] || noprev=$(( noprev + 1 ))
+  done
+  [ "$bad_amt" = 0 ] && [ "$nrows" -gt 0 ] && _bf_t ok "finance: 백필 금액 $nrows 행 중 시드 판정 금액($_BF_T_FIN_SEED_AMOUNTS)과 같은 것 0" \
+    || _bf_t fail "finance: 시드 판정 금액과 같은 백필 금액 $bad_amt 행 — topup_txns 가 오늘 입금 실패를 «있음» 으로 읽습니다"
+  [ "$neg" = 0 ] && _bf_t ok "finance: 계좌 A 의 시점별 잔액(창 전체 누계 · 그날 누계) ≥ 0 — 부팅 21개, 이체는 A→B 만" \
+    || _bf_t fail "finance: 계좌 A 잔액이 음수가 되는 시점 $neg 개 — ck_balances_non_negative 로 SQL 전체가 실패합니다"
+  [ "$dir" = 0 ] && _bf_t ok "finance: 입금은 A/B 에만 · 이체는 A→B 만 (B 는 받기만 한다)" || _bf_t fail "finance: 계좌/방향이 어긋난 행 $dir"
+  [ "$thin" = 0 ] && [ "$flat" = 0 ] && _bf_t ok "finance: topupCount 0 아닌 날 ≥ 10 (부팅 21개 중 최소 $minnz 일) · 날마다 값이 다름" \
+    || _bf_t fail "finance: 0 아닌 날 < 10 인 부팅 $thin 개(최소 $minnz) · 값이 한 종류인 부팅 $flat 개"
+  [ "$noprev" = 0 ] && _bf_t ok "finance: 모든 부팅에서 지난 달력 주(KST 월~일)에 이체 ≥ 1" \
+    || _bf_t fail "finance: 지난 주 이체가 0 인 부팅 $noprev 개 — 운영자 개요 «지난 주» 이체 금액이 0 입니다"
+
+  # (12) finance 수렴 — 스텁 MySQL 에 같은 날 두 번 · 3일 뒤 한 번. 잔액 = 시작 + 들어간 행의 합
+  declare -gA _BFS_IDS=() _BFS_LEDGER=()
+  _BFS_LEDGER[$A]=400000; _BFS_LEDGER[$B]=600000   # 오늘 시드의 API 입금·이체 뒤
+  local s1 s2 p1 sa sb n1 l1a l1b ok12=1 why12=""
+  s1="$(_bf_gen finance "$E1")"; p1="$(bf_planned "$s1" transactions)"
+  bf_init "$E1"; local last1=$BF_LAST
+  _bf_fin_sum() { # <rows> <최소 행 날> → _SA _SB (A · B 증분 합)
+    _SA=0; _SB=0
+    while IFS='|' read -r ts rd typ acc amt cp; do
+      [ -n "$ts" ] && [ "$rd" -ge "$2" ] || continue
+      if [ "$typ" = TOPUP ]; then if [ "$acc" = "$A" ]; then _SA=$(( _SA + amt )); else _SB=$(( _SB + amt )); fi
+      else _SA=$(( _SA - amt )); _SB=$(( _SB + amt )); fi
+    done <<<"$1"
+  }
+  _bf_fin_sum "$(_bf_fin_rows "$s1")" 0; sa=$_SA; sb=$_SB
+  if ! _bf_fin_apply "$s1"; then ok12=0; why12="1회차 rc≠0"
+  elif [ "$_BFS_N" != "$p1" ] || [ "${_BFS_LEDGER[$A]}" != $(( 400000 + sa )) ] || [ "${_BFS_LEDGER[$B]}" != $(( 600000 + sb )) ]; then
+    ok12=0; why12="1회차 새 행 $_BFS_N(계획 $p1) · A=${_BFS_LEDGER[$A]}(기대 $(( 400000 + sa ))) · B=${_BFS_LEDGER[$B]}"
+  fi
+  n1=$_BFS_N; l1a=${_BFS_LEDGER[$A]}; l1b=${_BFS_LEDGER[$B]}
+  if [ "$ok12" = 1 ]; then
+    if ! _bf_fin_apply "$s1"; then ok12=0; why12="같은 날 2회차 rc≠0 (수렴 절이 없으면 중복 키 오류)"
+    elif [ "$_BFS_N" != 0 ] || [ "${_BFS_LEDGER[$A]}" != "$l1a" ] || [ "${_BFS_LEDGER[$B]}" != "$l1b" ]; then
+      ok12=0; why12="같은 날 2회차가 +0 이 아님: 새 행 $_BFS_N · A $l1a→${_BFS_LEDGER[$A]} · B $l1b→${_BFS_LEDGER[$B]}"
+    fi
+  fi
+  if [ "$ok12" = 1 ]; then
+    s2="$(_bf_gen finance $(( E1 + 3 * 86400 )))"
+    local rows2; rows2="$(_bf_fin_rows "$s2")"
+    _bf_fin_sum "$rows2" $(( last1 + 1 ))
+    local nnew; nnew="$(printf '%s\n' "$rows2" | awk -F'|' -v m=$(( last1 + 1 )) '$2 >= m' | grep -c . || true)"
+    if ! _bf_fin_apply "$s2"; then ok12=0; why12="3일 뒤 rc≠0"
+    elif [ "$_BFS_N" != "$nnew" ] || [ "${_BFS_LEDGER[$A]}" != $(( l1a + _SA )) ] || [ "${_BFS_LEDGER[$B]}" != $(( l1b + _SB )) ]; then
+      ok12=0; why12="3일 뒤: 새 행 $_BFS_N(기대 새 날짜 $nnew) · A=${_BFS_LEDGER[$A]}(기대 $(( l1a + _SA ))) · B=${_BFS_LEDGER[$B]}(기대 $(( l1b + _SB )))"
+    fi
+  fi
+  [ "$ok12" = 1 ] && _bf_t ok "finance: 스텁 DB — 1회차 +$n1 행 · 잔액 = 시작 + 새 행 합 · 같은 날 2회차 +0/잔액 불변 · 3일 뒤 새 날짜 $nnew 행만큼만" \
+    || _bf_t fail "finance: 스텁 DB 수렴 — $why12"
 
   if [ "$_bf_t_fail" -gt 0 ]; then echo "[bf-self-test] FAIL $_bf_t_fail" >&2; return 1; fi
   echo "[bf-self-test] PASS"

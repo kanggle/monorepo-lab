@@ -167,7 +167,7 @@ DEMO_DOMAIN=local bash infra/demo/seed/seed-ecommerce.sh
 
 ### 시각 경계 — 예외: 최근 4주 과거 이력 (TASK-MONO-820)
 
-**대상.** SCM · ERP · IAM · WMS 의 «실적» 지표가 읽는 **과거 이력 행** 만:
+**대상.** SCM · ERP · IAM · WMS · FINANCE 의 «실적» 지표가 읽는 **과거 이력 행** 만:
 
 | 도메인 | 시드 | 표 | 지표가 자르는 시각 |
 |---|---|---|---|
@@ -175,15 +175,16 @@ DEMO_DOMAIN=local bash infra/demo/seed/seed-ecommerce.sh
 | erp | `seed-erp.sh` §4c | `approval_request` · `approval_route_stage` · `approval_action` | `submitted_at` · `finalized_at` |
 | iam | `seed-iam.sh` | `login_history` · `account_lock_history` | `occurred_at` |
 | wms | `seed-wms.sh` §1c | 읽기 모델 `admin_putaway_fact` · `admin_shipment_summary` (+ 일 카운터) | `completed_at` · `shipped_at` |
+| finance | `seed-finance.sh` 입금·이체 뒤 | `transactions`(TOPUP · TRANSFER A→B) + `balances.ledger_minor` 보정 | `settled_at` |
 
 정산 기간 · 위임 유효기간 같은 **업무 경계**는 여전히 고정 리터럴이다. 이 예외는 그것을 바꾸지 않는다.
 
 **이유.** 그 그래프들의 창이 «요청 시각 기준 최근 N일»(이번 주 · 이번 달, 그리고 «같은 경과 시각» 까지의
 지난 주)이다. 시드의 API 행은 전부 부팅한 오늘에 찍히고, 고정 리터럴 날짜는 몇 주 뒤 창 밖으로 밀려
-다시 빈다. 그래서 날짜를 **부팅 시각에서** 계산한다. 과거 시각으로 상신 · 로그인 · 출하하는 API 는
-어느 도메인에도 없으므로 네 단계 모두 `dbexec --why` 다(사유 문자열은 각 호출부에 있다).
+다시 빈다. 그래서 날짜를 **부팅 시각에서** 계산한다. 과거 시각으로 상신 · 로그인 · 출하 · 입금하는 API 는
+어느 도메인에도 없으므로 다섯 단계 모두 `dbexec --why` 다(사유 문자열은 각 호출부에 있다).
 
-**수렴 규칙** (구현은 `lib-backfill.sh` 하나 — 네 시드가 같은 생성기를 쓴다):
+**수렴 규칙** (구현은 `lib-backfill.sh` 하나 — 다섯 시드가 같은 생성기를 쓴다):
 
 1. 창 = KST «오늘 − 28일» ~ «어제». **오늘은 넣지 않는다**(오늘 막대는 API 행 몫). KST 는 고정 +9h 로
    계산한다 — 시드 셸은 UTC 호스트에서 돌고, 00:00–09:00 KST 에는 UTC 날짜가 하루 늦다.
@@ -206,17 +207,39 @@ demo-corp 의 유일한 계정(account `R__07` newhire)에 귀속한다. 데모 
 이라 demo-corp 지표에 원래 안 잡힌다. SCM · ERP · WMS 의 옛 날짜 행도 남지만(지우지 않는다) 날짜당 고정
 개수라 같은 식으로 묶인다.
 
+**FINANCE 는 잔액을 같이 맞춘다 (TASK-MONO-821).** 🔴 `TASK-MONO-820` 은 finance 를 «직접 INSERT 는 `balances` ·
+원장 투영과 어긋난다» 는 이유로 범위 밖에 두었다 — **그 판단은 소유자 결정(2026-10-28 UTC, `TASK-MONO-821`)으로
+뒤집혔다.** 어긋남 둘을 이렇게 다룬다:
+
+- **잔액.** `/finance/accounts` 는 잔액과 거래 목록을 나란히 보이므로 거래만 넣으면 둘이 갈라진다. 그래서 같은
+  트랜잭션에서 `balances.ledger_minor` 를 **이번에 실제로 들어간 행만큼만** 보정한다 — 각 `INSERT IGNORE` 바로 뒤의
+  `ROW_COUNT()`(새 행 1 · 이미 있던 id 0)를 계좌별 증분에 더하고 끝에서 그만큼 `UPDATE`. 재부팅 = +0. 시드는 넣은 뒤
+  두 계좌 잔액의 변화가 SQL 이 보고한 증분과 같은지 대조한다(다르면 ✗).
+- **비음수.** `ck_balances_non_negative`(`ledger ≥ 0 · ledger − held ≥ 0`) 때문에 이체가 A 를 음수로 만들면 SQL 전체가
+  실패한다. 이체(A→B)가 있는 날은 그날 첫 입금이 A 로 07시대, 이체가 08시대이고 이체 금액(≤ 75,000)은 입금 최솟값
+  (80,000)보다 작다 ⇒ 하루 안의 모든 시점에서 A 의 그날 누계 ≥ 0, 어느 날부터 세든 음수가 없다(자기시험 (11)).
+- **금액 분리.** 백필 금액은 시드의 판정 금액 `TOPUP_MINOR`(500,000) · `TRANSFER_MINOR`(100,000)과 겹치지 않는다 —
+  입금 술어(`topup_txns`)는 «그 금액의 TOPUP 이 있는가» 이므로 겹치면 오늘 입금이 실패해도 «있음» 으로 읽힌다.
+  그 술어는 이제 거래 목록을 끝 쪽까지 넘긴다(목록은 `createdAt desc` — 첫 부팅의 500,000 입금보다 뒤 날짜의 백필
+  입금이 쌓이면 첫 100건 밖으로 밀린다).
+- **원장 — 한계.** outbox · `audit_log` 는 쓰지 않는다. outbox 행을 넣으면 ledger-service 가 **소비 시각**
+  (`PostFromTransactionUseCase` 의 `clock.now()`)으로 분개해 과거 거래가 오늘 하루에 몰린다. 그래서 **`/ledger` 의
+  시산표 · 분개에는 백필 거래가 없다** — 원장 잔액은 API 로 만든 오늘의 입금·이체만 반영하고, 계좌 잔액
+  (`/finance/accounts`)보다 작다. 원장의 과거 기간은 이 예외의 범위 밖이다.
+- 양: 하루 입금 0~3건 + 이체(매주 월요일 + 해시로 약 1/4 의 날) — 날짜당 고정 개수라 위 SCM · ERP · WMS 와 같은 식으로 묶인다.
+
 **배포.** 시드는 AMI 에 구워진 클론에서 부팅 때 돈다(부팅 때 git pull 없음). 이 규칙이나 생성기를 바꾸면
 **다음 AMI 재굽기 뒤에야** 데모에 반영된다. 생성기를 바꾼 뒤 첫 부팅에서는 같은 id 의 옛 판 행이 이미 있어
 사후 대조가 ⚠ 로 어긋날 수 있다(INSERT IGNORE 는 덮어쓰지 않는다) — 그것은 경고이지 실패가 아니다.
 🔴 시드 단계 전체는 `demo-up.sh` 의 `POST_UP_BUDGET`(240초) 하나에 묶여 있고 도메인 순서는
 iam → wms → scm → finance → erp 다. 그래서 과거 이력 단계는 각 시드의 **맨 끝이 아니라 필요한 id 가
 준비되는 가장 이른 자리**에 있다(scm = 공급사 직후 · erp = 사원 ↔ 계정 연결 직후 · wms = ASN 86건 앞 ·
-iam = 첫 도메인). 예산에 잘린 도메인은 그 부팅에서 하루치 그래프로 남는다 — 다음 부팅이 수렴시킨다.
+iam = 첫 도메인 · finance = 오늘 입금·이체 직후, 원장 대기 앞). 예산에 잘린 도메인은 그 부팅에서 하루치 그래프로 남는다 — 다음 부팅이 수렴시킨다.
 
 **시험.** `bash infra/demo/seed/lib-backfill.sh --self-test` — Docker 없이 생성기의 성질(같은 부팅 시각 = 다른
 프로세스에서도 바이트 동일 · 모든 시각이 창 안 · 3일 뒤 부팅이 겹치는 날짜의 행을 그대로 냄 · 모든 INSERT 의
-수렴 절 · 일별 값의 변화)을 잰다. CI 는 `verify-demo-wrapper.sh` 의 (y2) 가 돌린다.
+수렴 절 · 일별 값의 변화 · finance 의 잔액 보정이 새 행에서만 옴 · A 의 시점별 잔액 ≥ 0 · 금액 분리 · 스텁 DB 에서
+같은 날 2회차 +0)을 잰다. CI 는 `verify-demo-wrapper.sh` 의 (y2) 가 돌린다.
 
 ### 🔴 알려진 제품 결함을 시드의 실패와 구별하라
 

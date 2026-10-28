@@ -21,6 +21,8 @@
 #   자연 경로를 태운다. 그러면 /ledger 의 데이터는 "시드가 넣었다"가 아니라
 #   **"투영이 동작한다"** 는 증거가 된다. (scm 의 공급사는 이런 갈래가 없어서 직접-DB
 #   말고는 길이 없었다 — 도메인마다 다르다.)
+# 🔴 단, 아래 «최근 4주 과거 입금·이체»(TASK-MONO-821)는 이 설계 **밖**이다 — 직접-DB 행이고
+#   outbox 를 안 쓰므로 원장에 분개가 없다. /ledger 가 증명하는 것은 오늘의 API 입금·이체뿐이다.
 #
 # 🔴 그리고 비-2xx 를 "없음"으로 번역하지 않는다. 조회 실패와 200+빈 목록은 다른
 # 사건이고, 갈라서 보고한다.
@@ -173,11 +175,26 @@ ledger_of() { # <account> — ledger 잔액(minor). 못 읽으면 빈 문자열
 # 계측 실패가 "입금이 없다" 로 읽힌다.
 # 🔴 `json_objects` 로 **객체 단위**로 자른 뒤 한 줄 안에서 두 조건을 본다. 통짜 grep 은
 # 서로 다른 거래의 필드를 합쳐 **키메라 행**을 만든다(TRANSFER 의 type + TOPUP 의 금액).
+# 🔴 **페이지를 끝까지 넘긴다(TASK-MONO-821).** 목록은 `order by createdAt desc` 이고
+# (TransactionJpaRepository#search) 크기 상한이 없지만, 아래 «최근 4주 과거 거래» 단계가 TOPUP 을
+# 더한다. 이 시드의 500000 입금은 **첫 부팅 날** 한 번 생기고 이후 부팅은 재생이므로, 그 뒤 날짜의
+# 백필 TOPUP 은 전부 그것보다 **최신**이다 — 볼륨이 오래 살수록 그 입금이 첫 100건 밖으로 밀리고,
+# 한 페이지만 보면 «0건» = 거짓 실패가 된다. 그래서 한 페이지가 꽉 차면(100건) 다음 쪽을 읽는다.
+# 상한(20쪽 = 2,000건)까지 꽉 차면 «0건» 이 아니라 **판정 불가**(빈 문자열)다.
+TOPUP_SCAN_PAGES=20
 topup_txns() {
-  http GET "$FIN/api/finance/accounts/$1/transactions?type=TOPUP&size=100" >/dev/null \
-    || { printf ''; return 1; }
-  json_objects "$SEED_LAST_BODY" \
-    | grep -F '"type":"TOPUP"' | grep -cF "\"amount\":\"$2\""
+  local page n got total=0
+  for (( page=0; page<TOPUP_SCAN_PAGES; page++ )); do
+    http GET "$FIN/api/finance/accounts/$1/transactions?type=TOPUP&size=100&page=$page" >/dev/null \
+      || { printf ''; return 1; }
+    n="$(json_objects "$SEED_LAST_BODY" \
+      | grep -F '"type":"TOPUP"' | grep -cF "\"amount\":\"$2\"")"
+    total=$(( total + ${n:-0} ))
+    got="$(printf '%s' "$SEED_LAST_BODY" | grep -o '"transactionId"' | wc -l | tr -d ' ')"
+    if [ "${got:-0}" -lt 100 ]; then printf '%s' "$total"; return 0; fi
+  done
+  [ "$total" -gt 0 ] && { printf '%s' "$total"; return 0; }
+  printf ''; return 1
 }
 
 TOPUP_MINOR=500000   # ₩5,000.00 — 이체 100,000 + 홀드 여유
@@ -254,6 +271,88 @@ if [ -n "$ACC_A" ] && [ -n "$ACC_B" ]; then
 else
   seed_fail "이체 생략 — 계좌 id 가 비어 있다 (A='${ACC_A:0:8}' B='${ACC_B:0:8}')"
 fi
+
+# --- 최근 4주 과거 입금·이체 — «실적» 일별 그래프 · 운영자 개요 «지난 주» (TASK-MONO-821) ---
+# 위 입금·이체는 전부 «오늘» 에 찍힌다 — `/api/finance/accounts/metrics` 는 transactions.settled_at
+# 을 KST 일로 자르므로(TransactionMetricsService) 그래프는 막대 하나, «지난 주» 이체는 0 이었다.
+# 과거 시각으로 입금·이체하는 API 가 없으므로 이 단계만 직접-DB 다(소유자 결정 2026-10-28 UTC —
+# TASK-MONO-820 의 «finance 제외» 를 뒤집었다). 규칙(창 · 날짜 유도 id · 수렴)은 `lib-backfill.sh`
+# 헤더와 README § 「시각 경계 — 예외: 최근 4주 과거 이력」.
+#
+# 🔴 자리가 여기(입금·이체 **뒤**)인 이유: 계좌 A/B 의 런타임 id 가 필요하고, 오늘 입금 판정
+#    (`topup_txns`)이 이 행들보다 먼저 끝나 있어야 한다 — 그 술어는 금액으로 세므로 생성기가 금액
+#    집합을 500000 · 100000 과 분리해 두었지만(자기시험 (11)), 순서까지 기대지는 않는다.
+#    🔴 `topup()` 과 `topup "계좌 A 입금"` 사이에 넣지 마라 — (z8) 가 그 구간을 떼어 가짜 서버로 돈다.
+# 🔵 잔액은 같은 트랜잭션에서 «이번에 실제로 들어간 행만큼» 만 맞춘다(ROW_COUNT) — 재부팅 = +0.
+# 🔵 outbox 를 안 쓴다 ⇒ 원장은 이 과거 거래를 모른다(/ledger 의 시산표·분개는 API 거래만 — 한계).
+# shellcheck source=infra/demo/seed/lib-backfill.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib-backfill.sh"
+FIN_MY_C="finance-platform-mysql"; FIN_MY_DB="finance_db"; FIN_MY_U="${MYSQL_USER:-finance}"; FIN_MY_P="${MYSQL_PASSWORD:-finance}"
+FIN_TENANT="demo-corp"
+finance_backfill() {
+  if [ -z "$ACC_A" ] || [ -z "$ACC_B" ]; then
+    # 실패는 위 계좌 개설 단계가 이미 셌다 — 같은 원인을 두 번 세지 않는다.
+    seed_log "생략  과거 입금·이체 — 계좌 id 가 비어 있다 (A='${ACC_A:0:8}' B='${ACC_B:0:8}'; 위 개설 실패가 원인)"
+    return 0
+  fi
+  local sql planned before after out ins dA dB q qb nbal la0 lb0 la1 lb1
+  bf_init || { seed_fail "과거 입금·이체 — 창을 계산하지 못했습니다"; return 1; }
+  sql="$(bf_finance_sql "$FIN_TENANT" "$ACC_A" "$ACC_B")" \
+    || { seed_fail "과거 입금·이체 — SQL 생성 실패(빈 계좌 id 또는 A = B)"; return 1; }
+  planned="$(bf_planned "$sql" transactions)"
+  bf_id_range 6101; local lo1="$BF_LO" hi1="$BF_HI"
+  bf_id_range 6102; local lo2="$BF_LO" hi2="$BF_HI"
+  q="SELECT (SELECT count(*) FROM transactions WHERE tenant_id = '$FIN_TENANT' AND id BETWEEN '$lo1' AND '$hi1') + (SELECT count(*) FROM transactions WHERE tenant_id = '$FIN_TENANT' AND id BETWEEN '$lo2' AND '$hi2')"
+  qb="SELECT account_id, ledger_minor FROM balances WHERE tenant_id = '$FIN_TENANT' AND currency = 'KRW' AND account_id IN ('$ACC_A', '$ACC_B')"
+  # 잔액 행이 둘 다 있어야 보정 UPDATE 가 맞는 행을 친다 — 없으면 거래만 들어가 화면이 갈라진다.
+  out="$(dbquery "$FIN_MY_C" mysql "$FIN_MY_DB" "$FIN_MY_U" "$FIN_MY_P" "$qb" | tr -d '\r')"
+  nbal="$(printf '%s\n' "$out" | grep -c . || true)"
+  if [ "$nbal" != 2 ]; then
+    seed_fail "과거 입금·이체 — 계좌 A/B 의 KRW 잔액 행이 ${nbal}개(기대 2) — 잔액을 같이 맞출 수 없어 넣지 않습니다"
+    return 1
+  fi
+  la0="$(printf '%s\n' "$out" | awk -v a="$ACC_A" '$1 == a {print $2}')"
+  lb0="$(printf '%s\n' "$out" | awk -v b="$ACC_B" '$1 == b {print $2}')"
+  before="$(dbquery "$FIN_MY_C" mysql "$FIN_MY_DB" "$FIN_MY_U" "$FIN_MY_P" "$q" | tr -d ' \r\n')"
+  # 🔵 출력을 받는다(마지막 SELECT 가 이번 실행의 증분이다). dbexec 의 사유 로그 줄도 같은 stdout 이라
+  #    받은 뒤 그 줄만 다시 찍는다 — 사유가 시드 로그에서 사라지면 (y) 가 지키는 «사유 인자» 가 무의미해진다.
+  local rc=0
+  out="$(dbexec --why "과거 시각으로 입금·이체하는 API 가 없다 — POST /api/finance/accounts/{id}/topups · /transfers 는 created_at·settled_at 을 서버 시계(ClockConfig 의 Clock.systemUTC())로 찍고, 과거 시각을 받는 요청 필드 · import 엔드포인트 · 데모 Flyway 시드가 없다. /api/finance/accounts/metrics 는 transactions.settled_at 만 KST 일로 자르므로(TransactionMetricsService · findSettledIn) «최근 28일» 막대는 과거 시각 행으로만 생긴다(TASK-MONO-821 · README § 시각 경계 예외). balances.ledger_minor 는 같은 트랜잭션에서 «이번에 새로 들어간 행»(ROW_COUNT)만큼 보정한다 — 거래 목록과 잔액이 갈라지지 않게(ck_balances_non_negative 를 지키는 순서는 생성기 자기시험이 잰다). outbox · audit_log 는 쓰지 않는다 — outbox 행은 ledger-service 가 소비 시각(clock.now())으로 분개하므로 과거 거래가 오늘 날짜 분개로 몰린다. 행 id 는 KST 날짜에서 유도 → INSERT IGNORE 로 수렴" \
+      "$FIN_MY_C" mysql "$FIN_MY_DB" "$FIN_MY_U" "$FIN_MY_P" <<<"$sql")" || rc=$?
+  printf '%s\n' "$out" | grep -F '[seed:' || true
+  if [ "$rc" != 0 ]; then
+    seed_fail "과거 입금·이체 INSERT 실패(mysql rc=$rc — 트랜잭션 전체가 되돌려졌고 오류 본문은 dbexec 가 버린다; 같은 SQL 을 손으로 흘려 확인하십시오)"
+    return 1
+  fi
+  # 마지막 줄 = SELECT @bf_n, @bf_da, @bf_db (이번 실행이 실제로 넣은 행 수와 계좌별 증분)
+  read -r ins dA dB <<<"$(printf '%s\n' "$out" | grep -vF '[seed:' | tr -d '\r' | tail -1)"
+  after="$(dbquery "$FIN_MY_C" mysql "$FIN_MY_DB" "$FIN_MY_U" "$FIN_MY_P" "$q" | tr -d ' \r\n')"
+  out="$(dbquery "$FIN_MY_C" mysql "$FIN_MY_DB" "$FIN_MY_U" "$FIN_MY_P" "$qb" | tr -d '\r')"
+  la1="$(printf '%s\n' "$out" | awk -v a="$ACC_A" '$1 == a {print $2}')"
+  lb1="$(printf '%s\n' "$out" | awk -v b="$ACC_B" '$1 == b {print $2}')"
+  bf_day "$BF_FIRST"; local first="$BF_DATE"; bf_day "$BF_LAST"
+  # 🔴 «썼다» 가 아니라 «있다» 와 «맞다» 를 잰다: 창 안 행 수 = 계획 수, 잔액 변화 = 보고된 증분.
+  local v bad=0
+  for v in "$la0" "$lb0" "$la1" "$lb1" "${ins:-}" "${dA:-}" "${dB:-}"; do
+    case "$v" in ''|*[!0-9-]*) bad=1 ;; esac
+  done
+  if [ "$bad" = 1 ] || [ $(( la1 - la0 )) != "$dA" ] || [ $(( lb1 - lb0 )) != "$dB" ]; then
+    seed_fail "과거 입금·이체 — 잔액 변화가 새 행의 증분과 다르다: A ${la0:-?}→${la1:-?} (증분 ${dA:-?}) · B ${lb0:-?}→${lb1:-?} (증분 ${dB:-?})"
+    return 1
+  fi
+  if [ -n "$planned" ] && [ "${after:-x}" = "$planned" ]; then
+    if [ "${ins:-0}" -gt 0 ] 2>/dev/null; then
+      SEED_CREATED=$((SEED_CREATED + 1)); seed_log "생성  과거 입금·이체 $first ~ $BF_DATE (KST) — 창 안 $after 건 (이번에 +$ins · 잔액 A +$dA · B +$dB)"
+    else
+      SEED_EXISTING=$((SEED_EXISTING + 1)); seed_log "존재  과거 입금·이체 $first ~ $BF_DATE (KST) — 창 안 $after 건 (수렴, +0 · 잔액 불변)"
+    fi
+  elif [ "${after:-0}" -gt 0 ] 2>/dev/null; then
+    seed_warn "과거 입금·이체 — 창 안 $after 건, 계획 $planned 건. 같은 id 를 다른 생성기 판이 먼저 넣었을 수 있습니다(lib-backfill.sh 변경 후 첫 부팅이면 정상 — 잔액은 새로 들어간 행만큼 맞췄습니다)"
+  else
+    seed_fail "과거 입금·이체 — INSERT 는 성공했는데 창 안 행이 ${after:-<읽기 실패>} 건입니다(계획 $planned)"
+  fi
+}
+finance_backfill
 
 # --- 검증: 화면이 읽는 것을 그대로 읽는다 ------------------------------------
 verify_get() {
