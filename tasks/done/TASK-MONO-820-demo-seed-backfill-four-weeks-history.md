@@ -8,7 +8,7 @@ TASK-MONO-820
 
 # Status
 
-review
+done (2026-10-28 UTC — 4-dim verified · impl PR #4593 squash 0777e56ea · 36차 창)
 
 # Owner
 
@@ -119,3 +119,12 @@ devops
 - **(d) AC-6 ✅ (소유자).** 로그인 WMS 개요 「출고 수량 · 일별」 10/1–10/28 이 모두 0 이 아니고 API 값과 같다. SCM · ERP · IAM 개요 월간 막대는 소유자가 ≥ 10일을 확인했다. 운영자 개요 카드: 로그인 실패 3 (직전 4), 출고 수량 138 (직전 201), 발주 금액 ₩1,064,800 (직전 ₩11,497,000), 승인 3 (직전 4) — 모든 「직전」 이 0 보다 크고 API 와 같다.
 - **측정 안 함:** 「ERP inbox equality (§9) 가 백필된 대기 결재 1건을 포함한다」 (`TASK-MONO-672` § Order 21 항목).
 - AC-4 · AC-5 는 라이브 AC 가 아니므로 그대로 둔다. 이 티켓의 AC 는 체크박스가 없는 목록이라 AC-2 · AC-3 · AC-6 줄 끝에 ✅ 를 덧붙였다.
+
+## Close (2026-10-28 UTC)
+
+4-dim 검증 통과 — (a) impl PR #4593 `state=MERGED` · (b) squash `0777e56ea` 가 `origin/main` 에 있음 · (c) 머지 시점 필수 체크 실패 0 · (d) `# Acceptance Criteria` 의 모든 AC 를 그 AC 의 동사에 맞춰 닫음.
+
+- AC-1 라이브 수렴 (+0) 추가
+- AC-2 · AC-3 · AC-6 36차 창 라이브 ✅
+- AC-4 = impl PR CI 실패 0
+- AC-5 ✅ — 시드를 두 번 돌린 뒤 라이브 IAM 행: 로그인 178 + 잠금 6 = 184 ≤ README 상한 11 × 28 = 308, 두 번째 실행의 증가분 +0

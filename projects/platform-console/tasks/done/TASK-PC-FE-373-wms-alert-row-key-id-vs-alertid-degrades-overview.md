@@ -8,7 +8,7 @@ TASK-PC-FE-373
 
 # Status
 
-review
+done (2026-10-28 UTC — 4-dim verified · impl PR #4565 squash a733cac85 · 36차 창)
 
 # Owner
 
@@ -123,3 +123,9 @@ Implemented 2026-10-25 UTC (branch `fix/pc-fe-373-wms-alert-row-key`). First com
 
 - **AC-8 ✅.** 36차 창: 굽기 `0777e56ea` → `ami-0bb9778ca4a73e75c`, 02:54:31Z 개설 · 04:46Z `/stop`. 로그인 `/wms` (demo-corp), 경보 1행에서 개요 전체가 렌더됐다 (degrade 없음). 경보 표: 「LOW_STOCK 현재 5 / 임계 10 · 위치 01910000-0000-7000-8000-000000001001」. 소유자가 「확인 처리」 를 눌러 행이 「확인됨」 이 됐다. 서버 `GET /api/v1/admin/dashboard/alerts` → 경보 `01a1807d-98a2-…` `acknowledgedAt 2026-10-28T03:26:57.810517Z` `acknowledgedBy 0199de70-0000-7000-8000-00000000ad03`.
 - 곁 발견 (기록만, 티켓 안 만듦): 위치 열이 코드가 아니라 위치 UUID 원문을 보인다 — 경보 행에 locationCode 가 없다.
+
+## Close (2026-10-28 UTC)
+
+4-dim 검증 통과 — (a) impl PR #4565 `state=MERGED` · (b) squash `a733cac85` 가 `origin/main` 에 있음 · (c) 머지 시점 필수 체크 실패 0 · (d) `# Acceptance Criteria` 의 모든 AC 를 그 AC 의 동사에 맞춰 닫음.
+
+- AC-8 36차 창 라이브 ✅

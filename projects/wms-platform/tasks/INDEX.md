@@ -89,10 +89,11 @@ _(없음)_
 
 ## review
 
-- `TASK-BE-661-inventory-seed-lacks-wh01-warehouse-snapshot.md` — **REVIEW (2026-10-26 UTC · AC-4 = 굽기 뒤 라이브).** inventory 시드에 WH01 `warehouse_snapshot` 행 추가(`ON CONFLICT (id) DO NOTHING`) + 로케이션→창고 폐포 parity 셀(`EcommerceSeedParityTest`) — 수정 전 빨강 · 수정 후 초록. 구현 권장 Sonnet. · 🔵 **2026-10-28 UTC 36차 창:** AC-4 ✅ (available 85 → 5 뒤 약 4초 안에 제안에 warehouseCode WH01)
+(empty)
 
 ## done
 
+- ✅ `TASK-BE-661-inventory-seed-lacks-wh01-warehouse-snapshot.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4568(`d5e2928b1`, 실패 0) · AC-4 36차 창 라이브 ✅
 - ✅ `TASK-BE-652-admin-settings-list-without-filters-500.md` — **DONE 2026-10-26 UTC (4-dim verified)** — impl PR #4502(`adae12ea4`, 실패 0) · AC-0 닫힘(코드·CI: run `39969962421` 83건 중 `users_noFilters…` 1건 빨강 · master-service 형제 6줄은 `:q = ''` 모양이 달라 범위 밖 — Partner·Sku null-q 실 PG 는 미측정 ⚪ · 콘솔 settings 는 GET 만, 쓰기 경로 0) · AC-1 · AC-2(34·35차 창) — 조건 없는 `GET /settings` 500 수선. 기록 = 티켓 끝 `## CORRECTION — AC-0 닫힘`.
 - ✅ `TASK-BE-657-dead-letter-resolver-returns-source-partition.md` — **DONE 2026-10-25 UTC (4-dim verified)** — impl PR #4543(`8aa66d152`, 실패 0) · AC-3 35차 창 ✅ — p1·p2 독 레코드 → `.DLT` · «non-existent partition» 0. 기록 = 티켓 끝 `## CORRECTION — 35차 창` · `TASK-MONO-672` § 35th.
 - ✅ `TASK-BE-647-inventory-low-stock-default-threshold-unset.md` — **DONE 2026-10-25 UTC (4-dim verified)** — impl PR #4479(`946c82b91`, 실패 0) · AC-2 35차 창 ✅ — 5 로 내리자 `low-stock-detected … threshold=10` · 알림 행. 기록 = 티켓 끝 `## CORRECTION — 35차 창` · `TASK-MONO-672` § 35th.

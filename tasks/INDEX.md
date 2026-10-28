@@ -219,10 +219,10 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-820-demo-seed-backfill-four-weeks-history.md` — **라이브 데모 시드에 부팅 기준 최근 4주 과거 행 (SCM · ERP · IAM 로그인 · WMS 읽기 모델)** (REVIEW 2026-10-28 UTC · 로컬 증거 = 생성기 자기시험 44칸 · bite 6 · 스텁 수렴 · bash -n · 시드 파싱 시험 · 가드 / 실제 DB · 화면 = 다음 굽기 뒤 창, `TASK-MONO-672` § Order 21): `lib-backfill.sh` 결정적 생성기 + `dbexec --why`, IAM 은 demo-corp newhire 귀속 · 누적 상한, ERP 시드 목록 조회 결함(size=100) 함께 수선. 🔴 월간 «≥ 10일» 은 매월 11일 이후 측정. 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **2026-10-28 UTC 36차 창:** AC-2 ✅ · AC-3 ✅ (28일 불일치 0) · AC-6 ✅ (소유자) · 두 번째 시드 수렴 +0 · ERP inbox §9 항목은 미측정
 - `TASK-MONO-819-capture-self-test-skipped-on-script-only-prs.md` — **`capture-portfolio.mjs --self-test` 가 그 스크립트만 고친 PR 에서 한 번도 안 돈다** (REVIEW 2026-10-25 UTC · AC-2 = 이 PR 의 CI): 호스트 잡 `frontend-e2e-smoke` 의 `if:` 가 그 스크립트를 담은 필터(`capture-route-staleness`)를 안 읽는다(#4526). `if:` 한 줄 + 배선 가드. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 ## done
+- ✅ `TASK-MONO-820-demo-seed-backfill-four-weeks-history.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4593(`0777e56ea`, 실패 0) · AC-1 라이브 수렴(+0) · AC-2 · AC-3 · AC-6 36차 창 ✅ · AC-4 impl PR CI 실패 0 · AC-5 ✅ 라이브 IAM 행 로그인 178 + 잠금 6 = 184 ≤ 상한 11 × 28 = 308, 두 번째 시드 실행 +0
 - ✅ `TASK-MONO-818-demo-seed-ships-ecommerce-orders-through-wms.md` — **DONE 2026-10-25 UTC (4-dim verified)** — impl PR #4547(`53a9227fb`, 실패 0) · AC-1 · AC-3 35차 창 라이브 ✅(슬롯 4·5 wms SHIPPED · 송장 = wms shipmentNo · 슬롯 5 DELIVERED) · AC-2 `Demo wrapper smoke` SUCCESS · AC-4 ⚪(wms 없는 부팅 미도달 — AC 가 사유 있는 ⚪ 허용). 기록 = 티켓 끝 `## CORRECTION — 35차 창` · `TASK-MONO-672` § 35th.
 - ✅ `TASK-MONO-815-wms-throughput-card-kst-window-with-bake.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4534(`3cea93ad0`, 실패 0) · WMS 처리량 카드를 한국 시간 창 · «한국 시간 기준» 문구로 · 소유자 화면 `/wms` 카드 «최근 14일 · 한국 시간 기준 (2026-10-12 ~ 2026-10-25)», 마지막 날 = KST 오늘.
 - ✅ `TASK-MONO-814-demo-backend-resolver-single-flight.md` — **DONE 2026-10-24 UTC (4-dim verified)** — impl PR #4508(`45fa46428`, 실패 0) · 데모 주소 해석기가 동시 조회를 한 번으로 묶고 실패가 좋은 스냅샷을 안 덮는다 · 34차 창 로그인 직후 첫 개요에서 여섯 카드가 값을 그렸고 «정상 6 · 점검 불가 0» · 람다 `Throttles` 17:01Z = 0(33차 4–12) · Vercel Production 넷 success.

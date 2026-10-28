@@ -8,7 +8,7 @@ TASK-PC-FE-377
 
 # Status
 
-review
+done (2026-10-28 UTC — 4-dim verified · impl PR #4579 squash c7e58e9ba · 36차 창)
 
 # Owner
 
@@ -116,3 +116,9 @@ frontend
 
 - **AC-7 ✅.** 36차 창: 굽기 `0777e56ea` → `ami-0bb9778ca4a73e75c`, 02:54:31Z 개설 · 04:46Z `/stop`. 로그인 `/scm/replenishment`: 행 SKU-APPLE-001 · WH01 · SUP-001 · 50 이 「재주문점 10 · 발동 5 · 제안 50」 을 보이고, 막대가 그려진 것을 소유자가 확인했다.
 - 이 티켓의 AC 는 체크박스가 없는 목록이라 AC-7 줄 끝에 ✅ 를 덧붙였다.
+
+## Close (2026-10-28 UTC)
+
+4-dim 검증 통과 — (a) impl PR #4579 `state=MERGED` · (b) squash `c7e58e9ba` 가 `origin/main` 에 있음 · (c) 머지 시점 필수 체크 실패 0 · (d) `# Acceptance Criteria` 의 모든 AC 를 그 AC 의 동사에 맞춰 닫음.
+
+- AC-7 36차 창 라이브 ✅

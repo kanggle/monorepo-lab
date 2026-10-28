@@ -8,7 +8,7 @@ TASK-FAN-BE-053
 
 # Status
 
-review
+done (2026-10-28 UTC — 4-dim verified · impl PR #4563 squash b3a113aa6 · 36차 창)
 
 # Owner
 
@@ -142,3 +142,10 @@ fan-platform 의 Redis 사용처는 `FeedCacheRepository`(community)와 `ArtistD
 ## CORRECTION — 36차 창 라이브 결과 (2026-10-28 UTC)
 
 - **AC-8 ✅.** 36차 창: 굽기 `0777e56ea` → `ami-0bb9778ca4a73e75c`, 02:54:31Z 개설 · 04:46Z `/stop`. 팬 소비자 계정 `…ec01`, 글 `01a1807a-e70a…`: 전 — 상세 0 / 피드 0, Redis 키 `feed:v3:fan-platform:<account>:0:10` ttl 245. PUT LOVE 200 → 상세 1 (LOVE) · 피드 1, ttl 244. DELETE 204 → 상세 0 / 피드 0, ttl 244 (키는 evict 되지 않았다 — 수치는 읽는 시점에 덮어쓴다). 35차 창은 상세 1 대 피드 0 이었다.
+
+## Close (2026-10-28 UTC)
+
+4-dim 검증 통과 — (a) impl PR #4563 `state=MERGED` · (b) squash `b3a113aa6` 가 `origin/main` 에 있음 · (c) 머지 시점 필수 체크 실패 0 · (d) `# Acceptance Criteria` 의 모든 AC 를 그 AC 의 동사에 맞춰 닫음.
+
+- AC-6 · AC-7 CI ✅ (2026-10-26)
+- AC-8 36차 창 라이브 ✅

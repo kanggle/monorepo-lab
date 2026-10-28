@@ -8,7 +8,7 @@ TASK-FAN-FE-033
 
 # Status
 
-review
+done (2026-10-28 UTC — 4-dim verified · impl PR #4562 squash eabc96810 · 36차 창)
 
 # Owner
 
@@ -109,3 +109,9 @@ post 상세 화면에서 팬이 이미 눌러둔 반응을 다시 누르면 반�
 ## CORRECTION — 36차 창 라이브 결과 (2026-10-28 UTC)
 
 - **AC-6 ✅ (소유자).** 눌린 반응을 다시 누르면 반응이 해제됐다. 소유자 확인.
+
+## Close (2026-10-28 UTC)
+
+4-dim 검증 통과 — (a) impl PR #4562 `state=MERGED` · (b) squash `eabc96810` 가 `origin/main` 에 있음 · (c) 머지 시점 필수 체크 실패 0 · (d) `# Acceptance Criteria` 의 모든 AC 를 그 AC 의 동사에 맞춰 닫음.
+
+- AC-6 36차 창 라이브 ✅ (소유자)
