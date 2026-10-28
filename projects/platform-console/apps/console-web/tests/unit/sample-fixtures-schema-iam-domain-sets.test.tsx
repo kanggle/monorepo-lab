@@ -301,14 +301,20 @@ describe('tenant_entry_policy — GET /api/admin/tenants/{tenantId}/entry-policy
     expect(s.enrolled).toBe(active.filter((o) => o.totpEnrolled).length);
   });
 
-  it('an unknown tenantId 404s TENANT_NOT_FOUND (policy and summary), FLAT envelope', async () => {
-    for (const suffix of ['', '/enrolment-summary']) {
-      const res = get('tenant_entry_policy', `/api/admin/tenants/no-such-tenant/entry-policy${suffix}`);
-      expect(res.status, suffix).toBe(404);
-      const body = (await res.json()) as { code?: string; timestamp?: string };
-      expect(body.code).toBe('TENANT_NOT_FOUND');
-      expect(typeof body.timestamp).toBe('string');
-    }
+  it('a tenantId with no policy row is NOT a 404 (contract: 꺼짐은 정상 상태) — 200 with the exact default body', async () => {
+    const res = get('tenant_entry_policy', '/api/admin/tenants/no-such-tenant/entry-policy');
+    expect(res.status).toBe(200);
+    const raw = await res.json();
+    expect(raw).toEqual({ tenantId: 'no-such-tenant', requireMfa: false, updatedAt: null, updatedBy: null });
+    EntryPolicySchema.parse(raw);
+  });
+
+  it('the summary of such a tenant is 200 with zero counts (contract silent; consistent with the policy endpoint)', async () => {
+    const res = get('tenant_entry_policy', '/api/admin/tenants/no-such-tenant/entry-policy/enrolment-summary');
+    expect(res.status).toBe(200);
+    const raw = await res.json();
+    expect(raw).toEqual({ tenantId: 'no-such-tenant', operators: 0, enrolled: 0, notEnrolled: 0, unlinked: 0 });
+    EnrolmentSummarySchema.parse(raw);
   });
 
   it('PUT is refused with 403 SAMPLE_READ_ONLY (the toggle never reaches a backend)', async () => {

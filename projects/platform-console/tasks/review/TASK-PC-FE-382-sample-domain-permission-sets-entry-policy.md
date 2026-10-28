@@ -115,3 +115,8 @@ frontend
 
 ## 남은 것
 AC-5 (배포 뒤 라이브 확인) — 미체크.
+
+---
+
+## CORRECTION (2026-10-28 UTC)
+위 Deviations 첫 항목(«진입 정책 GET 이 레지스트리에 없는 테넌트에 404 `TENANT_NOT_FOUND`»)은 더 이상 사실이 아니다. 티켓 Edge Case «레지스트리에 없는 테넌트 id 는 404» 는 생산자 계약(`admin-api.md` § GET …/entry-policy: «행이 없으면 `{tenantId, requireMfa:false, updatedAt:null, updatedBy:null}` — 404 가 아니다»)과 어긋났고, 픽스처는 계약을 따르도록 고쳤다: 정책 행이 없는 tenantId → 200 + 위 기본 본문(tenantId = 경로값). `…/enrolment-summary` 는 계약이 미등록 테넌트를 말하지 않는다(400 `'*'`/정규식 · 503 만) — 정책 엔드포인트와 일관되게 200 + 0 건수(소속 운영자 없음)로 했다; 읽기는 테넌트 존재 확인을 하지 않는다는 계약 문구와도 맞다. 없는 `setId` 404 `DOMAIN_PERMISSION_SET_NOT_FOUND` 는 계약(§ GET …/{setId} 오류표)대로 유지.

@@ -1242,11 +1242,11 @@ function domainPermissionSetsFixture(path: string): unknown {
 // updatedAt, updatedBy}` (every key always present; `null` stamps = never set) and
 // `{tenantId, operators, enrolled, notEnrolled, unlinked}`.
 //
-// One policy per REGISTRY tenant ({@link IAM_TENANTS}) — a tenant the registry does
-// not list answers 404 TENANT_NOT_FOUND, the same as the tenants detail fixture.
-// (🔵 The real GET never 404s — a missing row reads as `requireMfa=false` — but a
-// sample visitor can only reach tenants the sample registry shows; TASK-PC-FE-382
-// Edge Cases fixes this choice.)
+// One policy per REGISTRY tenant ({@link IAM_TENANTS}). Any other tenantId answers
+// 200 with the contract's «no row» default `{tenantId, requireMfa:false, updatedAt:null,
+// updatedBy:null}` — the producer GET never 404s (꺼짐은 정상 상태) and does no tenant
+// existence check on reads. The summary of such a tenant is all zeros (it has no
+// members), consistent with the policy endpoint; the contract is silent there.
 //
 // The enrolment summary is DERIVED from {@link IAM_OPERATORS} (ACTIVE operators ·
 // `totpEnrolled`), so it agrees with the 운영자 screen: `operators = enrolled +
@@ -1299,10 +1299,26 @@ function tenantEntryPolicyFixture(path: string): unknown {
   if (!match) return undefined;
 
   const tenantId = decodeURIComponent(match[1]);
-  const rows = match[2] ? IAM_ENROLMENT_SUMMARIES : IAM_ENTRY_POLICIES;
-  const found = rows.find((r) => r.tenantId === tenantId);
-  if (!found) return fixtureNotFound('TENANT_NOT_FOUND', 'tenant not found');
-  return found;
+  if (match[2]) {
+    return (
+      IAM_ENROLMENT_SUMMARIES.find((r) => r.tenantId === tenantId) ?? {
+        tenantId,
+        operators: 0,
+        enrolled: 0,
+        notEnrolled: 0,
+        unlinked: 0,
+      }
+    );
+  }
+  // 행이 없으면 404 가 아니라 «꺼짐» 기본 본문 — 계약 § GET entry-policy.
+  return (
+    IAM_ENTRY_POLICIES.find((r) => r.tenantId === tenantId) ?? {
+      tenantId,
+      requireMfa: false,
+      updatedAt: null,
+      updatedBy: null,
+    }
+  );
 }
 
 // ===========================================================================
