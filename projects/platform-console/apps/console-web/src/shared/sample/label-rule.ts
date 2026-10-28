@@ -22,6 +22,7 @@ import { SAMPLE_LABEL_SUFFIX } from './codes';
 const HUMAN_READABLE_KEYS = new Set([
   'displayName',
   'name',
+  'groupName', // TASK-PC-FE-383 — `domain-access` GROUP source: the group's name, echoed
   'title',
   'body',
   'description',
@@ -122,6 +123,11 @@ const MACHINE_KEYS = new Set([
   'role', // role catalogue / set role-ref role key ('INVENTORY_READ', …)
   'access', // role catalogue enum (READ | WRITE | OPERATE)
   'systemKey', // preset key ('wms-inventory-read', …)
+  // TASK-PC-FE-383 — the per-operator / per-group assignment wire shapes. `grantedBy`
+  // is the granting operator's id (an id without the `Id` suffix; `null` for a
+  // system path). `groupName` is the group's own `name` echoed by the producer —
+  // human-readable, so it carries the suffix like the group's `name`.
+  'grantedBy', // granting operator id (machine)
   // TASK-PC-FE-284 — ecommerce domain fixtures. All enum/code/formatted values
   // a parser, `StatusBadge`-like element or a copy-paste search key reads —
   // never free prose.

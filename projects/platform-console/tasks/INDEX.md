@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-383-sample-operator-group-domain-sets-dialogs.md` — **익명 샘플의 운영자 «도메인 접근» · 그룹 «세트» 가 «준비 중»** (READY, 2026-10-28 UTC · 소유자 결정 «둘 다 채운다»): `ready` 표면(`operators` · `groups`) 안에서 픽스처가 빠진 GET 둘(`/operators/{id}/domain-access` · `/groups/{id}/domain-permission-sets`). 배정 `setId` 는 382 의 세트 목록 안에서만 · 없는 id 응답은 계약 원문대로. Vercel 배포만. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 
 
@@ -125,6 +125,7 @@ _(없음)_
 
 ## review
 
+- `TASK-PC-FE-383-sample-operator-group-domain-sets-dialogs.md` — **익명 샘플의 운영자 «도메인 접근» · 그룹 «세트» 가 «준비 중»** (REVIEW, 2026-10-28 UTC · 소유자 결정 «둘 다 채운다»): `ready` 표면(`operators` · `groups`) 안에서 픽스처가 빠진 GET 둘(`/operators/{id}/domain-access` · `/groups/{id}/domain-permission-sets`)을 생산자 계약 모양으로 합성 — 배정 `setId` 는 382 의 세트 목록 안에서만 · 없는 id 는 404(`OPERATOR_NOT_FOUND` · `GROUP_NOT_FOUND`). AC-0~AC-4 완료(로컬 `next dev` + 쿠키 없는 Playwright 3건), AC-5 라이브는 배포 뒤. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 - `TASK-PC-FE-364-operator-overview-business-kpis.md` — **운영자 통합 개요 카드 여섯을 업무 지표로 — 잠긴 계정 · 미출고 주문 · 제출 대기 발주 · 미해소 대사 차이 · 내 결재 대기 · 출고 대기 주문** — 카드당 호출 1개 그대로(1:1 교체) · 서버 변경 없음 · 계약 § 2.4.9.1 먼저 · 소유자 결정 2026-10-22 KST (REVIEW, 2026-10-22 UTC · 문구 · 권한 표 소유자 승인 · 콘솔 nightly · federation e2e success · AC-3 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ❌ — WMS 출고 · SCM 발주 카드 `DOWNSTREAM_ERROR` · «WMS 점검 불가» → `TASK-PC-FE-369`. · 🔵 **2026-10-28 UTC 36차 창:** AC-3 ⚪ 다시 측정 안 함 (단일 권한 집합 운영자가 시드에 없음) — review 유지
 

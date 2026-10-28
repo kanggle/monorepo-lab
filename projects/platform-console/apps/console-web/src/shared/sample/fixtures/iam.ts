@@ -560,6 +560,17 @@ function operatorsFixture(path: string): unknown {
     // Home-tenant-only sample operators — no explicit cross-tenant assignment.
     return { assignments: [] };
   }
+  // TASK-PC-FE-383 — GET …/{id}/domain-access. admin-api.md: «404 OPERATOR_NOT_FOUND —
+  // operatorId 미존재 · 비-'*' 대상이 T 의 소속이 아니다».
+  const domainAccessMatch = pathname.match(
+    new RegExp(`^${OPERATORS_PATH}/([^/]+)/domain-access$`),
+  );
+  if (domainAccessMatch) {
+    const operatorId = decodeURIComponent(domainAccessMatch[1]);
+    const found = IAM_OPERATOR_DOMAIN_ACCESS.find((a) => a.operatorId === operatorId);
+    if (!found) return fixtureNotFound('OPERATOR_NOT_FOUND', 'operator not found');
+    return found;
+  }
   if (pathname !== OPERATORS_PATH) return undefined;
 
   const status = query.get('status');
@@ -854,6 +865,19 @@ function groupsFixture(path: string): unknown {
       return fixtureNotFound('GROUP_NOT_FOUND', 'group not found');
     }
     return { items: IAM_GROUP_GRANTS[id] ?? [] };
+  }
+
+  // TASK-PC-FE-383 — GET …/{id}/domain-permission-sets. admin-api.md: «Errors: 401, 403,
+  // 404 GROUP_NOT_FOUND» (no empty-list answer for an unknown group).
+  const domainSetsMatch = pathname.match(
+    new RegExp(`^${GROUPS_PATH}/([^/]+)/domain-permission-sets$`),
+  );
+  if (domainSetsMatch) {
+    const id = decodeURIComponent(domainSetsMatch[1]);
+    if (!IAM_GROUPS.some((g) => g.groupId === id)) {
+      return fixtureNotFound('GROUP_NOT_FOUND', 'group not found');
+    }
+    return { items: IAM_GROUP_DOMAIN_SETS[id] ?? [] };
   }
 
   const detailMatch = pathname.match(new RegExp(`^${GROUPS_PATH}/([^/]+)$`));
@@ -1161,7 +1185,7 @@ const PRESET_ROWS: readonly (readonly [
   ['012', 'fan-full', 'fan 전체', 'fan 전체 업무(세분 미지원)', rolesOfDomain('fan'), 0, 0],
   ['013', 'mes-full', 'MES 전체', 'MES 전체 업무(세분 미지원)', rolesOfDomain('mes'), 0, 0],
   ['014', 'all-domains-full', '모든 도메인 전체', '카탈로그 역할 전부', ALL_ROLE_NAMES, 1, 0],
-  ['015', 'legacy-compat', '이전 호환', '이전 백필 전용(MIGRATION) — 카탈로그 역할 전부', ALL_ROLE_NAMES, 0, 0],
+  ['015', 'legacy-compat', '이전 호환', '이전 백필 전용(MIGRATION) — 카탈로그 역할 전부', ALL_ROLE_NAMES, 1, 0],
 ];
 
 const PRESET_CREATED_AT = '2026-10-14T00:00:00Z';
@@ -1232,6 +1256,138 @@ function domainPermissionSetsFixture(path: string): unknown {
   }
   return undefined;
 }
+
+// ===========================================================================
+// 업무 권한 세트 «배정» — GET /api/admin/operators/{operatorId}/domain-access
+// + GET /api/admin/groups/{groupId}/domain-permission-sets (TASK-PC-FE-383)
+// ===========================================================================
+//
+// These two sub-paths belong to the `operators` / `groups` surfaces (ledger rows
+// that were already `ready`), which is why the ledger never showed the gap.
+// Wire shapes are the PRODUCER's (`admin-api.md` § GET …/operators/{operatorId}/
+// domain-access and § GET …/groups/{groupId}/domain-permission-sets).
+//
+// 🔴 Every `setId` below is one of {@link IAM_DOMAIN_PERMISSION_SETS} (the
+// TASK-PC-FE-382 list) — the rows are looked up by id, so a missing set throws when
+// the module loads (never renders as «알 수 없는 세트»). A group-sourced row exists ONLY for
+// a member of that group (rows are DERIVED from template × {@link IAM_GROUP_MEMBERS}),
+// and the sets' `grantCount` / `groupCount` above equal the rows built here.
+//
+// Sources used: DIRECT, MIGRATION (`legacy-compat` only — § 출처 table) and
+// GROUP:<id>. `ORIGIN` (회사 생성자 기본 세트) is contract-legal but the screen has
+// no label for it (it would print the raw key), and no sample operator is a
+// company creator — so it is not invented. No `'*'` row either: the sample
+// operators are all home-tenant operators.
+// Writes (POST/DELETE) need no handler: the router refuses every non-GET with
+// 403 SAMPLE_READ_ONLY (ADR-074 R1ⓐ).
+
+const presetSetId = (n: string) => `00000083-0000-7000-8000-000000000${n}`;
+const SET_D001 = '0192f3a0-0000-7000-8000-00000000d001';
+const SET_D002 = '0192f3a0-0000-7000-8000-00000000d002';
+
+interface OwnGrant {
+  operatorId: string;
+  setId: string;
+  source: 'DIRECT' | 'MIGRATION';
+  grantedAt: string;
+  /** `null` for the system path (`MIGRATION`). */
+  grantedBy: string | null;
+}
+
+const IAM_OPERATOR_OWN_GRANTS: readonly OwnGrant[] = [
+  { operatorId: 'op-sample-0001', setId: presetSetId('014'), source: 'DIRECT', grantedAt: '2026-10-14T00:10:00Z', grantedBy: 'op-sample-0001' },
+  { operatorId: 'op-sample-0001', setId: SET_D002, source: 'DIRECT', grantedAt: '2026-10-16T05:10:00Z', grantedBy: 'op-sample-0001' },
+  { operatorId: 'op-sample-0002', setId: SET_D001, source: 'DIRECT', grantedAt: '2026-10-14T09:10:00Z', grantedBy: 'op-sample-0001' },
+  { operatorId: 'op-sample-0002', setId: SET_D002, source: 'DIRECT', grantedAt: '2026-10-15T02:00:00Z', grantedBy: 'op-sample-0001' },
+  { operatorId: 'op-sample-0002', setId: presetSetId('021'), source: 'DIRECT', grantedAt: '2026-10-15T03:00:00Z', grantedBy: 'op-sample-0001' },
+  { operatorId: 'op-sample-0003', setId: presetSetId('001'), source: 'DIRECT', grantedAt: '2026-10-14T00:30:00Z', grantedBy: 'op-sample-0002' },
+  { operatorId: 'op-sample-0003', setId: presetSetId('016'), source: 'DIRECT', grantedAt: '2026-10-15T04:00:00Z', grantedBy: 'op-sample-0002' },
+  { operatorId: 'op-sample-0003', setId: presetSetId('027'), source: 'DIRECT', grantedAt: '2026-10-16T01:00:00Z', grantedBy: 'op-sample-0002' },
+  { operatorId: 'op-sample-0004', setId: presetSetId('015'), source: 'MIGRATION', grantedAt: '2026-10-14T00:00:00Z', grantedBy: null },
+  { operatorId: 'op-sample-0005', setId: SET_D001, source: 'DIRECT', grantedAt: '2026-10-14T10:00:00Z', grantedBy: 'op-sample-0001' },
+  { operatorId: 'op-sample-0005', setId: presetSetId('001'), source: 'DIRECT', grantedAt: '2026-10-14T00:40:00Z', grantedBy: 'op-sample-0002' },
+  { operatorId: 'op-sample-0005', setId: presetSetId('024'), source: 'DIRECT', grantedAt: '2026-10-15T06:00:00Z', grantedBy: 'op-sample-0001' },
+];
+
+/** Group → its set templates (`GET /groups/{id}/domain-permission-sets`). */
+const IAM_GROUP_SET_TEMPLATES: Readonly<
+  Record<string, readonly { setId: string; grantedAt: string; grantedBy: string }[]>
+> = {
+  'group-sample-0001': [{ setId: SET_D001, grantedAt: '2026-10-14T09:05:00Z', grantedBy: 'op-sample-0001' }],
+  'group-sample-0002': [{ setId: presetSetId('002'), grantedAt: '2026-10-15T02:00:00Z', grantedBy: 'op-sample-0001' }],
+};
+
+function domainSetById(setId: string) {
+  const set = IAM_DOMAIN_PERMISSION_SETS.find((s) => s.setId === setId);
+  if (!set) throw new Error(`sample fixture references unknown domain permission set ${setId}`);
+  return set;
+}
+
+const memberIdsOf = (groupId: string) =>
+  (IAM_GROUP_MEMBERS[groupId] ?? []).map((m) => (m as { operatorId: string }).operatorId);
+
+function operatorDomainAccess(operatorId: string) {
+  type Source = {
+    source: string;
+    groupId?: string;
+    groupName?: string;
+    tenantId: string;
+    grantedAt: string;
+    grantedBy: string | null;
+  };
+  const bySet = new Map<string, Source[]>();
+  const push = (setId: string, s: Source) => bySet.set(setId, [...(bySet.get(setId) ?? []), s]);
+
+  for (const g of IAM_OPERATOR_OWN_GRANTS.filter((r) => r.operatorId === operatorId)) {
+    push(g.setId, {
+      source: g.source,
+      tenantId: SAMPLE_TENANT_ID,
+      grantedAt: g.grantedAt,
+      grantedBy: g.grantedBy,
+    });
+  }
+  // GROUP:<id> rows exist only for the group's members (fan-out), stamped at the
+  // later of «template granted» / «member added».
+  for (const group of IAM_GROUPS) {
+    if (!memberIdsOf(group.groupId).includes(operatorId)) continue;
+    const added = (IAM_GROUP_MEMBERS[group.groupId] as { operatorId: string; addedAt: string }[]).find(
+      (m) => m.operatorId === operatorId,
+    )!.addedAt;
+    for (const t of IAM_GROUP_SET_TEMPLATES[group.groupId] ?? []) {
+      push(t.setId, {
+        source: 'GROUP',
+        groupId: group.groupId,
+        groupName: group.name,
+        tenantId: SAMPLE_TENANT_ID,
+        grantedAt: t.grantedAt > added ? t.grantedAt : added,
+        grantedBy: t.grantedBy,
+      });
+    }
+  }
+
+  const sets = IAM_DOMAIN_PERMISSION_SETS.filter((s) => bySet.has(s.setId)).map((s) => ({
+    setId: s.setId,
+    name: s.name,
+    systemKey: s.systemKey,
+    sources: bySet.get(s.setId) as Source[],
+  }));
+  const roleNames = sets.flatMap((s) => domainSetById(s.setId).roles.map((r) => r.role));
+  return { operatorId, tenantId: SAMPLE_TENANT_ID, roles: setRoles(roleNames).roles, sets };
+}
+
+export const IAM_OPERATOR_DOMAIN_ACCESS = IAM_OPERATORS.map((o) => operatorDomainAccess(o.operatorId));
+
+export const IAM_GROUP_DOMAIN_SETS: Readonly<Record<string, readonly unknown[]>> = Object.fromEntries(
+  IAM_GROUPS.map((g) => [
+    g.groupId,
+    [...(IAM_GROUP_SET_TEMPLATES[g.groupId] ?? [])]
+      .sort((a, b) => a.grantedAt.localeCompare(b.grantedAt))
+      .map((t) => {
+        const s = domainSetById(t.setId);
+        return { setId: s.setId, name: s.name, systemKey: s.systemKey, grantedAt: t.grantedAt, grantedBy: t.grantedBy };
+      }),
+  ]),
+);
 
 // ===========================================================================
 // tenant_entry_policy — GET /api/admin/tenants/{tenantId}/entry-policy
@@ -1355,6 +1511,7 @@ export const IAM_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
     content: IAM_OPERATORS,
     grantableRoles: IAM_GRANTABLE_ROLES,
     invitations: IAM_OPERATOR_INVITATIONS,
+    domainAccess: IAM_OPERATOR_DOMAIN_ACCESS, // TASK-PC-FE-383 — array of OBJECTS (own keys)
   },
   'iam:rbac': { roles: IAM_ROLES, permissions: IAM_PERMISSIONS },
   'iam:subscriptions': {},
@@ -1378,6 +1535,7 @@ export const IAM_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
     items: IAM_GROUPS,
     members: Object.values(IAM_GROUP_MEMBERS).flat(),
     grants: Object.values(IAM_GROUP_GRANTS).flat(),
+    domainSets: Object.values(IAM_GROUP_DOMAIN_SETS).flat(), // TASK-PC-FE-383
   },
   'iam:partnerships': { items: IAM_PARTNERSHIPS },
   'iam:iam_metrics': { week: computeIamMetrics('week'), month: computeIamMetrics('month') },
