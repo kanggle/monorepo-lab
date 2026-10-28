@@ -8,7 +8,7 @@ TASK-FAN-FE-034
 
 # Status
 
-review
+done (2026-10-28 UTC — 4-dim verified · impl PR #4597 squash 563c02501 · 36차 창)
 
 # Owner
 
@@ -102,3 +102,10 @@ OS 가 다크 모드여도 댓글 입력란과 글쓰기 폼의 제목 · 본문
 ## CORRECTION — 36차 창 라이브 결과 (2026-10-28 UTC)
 
 - **AC-4 ✅.** 구현 PR #4597 (squash `563c02501`), Vercel `Production – kanggle-fan` 이 04:07:01Z 에 563c02501 을 배포했다. 소유자가 댓글 입력칸이 밝은 바탕에 어두운 글씨로 보이는 것을 확인했다.
+
+## Close (2026-10-28 UTC)
+
+4-dim 검증 통과 — (a) impl PR #4597 `state=MERGED` · (b) squash `563c02501` 가 `origin/main` 에 있음 · (c) 머지 시점 필수 체크 실패 0 · (d) `# Acceptance Criteria` 의 모든 AC 를 그 AC 의 동사에 맞춰 닫음.
+
+- AC-2 ⚪ (이 AC 자신의 문장이 그 결과를 허용)
+- AC-4 ✅ (소유자)

@@ -4,7 +4,7 @@ TASK-BE-624
 
 # Status
 
-review
+done (2026-10-28 UTC — 4-dim verified · impl PR #4184 squash 3eb21c693 · 36차 창)
 
 # Title
 
@@ -286,3 +286,10 @@ pull-through 가 도는 "첫 인증 요청"은 **브라우저가 IAM 가입 → 
 
 - **AC-4 ✅.** 36차 창: 굽기 `0777e56ea` → `ami-0bb9778ca4a73e75c`, 02:54:31Z 개설 · 04:46Z `/stop`. 소유자가 스토어(시크릿 창)에서 새 IAM 이메일 계정 `be624-1028@example.com` 을 가입하고 로그인했다. IAM 계정 `613e0a5d-88b5-4605-ba90-1b0b4e963a19` ACTIVE (04:41:26Z). ecommerce `user_db.user_profiles` 에 같은 user_id 행이 있고 email 이 `be624-1028@example.com` (생성 04:41:27Z, 갱신 04:41:49Z — 나중 쓰기가 email 을 비우지 않았다).
 - `GET /api/users/me` 자체는 호출하지 않았다. 그 API 가 읽는 행을 직접 조회했다.
+
+## Close (2026-10-28 UTC)
+
+4-dim 검증 통과 — (a) impl PR #4184 `state=MERGED` · (b) squash `3eb21c693` 가 `origin/main` 에 있음 · (c) 머지 시점 필수 체크 실패 0 · (d) `# Acceptance Criteria` 의 모든 AC 를 그 AC 의 동사에 맞춰 닫음.
+
+- AC-4 36차 창 라이브 ✅
+- 머지 시점 체크: PR rollup 의 CANCELLED 15건은 전부 대체된 첫 런(14:32Z) 것 — 모든 체크의 최신 런은 SUCCESS/SKIPPED, 실패 0

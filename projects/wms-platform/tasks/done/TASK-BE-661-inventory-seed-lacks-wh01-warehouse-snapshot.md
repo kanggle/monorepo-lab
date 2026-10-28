@@ -8,7 +8,7 @@ inventory-service dev seed has no WH01 warehouse snapshot — the SKU-APPLE-001 
 
 # Status
 
-review
+done (2026-10-28 UTC — 4-dim verified · impl PR #4568 squash d5e2928b1 · 36차 창)
 
 # Owner
 
@@ -98,3 +98,9 @@ No contract change.
 - **AC-4 ✅.** 36차 창: 굽기 `0777e56ea` → `ami-0bb9778ca4a73e75c`, 02:54:31Z 개설 · 04:46Z `/stop`. `SKU-APPLE-001` 재고 `71d55bcf…` available 85 → 조정 −80 → 5 (201, 03:11:17Z). 약 4 초 안에 scm 제안 `c873edf0…` 이 `SUGGESTED` · source `ALERT` 로 생겼고 `"warehouseCode":"WH01"` · `reorderPointAtTrigger` 10 · `triggerAvailableQty` 5 · `suggestedQty` 50 을 실었다. inventory-service 로그 `inventory.low-stock-detected emitted … available=5 threshold=10`.
 - 제안의 `warehouseId` 는 여전히 LOCATION id `01910000-…-000000001001` 이다 (35차 곁 발견, 그대로).
 - 콘솔 `/scm/replenishment` 「창고」 열이 WH01 을 보인다 (소유자).
+
+## Close (2026-10-28 UTC)
+
+4-dim 검증 통과 — (a) impl PR #4568 `state=MERGED` · (b) squash `d5e2928b1` 가 `origin/main` 에 있음 · (c) 머지 시점 필수 체크 실패 0 · (d) `# Acceptance Criteria` 의 모든 AC 를 그 AC 의 동사에 맞춰 닫음.
+
+- AC-4 36차 창 라이브 ✅

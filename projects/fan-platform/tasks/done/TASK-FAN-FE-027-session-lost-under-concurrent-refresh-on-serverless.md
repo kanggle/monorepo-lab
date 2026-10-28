@@ -8,7 +8,7 @@ fan-platform-web 도 같은 모양의 refresh 경합 해저드를 갖고 있다 
 
 # Status
 
-review
+done (2026-10-28 UTC — 4-dim verified · impl PR #4188 squash 43a8740c5 · 36차 창)
 
 # Owner
 
@@ -232,3 +232,9 @@ fan-platform-web 의 세션 refresh 가 다중 서버리스 인스턴스 경합�
 ## CORRECTION — 36차 창 라이브 결과 (2026-10-28 UTC)
 
 - **AC-1 ✅ (수정 뒤 재현 안 됨).** 소유자가 스토어·팬에 로그인하고 03:33:59Z 부터 유휴, 04:09Z 이후 복귀했다. 두 세션 모두 로그인이 유지됐다. Traefik 접근 로그: Vercel (98.83.23.253) 에서 `POST /oauth2/token` 200 이 04:10:15Z (2388 bytes) · 04:10:16Z (2255 bytes) — 복귀 시점의 회전 두 번. auth-service 로그 03:33Z 이후 `replay` / `reuse detected` 줄 없음. (03:07:50Z 의 첫 유휴 시작은 소유자가 로그인 전이라 무효.)
+
+## Close (2026-10-28 UTC)
+
+4-dim 검증 통과 — (a) impl PR #4188 `state=MERGED` · (b) squash `43a8740c5` 가 `origin/main` 에 있음 · (c) 머지 시점 필수 체크 실패 0 · (d) `# Acceptance Criteria` 의 모든 AC 를 그 AC 의 동사에 맞춰 닫음.
+
+- AC-1 36차 창 라이브 ✅ (수정 뒤 재현 안 됨)

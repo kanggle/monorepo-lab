@@ -4,7 +4,7 @@ TASK-FE-106
 
 # Status
 
-review
+done (2026-10-28 UTC — 4-dim verified · impl PR #4183 squash 240b5b35e · 36차 창)
 
 # Title
 
@@ -308,3 +308,10 @@ fan-platform-web 은 `auth()` 호출처가 **더 많다** — `middleware.ts:85`
 - **AC-2 ✅.** 소유자가 스토어·팬에 로그인하고 03:33:59Z 부터 유휴, 04:09Z 이후 복귀했다. 두 세션 모두 로그인이 유지됐다. Traefik 접근 로그: Vercel (98.83.23.253) 에서 `POST /oauth2/token` 200 이 04:10:15Z (2388 bytes) · 04:10:16Z (2255 bytes) — 복귀 시점의 회전 두 번. auth-service 로그 03:33Z 이후 `replay` / `reuse detected` 줄 없음. (03:07:50Z 의 첫 유휴 시작은 소유자가 로그인 전이라 무효.)
 - **AC-3 ✅.** 라이브 스택에서 팬 클라이언트 refresh token A → 첫 사용 200, B 로 회전. 40 초 뒤 (grace 30 초 초과) A 를 다시 → 400 `invalid_grant` 「Refresh token reuse detected — all sessions have been revoked.」; 이어서 B → 400 `invalid_grant`. auth-service 로그 `SAS_REFRESH: reuse detected — revoking the refresh-token family. account=0199de70-0000-7000-8000-00000000ec01, children=1`. 부작용: 그 데모 팬 계정의 세션이 revoke 됐다.
 - AC-0 은 이전 소유자 결정대로 ⚪ 그대로.
+
+## Close (2026-10-28 UTC)
+
+4-dim 검증 통과 — (a) impl PR #4183 `state=MERGED` · (b) squash `240b5b35e` 가 `origin/main` 에 있음 · (c) 머지 시점 필수 체크 실패 0 · (d) `# Acceptance Criteria` 의 모든 AC 를 그 AC 의 동사에 맞춰 닫음.
+
+- AC-0 ⚪ 소유자 결정 (2026-10-26)
+- AC-2 · AC-3 36차 창 라이브 ✅
