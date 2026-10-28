@@ -70,7 +70,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-FAN-FE-034-comment-compose-fields-dark-native-background.md` — **댓글 입력란 · 글쓰기 제목 · 본문 칸이 OS 다크에서 어두운 바탕에 검은 글씨** (READY, 2026-10-28 UTC · 출처 36차 창 소유자 관찰): `TASK-FAN-FE-026` 의 `FORM_FIELD_CLASS` 로 옮겨지지 않은 형제 셋(`CommentPanel.tsx:105` · `ComposeForm.tsx:54,67`)을 공용 상수로. 프런트만 · Vercel 배포만. 분석=Opus 5.5 / 구현 권장=Sonnet.
+(empty)
 
 ## in-progress
 
@@ -78,6 +78,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## review
 
+- `TASK-FAN-FE-034-comment-compose-fields-dark-native-background.md` — **댓글 입력란 · 글쓰기 제목 · 본문 칸이 OS 다크에서 어두운 바탕에 검은 글씨** (REVIEW, 2026-10-28 UTC · 출처 36차 창 소유자 관찰): `TASK-FAN-FE-026` 의 `FORM_FIELD_CLASS` 로 옮겨지지 않은 형제 셋(`CommentPanel.tsx:105` · `ComposeForm.tsx:54,67`)을 공용 상수로. 프런트만 · Vercel 배포만. 새 `comment-compose-field-class.test.tsx` 2셀 — 수정 전 2 failed(`expected … to include 'bg-white'`) → 수정 후 통과. AC-2 계산값 ⚪(로그인 화면) · AC-4 라이브 = 배포 후. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-FAN-BE-053-following-feed-counts-stale-up-to-ttl.md` — **팔로잉 피드의 `commentCount`/`reactionCount` 가 최대 5분 낡는다** (REVIEW, 2026-10-25 UTC · 출처 35차 창: 상세 `reactionCount 1` vs 피드 `0`, Redis `ttl 297`): 캐시 hit 에서 `FeedReader.liveCounts`(grouped 집계 2회, 빈 페이지 0회)로 수치를 덧입히고 miss 는 페이지를 만들며 읽은 수치를 그대로 씀(4회 아님). 결정: 스냅샷 수치 필드 유지·`KEY_VERSION` `v3` 유지(AC-5 폴백 값이라서) · 집계 DB 실패 시 200 + 스냅샷 수치 + WARN + `community_feed_live_counts_fallback_total`(티켓 기본 권장) · 폴백이 런타임에 실제로 동작하도록 `execute` 에서 `@Transactional` 을 걷어내고 읽기를 `FeedReader` 의 read-only 트랜잭션 둘로 이동(Hibernate rollback-only → 커밋 시 500 방지). 계약 § Feed Freshness · architecture § Read Path 먼저(첫 커밋). 새 `GetFeedUseCaseCountFreshnessTest` 12셀 — 변이 3종 빨강(대표 `expected: 1L but was: 0L`), unit 238 tests rc=0. `FeedQueryIntegrationTest` 2셀 추가(TTL 안 새 수치 · 실제 SQL 오류 폴백) — 로컬 Docker 없음, CI 로 확인(AC-6·AC-7). AC-8 라이브는 다음 굽기 후 창. 분석=Opus 5.5 / 구현=Opus 5.5. · 🔵 **2026-10-26 UTC: AC-6 · AC-7 ✅** — CI run `40185901815` 로그에서 `FeedQueryIntegrationTest` 새 2셀 PASSED · `community-service:integrationTest` 59/실패 0 · 단위 `community-service:test` 실제 실행(기록 = 티켓 끝 CORRECTION). 남은 것 = AC-8(굽기 후 라이브).
 - `TASK-FAN-FE-033-reaction-cannot-be-removed-active-click-reputs.md` — **팬이 남긴 반응을 취소할 수 없다** (REVIEW, 2026-10-25 UTC · 출처 35차 창 소유자 관찰): `ReactionBar.onClick` 이 눌린 반응을 다시 누르면 `removeReaction`(DELETE) + 눌림 해제(낙관적, 실패 시 직전 값으로 롤백), 다른 타입이면 `setReaction` 전환. 프런트만. 새 테스트 `reaction-remove.test.tsx` 6셀 — 수정 전 4 failed(AC-1 `removeReaction` 0회 호출 등) → 수정 후 통과; vitest 49 files/433 tests · tsc · lint rc=0. AC-6 라이브는 다음 창(Vercel 만으로 충분) 열림. 분석=Opus 5.5 / 구현=Sonnet 5.5.
 - `TASK-FAN-FE-027-session-lost-under-concurrent-refresh-on-serverless.md` — **세션 refresh 가 «버리는 자리» 에서만 돌던 결함 + 동시 refresh 경합** (REVIEW, 2026-10-07 UTC · 출처 `TASK-MONO-764` 23차 창). 착수 조사: 요청 없는 `auth()` 셋(`middleware` · `getFanSession` · 헤더가 매 렌더 부르는 `isAuthenticated`)이 IAM 에서 refresh 토큰을 회전시키고 쿠키를 버렸고, fan 에는 `/api/auth/session` 을 읽는 클라이언트가 없어 n=1 로도 유예 거절 → 60초 뒤 heartbeat 재사용 탐지. `TASK-FE-106` 패턴 복사(decode-only 판정 · `rotation_suspect` + `refreshRaceLost` · 세션 라우트 래퍼 307 재시도) + fan 전용 `SessionKeeper`(인증 헤더에만, 50초·탭 복귀·낡은 렌더 시 `/api/auth/session` 읽기). vitest 45/401 · tsc · lint · build rc=0, bite 9셀. AC-1 라이브 = 오케스트레이터가 다음 창에서 측정. 분석=Opus 5.5 / 구현=Opus 5.5.

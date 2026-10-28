@@ -4,6 +4,7 @@ import type { Comment } from '@/entities/post';
 import { addComment, deleteComment, loadMoreComments } from '@/features/post/api/comments';
 import { FAN_COMMENT_BODY_MAX } from '@/features/post/lib/post-limits';
 import { Button } from '@/shared/ui/Button';
+import { FORM_FIELD_CLASS } from '@/shared/ui/formField';
 
 /**
  * Comment list + composer + own-comment delete (TASK-FAN-FE-032).
@@ -102,7 +103,7 @@ export function CommentPanel({
             rows={3}
             onChange={(e) => setBody(e.target.value)}
             placeholder="댓글을 남겨보세요"
-            className="rounded-md border border-ink-200 px-3 py-2 text-sm text-ink-900 dark:bg-ink-800 dark:text-ink-100 dark:border-ink-700"
+            className={FORM_FIELD_CLASS}
           />
           <div className="flex items-center justify-between">
             <span className={['text-xs', tooLong ? 'text-red-600' : 'text-ink-500'].join(' ')}>

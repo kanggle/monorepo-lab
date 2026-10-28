@@ -8,7 +8,7 @@ TASK-FAN-FE-034
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -58,10 +58,10 @@ OS 가 다크 모드여도 댓글 입력란과 글쓰기 폼의 제목 · 본문
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 위 «현재 코드 상태» 의 줄(`CommentPanel.tsx:105` · `ComposeForm.tsx:54,67` · `formField.ts:19-20` · `globals.css:5-7` · `tailwind.config.ts:13`)을 착수 시점에 다시 읽고, `src/` 의 다른 `<input>`/`<textarea>`/`<select>` 중 `FORM_FIELD_CLASS` 를 안 쓰고 바탕색도 없는 칸이 더 있는지 전수 확인해 기록한다(있으면 같은 PR 에 포함).
-- [ ] **AC-1 (배선, 수정 전 빨강)** — 단위 시험: 렌더한 `CommentPanel`(로그인 뷰어) 의 `comment-input` 과 `ComposeForm` 의 제목 · 본문 칸 className 에 `bg-white` 와 `[color-scheme:light]` 가 있다. 수정 전 코드에서 빨강임을 확인해 구현 보고에 적는다.
-- [ ] **AC-2 (계산값)** — 로컬 브라우저(Playwright `colorScheme: 'dark'`)에서 세 칸 중 하나 이상의 계산된 `background-color` 가 흰색 · `color` 가 `ink-900` 이다. 로그인이 필요한 화면이라 렌더할 수 없으면 ⚪ + 사유와 함께 AC-1 배선으로 갈음한다(`TASK-FAN-FE-026` AC-2 와 같은 처리).
-- [ ] **AC-3 (회귀)** — `tsc --noEmit` · `next lint` · vitest 전체 · `next build` rc=0 (각각 따로 실행, rc 직접 확인).
+- [x] **AC-0** — 위 «현재 코드 상태» 의 줄(`CommentPanel.tsx:105` · `ComposeForm.tsx:54,67` · `formField.ts:19-20` · `globals.css:5-7` · `tailwind.config.ts:13`)을 착수 시점에 다시 읽고, `src/` 의 다른 `<input>`/`<textarea>`/`<select>` 중 `FORM_FIELD_CLASS` 를 안 쓰고 바탕색도 없는 칸이 더 있는지 전수 확인해 기록한다(있으면 같은 PR 에 포함).
+- [x] **AC-1 (배선, 수정 전 빨강)** — 단위 시험: 렌더한 `CommentPanel`(로그인 뷰어) 의 `comment-input` 과 `ComposeForm` 의 제목 · 본문 칸 className 에 `bg-white` 와 `[color-scheme:light]` 가 있다. 수정 전 코드에서 빨강임을 확인해 구현 보고에 적는다.
+- [x] **AC-2 (계산값) ⚪** — 로컬 브라우저(Playwright `colorScheme: 'dark'`)에서 세 칸 중 하나 이상의 계산된 `background-color` 가 흰색 · `color` 가 `ink-900` 이다. 로그인이 필요한 화면이라 렌더할 수 없으면 ⚪ + 사유와 함께 AC-1 배선으로 갈음한다(`TASK-FAN-FE-026` AC-2 와 같은 처리).
+- [x] **AC-3 (회귀)** — `tsc --noEmit` · `next lint` · vitest 전체 · `next build` rc=0 (각각 따로 실행, rc 직접 확인).
 - [ ] **AC-4 (라이브)** — Vercel Production 배포 후 OS 다크 모드 브라우저에서 팬 상세 화면 댓글 입력란이 흰 바탕 · 검은 글씨로 보인다(소유자). 못 재면 ⚪ + 사유.
 
 # Related Specs
@@ -84,3 +84,15 @@ OS 가 다크 모드여도 댓글 입력란과 글쓰기 폼의 제목 · 본문
 1. 바탕만 `bg-white` 로 덧붙이고 `[color-scheme:light]` 를 빼면 — 네이티브 부품(스크롤바 등)은 여전히 다크로 그려진다(`formField.ts:14-15`).
 2. 공용 상수 대신 같은 문자열을 복사하면 — 다음 수정이 한 집에만 들어간다(이번 결함이 바로 그 모양이다).
 3. `dark:` 변형을 남겨 두면 — 나중에 누가 `<html class="dark">` 를 달 때 입력칸만 어두워져 `FORM_FIELD_CLASS` 칸들과 갈라진다.
+
+---
+
+# Implementation Notes (2026-10-28 UTC)
+
+- **AC-0 ✅** — 착수 시점(main `9b1f8bd0c`)에 «현재 코드 상태» 의 줄이 모두 같았다(`ComposeForm.tsx:54,67` 은 여는 태그 줄, className 은 `:61` · `:73`). `src/` 의 입력 부품 전수 = 8개: `FORM_FIELD_CLASS` 사용 5(`artists/page.tsx:48` · `SubscribePanel.tsx:156` · `PublicFeedFilter.tsx:45,56,67`) · 미사용 3(이 티켓의 대상). 추가 대상 없음.
+- **변경** — `CommentPanel.tsx` 댓글 `<textarea>` · `ComposeForm.tsx` 제목 `<input>` · 본문 `<textarea>` 의 className 을 `FORM_FIELD_CLASS` 로 교체(덧붙인 클래스 없음), 발화하지 않던 `dark:` 변형 삭제.
+- **AC-1 ✅** — 새 `src/__tests__/comment-compose-field-class.test.tsx` 2셀(댓글 입력 · 글쓰기 두 칸). 두 소스 파일만 `git stash` 로 되돌린 트리에서 **2 failed** (`AssertionError: expected [ 'rounded-md', 'border', …(8) ] to include 'bg-white'`) → 수정 후 2 passed.
+- **AC-2 ⚪** — 세 칸 모두 로그인 뒤 화면(상세의 댓글 작성기는 `viewerAccountId` 가 있을 때만, `/compose` 는 로그인 필요)이라 쿠키 없는 로컬 브라우저로 렌더할 수 없다. `TASK-FAN-FE-026` AC-2 와 같이 AC-1 배선으로 갈음 — 같은 상수를 쓰는 검색칸의 OS 다크 계산값(흰 바탕 · `ink-900`)은 FE-026 AC-1 에서 이미 쟀다.
+- **AC-3 ✅** — 각각 따로 실행, rc 직접 확인: `tsc --noEmit` 0 · `next lint` 0 · vitest 0 (50 files / 435 tests) · `next build` 0.
+  - 🔴 첫 게이트 실행은 **무효로 버렸다**: 실행 도중 같은 worktree 에서 `git stash -u`(main 병합용)를 해서 새 시험 파일이 잠깐 사라졌고, vitest 가 그 파일을 «Cannot find module» 로 1 failed 처리했다. 최종 트리에서 새 로그 경로로 네 게이트를 다시 돌린 값이 위 숫자다.
+- **AC-4** — 열림. Vercel Production 배포 후 소유자가 OS 다크 브라우저에서 확인(굽기 불필요).
