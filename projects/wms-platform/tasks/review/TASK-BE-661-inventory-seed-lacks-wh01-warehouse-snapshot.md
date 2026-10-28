@@ -57,7 +57,7 @@ On the demo stack, a low-stock alert for SKU-APPLE-001 (warehouse WH01) carries 
 - [x] **AC-1 (수정 전 빨강)** — the parity cell from Scope 2 is red on today's seed (show the failing assertion) and green after the row is added.
 - [x] **AC-2** — the row's id and code equal master-service and the three sibling snapshots (asserted by the cell, not by inspection).
 - [x] **AC-3** — `./gradlew :projects:wms-platform:apps:inventory-service:test` (exact path from `settings.gradle`) rc=0; existing `EcommerceSeedParityTest` cells unchanged and green.
-- [ ] **AC-4 (라이브, 굽기 뒤 창)** — fresh volume: drop SKU-APPLE-001 below 10 (`TASK-MONO-672` § 35th preparation step 3) → the scm suggestion carries `"warehouseCode":"WH01"`. ⚪ with the reason if the window cannot run step 3. Undo per that section.
+- [x] **AC-4 (라이브, 굽기 뒤 창)** — fresh volume: drop SKU-APPLE-001 below 10 (`TASK-MONO-672` § 35th preparation step 3) → the scm suggestion carries `"warehouseCode":"WH01"`. ⚪ with the reason if the window cannot run step 3. Undo per that section.
 
 # Related Specs
 
@@ -90,3 +90,11 @@ No contract change.
 - Green after: `./gradlew :projects:wms-platform:apps:inventory-service:test --tests '*EcommerceSeedParityTest*'` rc=0; full `./gradlew :projects:wms-platform:apps:inventory-service:test` rc=0.
 - AC-4 (live, after bake) remains open.
 
+
+---
+
+## CORRECTION — 36차 창 라이브 결과 (2026-10-28 UTC)
+
+- **AC-4 ✅.** 36차 창: 굽기 `0777e56ea` → `ami-0bb9778ca4a73e75c`, 02:54:31Z 개설 · 04:46Z `/stop`. `SKU-APPLE-001` 재고 `71d55bcf…` available 85 → 조정 −80 → 5 (201, 03:11:17Z). 약 4 초 안에 scm 제안 `c873edf0…` 이 `SUGGESTED` · source `ALERT` 로 생겼고 `"warehouseCode":"WH01"` · `reorderPointAtTrigger` 10 · `triggerAvailableQty` 5 · `suggestedQty` 50 을 실었다. inventory-service 로그 `inventory.low-stock-detected emitted … available=5 threshold=10`.
+- 제안의 `warehouseId` 는 여전히 LOCATION id `01910000-…-000000001001` 이다 (35차 곁 발견, 그대로).
+- 콘솔 `/scm/replenishment` 「창고」 열이 WH01 을 보인다 (소유자).

@@ -63,7 +63,7 @@ post 상세 화면에서 팬이 이미 눌러둔 반응을 다시 누르면 반�
 - [x] **AC-3 (첫 반응, 대조군)** — `initialReaction=null` 에서 클릭 → `setReaction` 1회 · `removeReaction` 미호출 (기존 동작 유지).
 - [x] **AC-4 (롤백)** — `removeReaction` 이 reject 하면 `aria-pressed` 가 다시 `true` (눌림 복원). 서버 액션 mock 이 실패하도록 한 테스트로 확인.
 - [x] **AC-5 (회귀)** — 기존 `src/__tests__/reaction-restore.test.tsx` 와 post 관련 스위트 · `tsc --noEmit` · `next lint` 초록.
-- [ ] **AC-6 (라이브, 다음 데모 창)** — 로그인한 팬이 반응이 눌린 글에서 같은 반응을 다시 눌러 **1초 안에 눌림이 풀리고**, 새로고침 후에도 풀려 있으며 `총 N개` 가 1 줄어든다. 다른 반응을 누르면 바뀐다. 못 재면 ⚪ + 사유. (Vercel 배포만으로 충분 — 굽기 불필요.)
+- [x] **AC-6 (라이브, 다음 데모 창)** — 로그인한 팬이 반응이 눌린 글에서 같은 반응을 다시 눌러 **1초 안에 눌림이 풀리고**, 새로고침 후에도 풀려 있으며 `총 N개` 가 1 줄어든다. 다른 반응을 누르면 바뀐다. 못 재면 ⚪ + 사유. (Vercel 배포만으로 충분 — 굽기 불필요.)
 
 # Related Specs
 
@@ -103,3 +103,9 @@ post 상세 화면에서 팬이 이미 눌러둔 반응을 다시 누르면 반�
 - **검증 (모두 `> log; echo rc=$?`)** — touched vitest(reaction-remove + reaction-restore) rc=0 (12 tests) · `tsc --noEmit` rc=0 · `npm run lint` rc=0 · fan web 전체 `vitest run` rc=0 (49 files / 433 tests).
 - **e2e 셀렉터 grep** — `web/fan-platform-web/e2e-smoke` 에 반응 관련 셀렉터 없음. `tests/e2e` 의 반응 언급은 API(PUT) 레벨뿐 — 영향 없음.
 - **AC-6 (라이브)** — 열어 둠. 다음 데모 창에서 Vercel 배포 후 측정.
+
+---
+
+## CORRECTION — 36차 창 라이브 결과 (2026-10-28 UTC)
+
+- **AC-6 ✅ (소유자).** 눌린 반응을 다시 누르면 반응이 해제됐다. 소유자 확인.

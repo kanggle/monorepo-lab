@@ -75,7 +75,7 @@ fan-platform
 - [x] **AC-5 (실패 경로 결정)** — 집계 질의가 실패하면(DB 오류) 피드 전체를 500 으로 만들지, 스냅샷의 구워진 수치로 폴백할지 **결정하고 테스트로 고정한다**. 기본 권장: 수치는 부가 정보이므로 폴백(낡은 수치 + 경고 로그 + 카운터), 단 페이지 자체 질의 실패는 기존대로. 선택과 근거를 구현 보고에 적는다.
 - [ ] **AC-6 (통합)** — Testcontainers 통합 테스트(`FeedQueryIntegrationTest` 계열): 피드를 한 번 조회해 캐시를 채운 뒤 반응/댓글을 추가하고 **캐시 TTL 안에서** 다시 조회하면 새 수치가 보인다. 키 버전을 바꾸면 쓰는 `FeedCacheRepository.KEY_VERSION` 상수로 키를 구성(손으로 타이핑한 키 금지 — 기존 규칙 `:51-55`).
 - [ ] **AC-7 (회귀)** — community-service 전체 단위·통합 초록. 형제 모듈이 수치를 가진 다른 응답이 있는지 grep(피드 외 캐시 사용처) 해 같은 결함이 없는지 확인하고 결과를 기록.
-- [ ] **AC-8 (라이브, 다음 데모 창 — 굽기 필요)** — 이 변경은 community-service 이므로 **다음 AMI 굽기 후 창**에서 측정한다: 반응 PUT 직후 `/feed` 의 `reactionCount` 가 상세와 같은 값이고, Redis 키 `ttl` 이 아직 남아 있는데도(예: `redis-cli TTL feed:<ver>:...` > 0) 그렇다. 반응은 DELETE 204 로 되돌린다. 못 재면 ⚪ + 사유.
+- [x] **AC-8 (라이브, 다음 데모 창 — 굽기 필요)** — 이 변경은 community-service 이므로 **다음 AMI 굽기 후 창**에서 측정한다: 반응 PUT 직후 `/feed` 의 `reactionCount` 가 상세와 같은 값이고, Redis 키 `ttl` 이 아직 남아 있는데도(예: `redis-cli TTL feed:<ver>:...` > 0) 그렇다. 반응은 DELETE 204 로 되돌린다. 못 재면 ⚪ + 사유.
 
 # Related Specs
 
@@ -136,3 +136,9 @@ fan-platform 의 Redis 사용처는 `FeedCacheRepository`(community)와 `ArtistD
 - **AC-7 ✅** — 통합: 위 59건 실패 0. 단위: 같은 run 의 job `121146537301` «Build & Test (JDK 21, Linux)» = SUCCESS, 로그에 `> Task :projects:fan-platform:apps:community-service:test` 가 접미사 없이(= `UP-TO-DATE`/`FROM-CACHE` 아님, 실제 실행) 찍히고 빌드 성공 — 이 잡은 테스트별 이벤트를 출력하지 않아 **셀 단위는 로그로 못 본다**; 셀 수는 구현 기록의 로컬 실행(`--rerun-tasks` rc=0, 41 클래스 238 tests, 실패 0)이다. 형제 grep 은 위 절.
 - **AC-8 — 열린 채 유지**(다음 AMI 굽기 후 창). ⇒ review 유지.
 - (원문 체크박스는 동결 규칙상 바꾸지 않았다 — 이 절이 AC-6 · AC-7 의 닫힘 기록이다.)
+
+---
+
+## CORRECTION — 36차 창 라이브 결과 (2026-10-28 UTC)
+
+- **AC-8 ✅.** 36차 창: 굽기 `0777e56ea` → `ami-0bb9778ca4a73e75c`, 02:54:31Z 개설 · 04:46Z `/stop`. 팬 소비자 계정 `…ec01`, 글 `01a1807a-e70a…`: 전 — 상세 0 / 피드 0, Redis 키 `feed:v3:fan-platform:<account>:0:10` ttl 245. PUT LOVE 200 → 상세 1 (LOVE) · 피드 1, ttl 244. DELETE 204 → 상세 0 / 피드 0, ttl 244 (키는 evict 되지 않았다 — 수치는 읽는 시점에 덮어쓴다). 35차 창은 상세 1 대 피드 0 이었다.

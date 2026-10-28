@@ -311,3 +311,9 @@ frontend
   - 권한 표: 단일 권한 세트만 가진 운영자가 필요한데 시드에 없다. AC-3 이 괄호로 요구한 «권한별 «권한 없음» 표가 맞는가» 는 측정되지 않았다. AC 문구는 ⚪ 를 닫힘으로 받는다고 적지 않았다.
 
 ⇒ review 유지 — 남은 것: AC-3 의 권한별 «권한 없음» 표 (단일 권한 세트 운영자 시드 필요 — `scm-inventory-visibility-operate` · `finance-account-operate` · `erp-masterdata-operate` · `ecommerce-product-operate` 와 SUPER_ADMIN 와일드카드 ERP 행)
+
+---
+
+## CORRECTION — 36차 창 라이브 결과 (2026-10-28 UTC)
+
+- **AC-3 — 다시 측정 안 함 (⚪).** 권한 집합이 하나뿐인 운영자가 있어야 재는데 시드에 없다. review 유지.

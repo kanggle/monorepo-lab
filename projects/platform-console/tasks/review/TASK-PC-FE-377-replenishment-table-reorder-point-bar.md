@@ -69,7 +69,7 @@ frontend
 - **AC-4** 막대 눈금 계산이 순수 함수로 분리돼 단위 시험이 있고, 재주문점 없음 · 0 · 발동 재고 > 재주문점 · 제안 수량 0 에서 NaN/Infinity/음수 폭을 내지 않는다.
 - **AC-5** 샘플 시드가 생산자 모양을 따른다 — 값 있는 행 3, 키 생략 행 1(0003), `null` 로 직렬화하지 않는다. 샘플 스키마 시험 · `sample-coverage-ledger` 초록.
 - **AC-6** console-web `lint` · `tsc` · vitest(대상 + 기존 `ReplenishmentScreen` · `demand-planning-api` · `sample-fixtures-schema-scm`) 초록, CI 프런트 단위 초록.
-- **AC-7 ⚪ 라이브** 로그인 콘솔 `/scm/replenishment` 에서 새로 발동된 제안 행이 `reorderPointAtTrigger` 값(데모 정책 10)을 막대로 보인다 — 다음 창 측정(서버는 이미 굽혔고 Vercel 배포만 필요).
+- **AC-7 ⚪ 라이브** 로그인 콘솔 `/scm/replenishment` 에서 새로 발동된 제안 행이 `reorderPointAtTrigger` 값(데모 정책 10)을 막대로 보인다 — 다음 창 측정(서버는 이미 굽혔고 Vercel 배포만 필요). ✅ 2026-10-28 UTC 36차 창 — 아래 CORRECTION
 
 # Related Specs
 
@@ -109,3 +109,10 @@ frontend
 - **AC-6** `tsc` rc=0 · `lint` rc=0 · vitest 대상 4파일 93건 + `tests/unit/sample` 전체(30파일 595건, 구현 에이전트 실행) rc=0.
 - **브라우저 실측(로컬 `next dev`, 샘플 방문자, Playwright)**: 1280px — 4행 중 막대 3 · 0003 은 `재주문점 —`, 페이지 가로 넘침 없음. 🔴 **390px 모바일 — 표가 페이지를 넘친다. 단 main 에서도 넘친다**(같은 화면 main `scrollWidth` 554 / 표 536, 감싸는 `overflow-x` 요소 없음). 처음 구현(`min-w-40`)은 +146px 를 더했고 `min-w-24` + 줄바꿈 텍스트로 +82px(636)까지 줄였다 — 남은 증가는 정보가 는 칸의 자연 폭. **표에 가로 스크롤 감싸개가 없는 것은 이 티켓 이전부터의 결함이고 범위 밖**(별도 티켓 후보).
 - **AC-7 ⚪ 열림** — 로그인 콘솔 라이브(다음 창, Vercel 배포만 필요).
+
+---
+
+## CORRECTION — 36차 창 라이브 결과 (2026-10-28 UTC)
+
+- **AC-7 ✅.** 36차 창: 굽기 `0777e56ea` → `ami-0bb9778ca4a73e75c`, 02:54:31Z 개설 · 04:46Z `/stop`. 로그인 `/scm/replenishment`: 행 SKU-APPLE-001 · WH01 · SUP-001 · 50 이 「재주문점 10 · 발동 5 · 제안 50」 을 보이고, 막대가 그려진 것을 소유자가 확인했다.
+- 이 티켓의 AC 는 체크박스가 없는 목록이라 AC-7 줄 끝에 ✅ 를 덧붙였다.

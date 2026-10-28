@@ -95,7 +95,7 @@ fan-platform-web 의 세션 refresh 가 다중 서버리스 인스턴스 경합�
       그대로 「NextAuth serialises the `jwt` callback per session token, providing in-flight
       deduplication」 이었다(수정함). `TASK-FE-106` = PR #4183(`origin/task-fe-106`, 착수 시
       미머지 · review) — 해법은 아래 § 구현에 옮겨 적었다.
-- [ ] **AC-1** — 재현. **로컬(단위 하네스) = 재현됨**: `session-route-refresh-race.test.ts`
+- [x] **AC-1** — 재현. **로컬(단위 하네스) = 재현됨**: `session-route-refresh-race.test.ts`
       의 🔵 대조군 2칸이 **수정 전 코드에서** 초록(= 결함을 보인다) — ① bare 세션 액션에서
       패자의 `RefreshAccessTokenError` 쿠키가 승자를 덮는다, ② 요청 없는 `auth()` 가 IAM 에서
       `rt-0` 을 회전시키고 쿠키를 버려 다음 읽기가 `rt-0` 을 재전송한다(`['rt-0','rt-0']`).
@@ -226,3 +226,9 @@ fan-platform-web 의 세션 refresh 가 다중 서버리스 인스턴스 경합�
 - **AC-1 — 라이브 ⚪ 측정 안 함 (열린 채 유지).** 35차 창: 소유자가 35 분 유휴 대기를 건너뛰기로 했다(`TASK-FE-106` 과 같은 결정). 로컬 단위 하네스의 재현(대조군 2칸)은 이미 닫혀 있고, 라이브 재현(로그인 → 액세스 토큰 만료까지 유휴 → 페이지 로드 → auth-service 의 `SAS_REFRESH: replay …` 또는 `reuse detected` 유무)이 남았다. 유휴 대기는 다른 측정과 함께 흘려보낼 수 있다.
 
 ⇒ review 유지 — 남은 것: AC-1 의 라이브 재현 (유휴 뒤 복귀)
+
+---
+
+## CORRECTION — 36차 창 라이브 결과 (2026-10-28 UTC)
+
+- **AC-1 ✅ (수정 뒤 재현 안 됨).** 소유자가 스토어·팬에 로그인하고 03:33:59Z 부터 유휴, 04:09Z 이후 복귀했다. 두 세션 모두 로그인이 유지됐다. Traefik 접근 로그: Vercel (98.83.23.253) 에서 `POST /oauth2/token` 200 이 04:10:15Z (2388 bytes) · 04:10:16Z (2255 bytes) — 복귀 시점의 회전 두 번. auth-service 로그 03:33Z 이후 `replay` / `reuse detected` 줄 없음. (03:07:50Z 의 첫 유휴 시작은 소유자가 로그인 전이라 무효.)

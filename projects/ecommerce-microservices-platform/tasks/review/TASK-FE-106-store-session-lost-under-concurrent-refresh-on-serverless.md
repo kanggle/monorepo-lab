@@ -137,9 +137,9 @@ web-store 는 NextAuth JWT 전략(`jwt` 콜백이 메모리의 토큰 객체를 
 - [x] **AC-1** — web-store 의 refresh 처리가 다중 인스턴스에 안전한 전략으로 바뀐다(구체적
       기전은 착수 시 결정 — console-web 패턴을 인용만, 강제하지 않음).
       → § 결정 (가)(나). 인스턴스 상태를 공유하지 않으므로 인스턴스 수와 무관.
-- [ ] **AC-2** — AC-0 재현 절차를 수정 후 다시 돌리면 세션이 깨지지 않는다(유효한
+- [x] **AC-2** — AC-0 재현 절차를 수정 후 다시 돌리면 세션이 깨지지 않는다(유효한
       `accountId` 유지). ⚪ **오케스트레이터가 다음 창에서 측정** (머지·배포 뒤).
-- [ ] **AC-3 (회귀)** — 진짜 재사용 탐지 경로(Edge Case 의 "결함 아님" 사례)는 여전히
+- [x] **AC-3 (회귀)** — 진짜 재사용 탐지 경로(Edge Case 의 "결함 아님" 사례)는 여전히
       정상 동작한다 — `TASK-BE-606`/`608` 의 의도된 동작을 깨뜨리지 않는다.
       ⚪ **오케스트레이터가 다음 창에서 측정.** iam 코드는 건드리지 않았다. 클라이언트 쪽
       단위 증거: 경합 패자·진짜 실패 어느 경로도 같은 refresh 토큰을 두 번 보내지 않는다
@@ -300,3 +300,11 @@ fan-platform-web 은 `auth()` 호출처가 **더 많다** — `middleware.ts:85`
 - **AC-2 · AC-3 은 열려 있다** (유휴 ~35분 뒤 복귀 라이브 — 다른 측정과 함께).
 
 ⇒ review 유지 — 남은 것: AC-2 · AC-3
+
+---
+
+## CORRECTION — 36차 창 라이브 결과 (2026-10-28 UTC)
+
+- **AC-2 ✅.** 소유자가 스토어·팬에 로그인하고 03:33:59Z 부터 유휴, 04:09Z 이후 복귀했다. 두 세션 모두 로그인이 유지됐다. Traefik 접근 로그: Vercel (98.83.23.253) 에서 `POST /oauth2/token` 200 이 04:10:15Z (2388 bytes) · 04:10:16Z (2255 bytes) — 복귀 시점의 회전 두 번. auth-service 로그 03:33Z 이후 `replay` / `reuse detected` 줄 없음. (03:07:50Z 의 첫 유휴 시작은 소유자가 로그인 전이라 무효.)
+- **AC-3 ✅.** 라이브 스택에서 팬 클라이언트 refresh token A → 첫 사용 200, B 로 회전. 40 초 뒤 (grace 30 초 초과) A 를 다시 → 400 `invalid_grant` 「Refresh token reuse detected — all sessions have been revoked.」; 이어서 B → 400 `invalid_grant`. auth-service 로그 `SAS_REFRESH: reuse detected — revoking the refresh-token family. account=0199de70-0000-7000-8000-00000000ec01, children=1`. 부작용: 그 데모 팬 계정의 세션이 revoke 됐다.
+- AC-0 은 이전 소유자 결정대로 ⚪ 그대로.

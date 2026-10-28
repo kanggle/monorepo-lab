@@ -70,7 +70,7 @@ wms 경보가 1건 이상 있는 운영 상태에서도 로그인 `/wms` 개요�
 - [x] **AC-5 (한 행이 전체를 지우지 않는다)** — 경보 응답에 정상 행 1 + 파싱 불가 행 1(예: `id` 부재)이 섞여 있을 때 개요가 degraded 가 아니고 정상 행이 표에 나온다. 수정 전 빨강.
 - [x] **AC-6 (픽스처)** — 표본 경보 행이 생산자 모양(`id`)이고, 익명 `/wms` 표본 화면이 여전히 경보 표를 그린다(기존 sample 스위트 초록).
 - [x] **AC-7 (회귀)** — console 전체 vitest(`--maxWorkers=2 --minWorkers=1`) · `tsc --noEmit` · `next lint` rc=0. 모든 e2e 스펙을 grep 해서 `alertId`/`wms-alert-row` 를 읽는 스펙이 있으면 함께 고친다.
-- [ ] **AC-8 (라이브, 다음 데모 창)** — Vercel Production 배포 후 다음 창에서 로그인 `/wms` 가 **경보 ≥ 1건** 상태로 개요를 렌더하고(경보 행 생성은 `TASK-BE-647` 재현 — 재고 조정으로 임계 이하), 표에 경보가 보이며 «확인 처리» 가 성공해 행이 «확인됨» 이 된다. 못 재면 ⚪ + 사유.
+- [x] **AC-8 (라이브, 다음 데모 창)** — Vercel Production 배포 후 다음 창에서 로그인 `/wms` 가 **경보 ≥ 1건** 상태로 개요를 렌더하고(경보 행 생성은 `TASK-BE-647` 재현 — 재고 조정으로 임계 이하), 표에 경보가 보이며 «확인 처리» 가 성공해 행이 «확인됨» 이 된다. 못 재면 ⚪ + 사유.
 
 # Related Specs
 
@@ -116,3 +116,10 @@ Implemented 2026-10-25 UTC (branch `fix/pc-fe-373-wms-alert-row-key`). First com
 **Green.** `tsc --noEmit` rc=0; `next lint` rc=0 (one pre-existing warning in `onboarding/received-invitations/route.ts`); full console vitest `--maxWorkers=2 --minWorkers=1`: 449/450 files, 5555/5556 tests - the single failure was `WmsRefPicker — fetch + scope params (AC-2) > debounces the fetch...` (a timing flake in an unrelated file); that file re-run alone: 16/16 pass (rc=0). e2e grep (`e2e-smoke/`, `tests/e2e`, `tests/a11y`, `tests/helpers`) for `alertId` / `wms-alert-*` / «메시지» / `acknowledged`: no hits touching this screen (the only «메시지» hits are in `login-page.spec.ts`, unrelated).
 
 **Open.** AC-8 (live, next demo window) is not closed here.
+
+---
+
+## CORRECTION — 36차 창 라이브 결과 (2026-10-28 UTC)
+
+- **AC-8 ✅.** 36차 창: 굽기 `0777e56ea` → `ami-0bb9778ca4a73e75c`, 02:54:31Z 개설 · 04:46Z `/stop`. 로그인 `/wms` (demo-corp), 경보 1행에서 개요 전체가 렌더됐다 (degrade 없음). 경보 표: 「LOW_STOCK 현재 5 / 임계 10 · 위치 01910000-0000-7000-8000-000000001001」. 소유자가 「확인 처리」 를 눌러 행이 「확인됨」 이 됐다. 서버 `GET /api/v1/admin/dashboard/alerts` → 경보 `01a1807d-98a2-…` `acknowledgedAt 2026-10-28T03:26:57.810517Z` `acknowledgedBy 0199de70-0000-7000-8000-00000000ad03`.
+- 곁 발견 (기록만, 티켓 안 만듦): 위치 열이 코드가 아니라 위치 UUID 원문을 보인다 — 경보 행에 locationCode 가 없다.
