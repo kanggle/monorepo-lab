@@ -115,6 +115,13 @@ const MACHINE_KEYS = new Set([
   'myRole', // partnership side discriminant ('host' | 'partner')
   'grantableRoles', // operators grantable-roles endpoint — role-name array (label-guard document key only; not a wire field of any schema)
   'invitedBy', // TASK-MONO-772 S5 — operator invitation: the inviting operator's id (an id without the `Id` suffix)
+  // TASK-PC-FE-382 — the 업무 권한 세트 wire shapes (admin-api.md § 도메인 업무 권한 세트).
+  // All catalogue/preset KEYS the screens look labels up by — never prose (the
+  // human-readable siblings are `label` / `name` / `description`, already above).
+  'domainKey', // role catalogue / set role-ref domain key ('wms', 'scm', …)
+  'role', // role catalogue / set role-ref role key ('INVENTORY_READ', …)
+  'access', // role catalogue enum (READ | WRITE | OPERATE)
+  'systemKey', // preset key ('wms-inventory-read', …)
   // TASK-PC-FE-284 — ecommerce domain fixtures. All enum/code/formatted values
   // a parser, `StatusBadge`-like element or a copy-paste search key reads —
   // never free prose.

@@ -1003,6 +1003,309 @@ function metricsFixture(path: string): unknown {
 }
 
 // ===========================================================================
+// domain_permission_sets — GET /api/admin/domain-roles (catalogue) +
+// GET /api/admin/domain-permission-sets[/{setId}] (ADR-MONO-083, TASK-PC-FE-382)
+// ===========================================================================
+//
+// Wire shapes are the PRODUCER's (`admin-api.md` § 도메인 업무 권한 세트 — « Domain
+// role wire shape » / « Domain permission set wire shape »), not a console
+// re-modelling: `{domainKey, role, access, fineGrained, label}` and
+// `{setId, tenantId, systemKey, readOnly, name, description, roles[{domainKey,role}],
+// domains, grantCount, groupCount, createdAt, updatedAt}`.
+//
+// 🔴 Role keys, preset `systemKey`s and the presets' fixed `setId`s are the REAL
+// ones (the catalogue table + § 시스템 프리셋 + the V0052/V0056–V0059 seed): the
+// screens look labels up by key, and a made-up key renders as «unknown». The only
+// invented rows are the two TENANT sets (named with «(샘플)»). The catalogue's
+// `label` and the presets' `name`/`description` carry the suffix too (R2ⓐ — the
+// label guard treats `label`/`name`/`description` as human-readable).
+//
+// Writes (POST/PATCH/DELETE) need no handler: the router refuses every non-GET
+// with 403 SAMPLE_READ_ONLY (ADR-074 R1ⓐ).
+//
+// The sample world has ONE acting tenant ({@link SAMPLE_TENANT_ID}) and the
+// router hands a fixture only the path (no `X-Tenant-Id`), so — like every other
+// IAM fixture — the list is the sample tenant's: presets first, then its sets.
+
+const DOMAIN_ROLES_PATH = '/api/admin/domain-roles';
+const DOMAIN_PERMISSION_SETS_PATH = '/api/admin/domain-permission-sets';
+
+type DomainAccess = 'READ' | 'WRITE' | 'OPERATE';
+
+/** `[domainKey, role, access, label, fineGrained]` — the catalogue table, in its order. */
+const DOMAIN_ROLE_ROWS: readonly (readonly [string, string, DomainAccess, string, boolean])[] = [
+  ['wms', 'INVENTORY_READ', 'READ', '재고 조회', true],
+  ['wms', 'INVENTORY_WRITE', 'WRITE', '재고 변경(조정 · 이동)', true],
+  ['wms', 'INBOUND_READ', 'READ', '입고 조회', true],
+  ['wms', 'INBOUND_WRITE', 'WRITE', '입고 변경', true],
+  ['wms', 'OUTBOUND_READ', 'READ', '출고 조회', true],
+  ['wms', 'OUTBOUND_WRITE', 'WRITE', '출고 변경', true],
+  ['wms', 'MASTER_READ', 'READ', '기준정보 조회', true],
+  ['wms', 'WMS_OPERATOR', 'OPERATE', 'WMS 운영 조치(알림 확인 · 운영 조치 — 업무 API 를 열지 않는다)', true],
+  ['scm', 'SCM_PROCUREMENT_READ', 'READ', '발주 조회', true],
+  ['scm', 'SCM_PROCUREMENT_WRITE', 'WRITE', '발주 변경(생성 · 제출 · 확정 · 취소 · 공급사 등록)', true],
+  ['scm', 'SCM_DEMAND_PLANNING_READ', 'READ', '수요계획 조회', true],
+  ['scm', 'SCM_DEMAND_PLANNING_WRITE', 'WRITE', '수요계획 변경(승인 · 기각 · 정책 · 매핑)', true],
+  ['scm', 'SCM_LOGISTICS_READ', 'READ', '물류(배차) 조회', true],
+  ['scm', 'SCM_LOGISTICS_WRITE', 'WRITE', '물류 변경(발송 재시도)', true],
+  ['scm', 'SCM_INVENTORY_VISIBILITY_READ', 'READ', '재고 가시성 조회', true],
+  ['scm', 'SCM_INVENTORY_VISIBILITY_WRITE', 'WRITE', '재고 가시성 변경(3PL 노드 등록 · 관측 재고)', true],
+  ['erp', 'ERP_MASTERDATA_READ', 'READ', '기준정보 조회', true],
+  ['erp', 'ERP_MASTERDATA_WRITE', 'WRITE', '기준정보 변경(생성 · 수정 · 퇴역 · 부서 이동 · 계정 연결 제안/철회)', true],
+  ['erp', 'ERP_APPROVAL_READ', 'READ', '결재 조회', true],
+  ['erp', 'ERP_APPROVAL_WRITE', 'WRITE', '결재 변경(상신 · 승인 · 반려 · 회수 · 위임)', true],
+  ['finance', 'FINANCE_ACCOUNT_READ', 'READ', '계좌 조회', true],
+  ['finance', 'FINANCE_ACCOUNT_WRITE', 'WRITE', '계좌 변경(개설 · KYC 승급 · 충전 · 홀드 · 이체)', true],
+  ['finance', 'FINANCE_LEDGER_READ', 'READ', '원장 조회', true],
+  ['finance', 'FINANCE_LEDGER_WRITE', 'WRITE', '원장 업무 변경(수동 분개 · 정산 · 재평가 · 명세 수입 · 대사 해소 · 환율 갱신)', true],
+  ['finance', 'FINANCE_LEDGER_CONTROL', 'WRITE', '원장 통제(기간 개시 · 마감 · 환율 덮어쓰기 · 환차 허용오차 · 원가흐름 설정)', true],
+  ['ecommerce', 'ECOMMERCE_ORDER_READ', 'READ', '주문 조회', true],
+  ['ecommerce', 'ECOMMERCE_ORDER_WRITE', 'WRITE', '주문 변경(상태 전이)', true],
+  ['ecommerce', 'ECOMMERCE_PRODUCT_READ', 'READ', '상품 · 판매자 조회', true],
+  ['ecommerce', 'ECOMMERCE_PRODUCT_WRITE', 'WRITE', '상품 · 판매자 변경(상품 · 옵션 · 재고 · 이미지 · 판매자 · 구성원 초대 · 검색 재색인)', true],
+  ['ecommerce', 'ECOMMERCE_MEMBER_READ', 'READ', '회원 조회', true],
+  ['ecommerce', 'ECOMMERCE_SETTLEMENT_READ', 'READ', '정산 조회', true],
+  ['ecommerce', 'ECOMMERCE_SETTLEMENT_WRITE', 'WRITE', '정산 변경(수수료율 · 기간 개시 · 마감 · 지급 실행)', true],
+  ['ecommerce', 'ECOMMERCE_PROMOTION_READ', 'READ', '프로모션 조회', true],
+  ['ecommerce', 'ECOMMERCE_PROMOTION_WRITE', 'WRITE', '프로모션 변경(등록 · 수정 · 삭제 · 쿠폰 발급)', true],
+  ['ecommerce', 'ECOMMERCE_SHIPPING_READ', 'READ', '배송 조회', true],
+  ['ecommerce', 'ECOMMERCE_SHIPPING_WRITE', 'WRITE', '배송 변경(상태 · 추적 갱신)', true],
+  ['ecommerce', 'ECOMMERCE_NOTIFICATION_READ', 'READ', '알림 템플릿 조회', true],
+  ['ecommerce', 'ECOMMERCE_NOTIFICATION_WRITE', 'WRITE', '알림 템플릿 변경(등록 · 수정)', true],
+  ['fan', 'FAN_OPERATOR', 'OPERATE', 'fan 전체 업무(세분 미지원)', false],
+  ['mes', 'MES_OPERATOR', 'OPERATE', 'MES 전체 업무(세분 미지원)', false],
+];
+
+export const IAM_DOMAIN_ROLES = DOMAIN_ROLE_ROWS.map(([domainKey, role, access, label, fineGrained]) => ({
+  domainKey,
+  role,
+  access,
+  fineGrained,
+  label: `${label}${SUFFIX}`,
+}));
+
+const DOMAIN_ROLE_ORDER = new Map(DOMAIN_ROLE_ROWS.map(([, role], i) => [role, i]));
+const DOMAIN_OF_ROLE = new Map(DOMAIN_ROLE_ROWS.map(([domainKey, role]) => [role, domainKey]));
+
+/** Catalogue order, no duplicates (the producer's `roles` rule); `domains` ascending. */
+function setRoles(roleNames: readonly string[]) {
+  const sorted = [...new Set(roleNames)].sort(
+    (a, b) => (DOMAIN_ROLE_ORDER.get(a) ?? 0) - (DOMAIN_ROLE_ORDER.get(b) ?? 0),
+  );
+  const roles = sorted.map((role) => ({ domainKey: DOMAIN_OF_ROLE.get(role) as string, role }));
+  const domains = [...new Set(roles.map((r) => r.domainKey))].sort();
+  return { roles, domains };
+}
+
+const rolesOfDomain = (domainKey: string) =>
+  DOMAIN_ROLE_ROWS.filter(([d]) => d === domainKey).map(([, role]) => role);
+const ALL_ROLE_NAMES = DOMAIN_ROLE_ROWS.map(([, role]) => role);
+
+/**
+ * `[setId suffix, systemKey, name, description, role names, grantCount, groupCount]`
+ * — § 시스템 프리셋, in the producer's list order. `setId` = the seed's fixed
+ * `00000083-0000-7000-8000-0000000000NN`; `name`/`description` = the seed's text
+ * (V0052/V0056–V0059). The counts are the SAMPLE tenant's (synthetic).
+ */
+const PRESET_ROWS: readonly (readonly [
+  string,
+  string,
+  string,
+  string,
+  readonly string[],
+  number,
+  number,
+])[] = [
+  ['001', 'wms-inventory-read', '재고 조회', 'WMS 재고 조회', ['INVENTORY_READ'], 2, 0],
+  ['002', 'wms-inventory-operate', '재고 운영', 'WMS 재고 조회 · 변경', ['INVENTORY_READ', 'INVENTORY_WRITE'], 1, 1],
+  ['003', 'wms-inbound-operate', '입고 운영', 'WMS 입고 조회 · 변경', ['INBOUND_READ', 'INBOUND_WRITE'], 0, 0],
+  ['004', 'wms-outbound-operate', '출고 운영', 'WMS 출고 조회 · 변경', ['OUTBOUND_READ', 'OUTBOUND_WRITE'], 0, 0],
+  ['005', 'wms-master-read', '기준정보 조회', 'WMS 기준정보 조회', ['MASTER_READ'], 0, 0],
+  ['006', 'wms-ops-actions', 'WMS 운영 조치', 'WMS 알림 확인 · 운영 조치', ['WMS_OPERATOR'], 0, 0],
+  ['007', 'wms-full', 'WMS 전체', 'WMS 카탈로그 역할 전부', rolesOfDomain('wms'), 0, 0],
+  ['008', 'scm-full', 'SCM 전체', 'SCM 전체 업무(세분 미지원)', rolesOfDomain('scm'), 0, 0],
+  ['016', 'scm-read', 'SCM 조회', 'SCM 발주 · 수요계획 · 물류 · 재고 가시성 조회', [
+    'SCM_PROCUREMENT_READ',
+    'SCM_DEMAND_PLANNING_READ',
+    'SCM_LOGISTICS_READ',
+    'SCM_INVENTORY_VISIBILITY_READ',
+  ], 1, 0],
+  ['017', 'scm-procurement-operate', '발주 운영', 'SCM 발주 조회 · 변경', ['SCM_PROCUREMENT_READ', 'SCM_PROCUREMENT_WRITE'], 0, 0],
+  ['018', 'scm-demand-planning-operate', '수요계획 운영', 'SCM 수요계획 조회 · 변경', ['SCM_DEMAND_PLANNING_READ', 'SCM_DEMAND_PLANNING_WRITE'], 0, 0],
+  ['019', 'scm-logistics-operate', '물류 운영', 'SCM 물류(배차) 조회 · 발송 재시도', ['SCM_LOGISTICS_READ', 'SCM_LOGISTICS_WRITE'], 0, 0],
+  ['020', 'scm-inventory-visibility-operate', '재고 가시성 운영', 'SCM 재고 가시성 조회 · 3PL 온보딩', ['SCM_INVENTORY_VISIBILITY_READ', 'SCM_INVENTORY_VISIBILITY_WRITE'], 0, 0],
+  ['009', 'erp-full', 'ERP 전체', 'ERP 전체 업무(세분 미지원)', rolesOfDomain('erp'), 0, 0],
+  ['021', 'erp-read', 'ERP 조회', 'ERP 기준정보 · 결재 조회', ['ERP_MASTERDATA_READ', 'ERP_APPROVAL_READ'], 1, 0],
+  ['022', 'erp-masterdata-operate', '기준정보 운영', 'ERP 기준정보 조회 · 변경', ['ERP_MASTERDATA_READ', 'ERP_MASTERDATA_WRITE'], 0, 0],
+  ['023', 'erp-approval-operate', '결재 운영', 'ERP 결재 조회 · 변경', ['ERP_APPROVAL_READ', 'ERP_APPROVAL_WRITE'], 0, 0],
+  ['010', 'finance-full', 'Finance 전체', 'Finance 전체 업무(세분 미지원)', rolesOfDomain('finance'), 0, 0],
+  ['024', 'finance-read', 'Finance 조회', 'Finance 계좌 · 원장 조회', ['FINANCE_ACCOUNT_READ', 'FINANCE_LEDGER_READ'], 1, 0],
+  ['025', 'finance-account-operate', '계좌 운영', 'Finance 계좌 조회 · 변경', ['FINANCE_ACCOUNT_READ', 'FINANCE_ACCOUNT_WRITE'], 0, 0],
+  ['026', 'finance-ledger-operate', '원장 운영', 'Finance 원장 조회 · 업무 변경(통제 제외)', ['FINANCE_LEDGER_READ', 'FINANCE_LEDGER_WRITE'], 0, 0],
+  ['011', 'ecommerce-full', 'E-commerce 전체', 'E-commerce 전체 업무(세분 미지원)', rolesOfDomain('ecommerce'), 0, 0],
+  ['027', 'ecommerce-read', 'E-commerce 조회', 'E-commerce 주문 · 상품 · 회원 · 정산 · 프로모션 · 배송 · 알림 조회', [
+    'ECOMMERCE_ORDER_READ',
+    'ECOMMERCE_PRODUCT_READ',
+    'ECOMMERCE_MEMBER_READ',
+    'ECOMMERCE_SETTLEMENT_READ',
+    'ECOMMERCE_PROMOTION_READ',
+    'ECOMMERCE_SHIPPING_READ',
+    'ECOMMERCE_NOTIFICATION_READ',
+  ], 1, 0],
+  ['028', 'ecommerce-order-operate', '주문 운영', 'E-commerce 주문 조회 · 변경', ['ECOMMERCE_ORDER_READ', 'ECOMMERCE_ORDER_WRITE'], 0, 0],
+  ['029', 'ecommerce-product-operate', '상품 운영', 'E-commerce 상품 · 판매자 조회 · 변경', ['ECOMMERCE_PRODUCT_READ', 'ECOMMERCE_PRODUCT_WRITE'], 0, 0],
+  ['030', 'ecommerce-settlement-operate', '정산 운영', 'E-commerce 정산 조회 · 변경', ['ECOMMERCE_SETTLEMENT_READ', 'ECOMMERCE_SETTLEMENT_WRITE'], 0, 0],
+  ['031', 'ecommerce-promotion-operate', '프로모션 운영', 'E-commerce 프로모션 조회 · 변경', ['ECOMMERCE_PROMOTION_READ', 'ECOMMERCE_PROMOTION_WRITE'], 0, 0],
+  ['032', 'ecommerce-shipping-operate', '배송 운영', 'E-commerce 배송 조회 · 변경', ['ECOMMERCE_SHIPPING_READ', 'ECOMMERCE_SHIPPING_WRITE'], 0, 0],
+  ['033', 'ecommerce-notification-operate', '알림 운영', 'E-commerce 알림 템플릿 조회 · 변경', ['ECOMMERCE_NOTIFICATION_READ', 'ECOMMERCE_NOTIFICATION_WRITE'], 0, 0],
+  ['012', 'fan-full', 'fan 전체', 'fan 전체 업무(세분 미지원)', rolesOfDomain('fan'), 0, 0],
+  ['013', 'mes-full', 'MES 전체', 'MES 전체 업무(세분 미지원)', rolesOfDomain('mes'), 0, 0],
+  ['014', 'all-domains-full', '모든 도메인 전체', '카탈로그 역할 전부', ALL_ROLE_NAMES, 1, 0],
+  ['015', 'legacy-compat', '이전 호환', '이전 백필 전용(MIGRATION) — 카탈로그 역할 전부', ALL_ROLE_NAMES, 0, 0],
+];
+
+const PRESET_CREATED_AT = '2026-10-14T00:00:00Z';
+
+const IAM_DOMAIN_PRESETS = PRESET_ROWS.map(
+  ([n, systemKey, name, description, roleNames, grantCount, groupCount]) => ({
+    setId: `00000083-0000-7000-8000-000000000${n}`,
+    tenantId: null,
+    systemKey,
+    readOnly: true,
+    name: `${name}${SUFFIX}`,
+    description: `${description}${SUFFIX}`,
+    ...setRoles(roleNames),
+    grantCount,
+    groupCount,
+    createdAt: PRESET_CREATED_AT,
+    updatedAt: PRESET_CREATED_AT,
+  }),
+);
+
+/** The sample tenant's own sets (the contract's wire-shape example id range `…d001`). */
+const IAM_DOMAIN_TENANT_SETS = [
+  {
+    setId: '0192f3a0-0000-7000-8000-00000000d001',
+    tenantId: SAMPLE_TENANT_ID,
+    systemKey: null,
+    readOnly: false,
+    name: `재고팀${SUFFIX}`,
+    description: `재고 조회 · 변경${SUFFIX}`,
+    ...setRoles(['INVENTORY_READ', 'INVENTORY_WRITE']),
+    grantCount: 4,
+    groupCount: 1,
+    createdAt: '2026-10-14T09:00:00Z',
+    updatedAt: '2026-10-14T09:00:00Z',
+  },
+  {
+    setId: '0192f3a0-0000-7000-8000-00000000d002',
+    tenantId: SAMPLE_TENANT_ID,
+    systemKey: null,
+    readOnly: false,
+    name: `발주 · 결재 담당${SUFFIX}`,
+    description: null,
+    ...setRoles(['SCM_PROCUREMENT_READ', 'SCM_PROCUREMENT_WRITE', 'ERP_APPROVAL_READ']),
+    grantCount: 2,
+    groupCount: 0,
+    createdAt: '2026-10-15T01:30:00Z',
+    updatedAt: '2026-10-16T05:00:00Z',
+  },
+] as const;
+
+/** Presets first (§ 시스템 프리셋 order), then the tenant's sets by `createdAt` ascending. */
+export const IAM_DOMAIN_PERMISSION_SETS = [...IAM_DOMAIN_PRESETS, ...IAM_DOMAIN_TENANT_SETS];
+
+function domainPermissionSetsFixture(path: string): unknown {
+  const { pathname } = splitPath(path);
+
+  if (pathname === DOMAIN_ROLES_PATH) return { items: IAM_DOMAIN_ROLES };
+  if (pathname === DOMAIN_PERMISSION_SETS_PATH) return { items: IAM_DOMAIN_PERMISSION_SETS };
+
+  const detailMatch = pathname.match(new RegExp(`^${DOMAIN_PERMISSION_SETS_PATH}/([^/]+)$`));
+  if (detailMatch) {
+    const setId = decodeURIComponent(detailMatch[1]);
+    const found = IAM_DOMAIN_PERMISSION_SETS.find((s) => s.setId === setId);
+    if (!found) {
+      return fixtureNotFound('DOMAIN_PERMISSION_SET_NOT_FOUND', 'domain permission set not found');
+    }
+    return found;
+  }
+  return undefined;
+}
+
+// ===========================================================================
+// tenant_entry_policy — GET /api/admin/tenants/{tenantId}/entry-policy
+// (+ /enrolment-summary) (TASK-MONO-771 S5 console slice, TASK-PC-FE-382)
+// ===========================================================================
+//
+// Producer shapes (`admin-api.md` § Tenant Entry Policy): `{tenantId, requireMfa,
+// updatedAt, updatedBy}` (every key always present; `null` stamps = never set) and
+// `{tenantId, operators, enrolled, notEnrolled, unlinked}`.
+//
+// One policy per REGISTRY tenant ({@link IAM_TENANTS}) — a tenant the registry does
+// not list answers 404 TENANT_NOT_FOUND, the same as the tenants detail fixture.
+// (🔵 The real GET never 404s — a missing row reads as `requireMfa=false` — but a
+// sample visitor can only reach tenants the sample registry shows; TASK-PC-FE-382
+// Edge Cases fixes this choice.)
+//
+// The enrolment summary is DERIVED from {@link IAM_OPERATORS} (ACTIVE operators ·
+// `totpEnrolled`), so it agrees with the 운영자 screen: `operators = enrolled +
+// notEnrolled + unlinked`. The operators fixture is tenant-agnostic (the visitor
+// sees one operator pool), so every sample tenant reports the same counts. Every
+// seed operator has a linked account → `unlinked` is honestly 0.
+
+const ENTRY_POLICY_PATH_RE = new RegExp(
+  `^${TENANTS_PATH}/([^/]+)/entry-policy(/enrolment-summary)?$`,
+);
+
+const ENTRY_POLICY_BY_TENANT: Readonly<
+  Record<string, { requireMfa: boolean; updatedAt: string | null; updatedBy: string | null }>
+> = {
+  // 켜 둔 테넌트 — 켠 사람 · 시각이 보인다.
+  [SAMPLE_TENANT_ID]: {
+    requireMfa: true,
+    updatedAt: '2026-09-10T03:00:00Z',
+    updatedBy: 'op-sample-0001',
+  },
+  // 한 번도 안 켠 테넌트 — 행이 없을 때의 응답(`false` + null 스탬프).
+  'globex-sample': { requireMfa: false, updatedAt: null, updatedBy: null },
+  // 켰다가 끈 테넌트 — 끄기는 행을 지우지 않으므로 마지막 변경자 · 시각이 남는다.
+  'initech-sample': {
+    requireMfa: false,
+    updatedAt: '2026-08-01T00:00:00Z',
+    updatedBy: 'op-sample-0002',
+  },
+};
+
+export const IAM_ENTRY_POLICIES = IAM_TENANTS.map((t) => ({
+  tenantId: t.tenantId,
+  ...ENTRY_POLICY_BY_TENANT[t.tenantId],
+}));
+
+const ACTIVE_OPERATORS = IAM_OPERATORS.filter((o) => o.status === 'ACTIVE');
+const ENROLLED_OPERATORS = ACTIVE_OPERATORS.filter((o) => o.totpEnrolled).length;
+
+export const IAM_ENROLMENT_SUMMARIES = IAM_TENANTS.map((t) => ({
+  tenantId: t.tenantId,
+  operators: ACTIVE_OPERATORS.length,
+  enrolled: ENROLLED_OPERATORS,
+  notEnrolled: ACTIVE_OPERATORS.length - ENROLLED_OPERATORS,
+  unlinked: 0,
+}));
+
+function tenantEntryPolicyFixture(path: string): unknown {
+  const { pathname } = splitPath(path);
+  const match = pathname.match(ENTRY_POLICY_PATH_RE);
+  if (!match) return undefined;
+
+  const tenantId = decodeURIComponent(match[1]);
+  const rows = match[2] ? IAM_ENROLMENT_SUMMARIES : IAM_ENTRY_POLICIES;
+  const found = rows.find((r) => r.tenantId === tenantId);
+  if (!found) return fixtureNotFound('TENANT_NOT_FOUND', 'tenant not found');
+  return found;
+}
+
+// ===========================================================================
 // exports
 // ===========================================================================
 
@@ -1017,6 +1320,9 @@ export const IAM_FIXTURE_HANDLERS: Readonly<Record<string, IamFixtureHandler>> =
   'iam:groups': groupsFixture,
   'iam:partnerships': partnershipsFixture,
   'iam:iam_metrics': metricsFixture,
+  // TASK-PC-FE-382
+  'iam:domain_permission_sets': domainPermissionSetsFixture,
+  'iam:tenant_entry_policy': tenantEntryPolicyFixture,
 };
 
 /**
@@ -1059,4 +1365,8 @@ export const IAM_FIXTURE_DOCUMENTS: Readonly<Record<string, unknown>> = {
   },
   'iam:partnerships': { items: IAM_PARTNERSHIPS },
   'iam:iam_metrics': { week: computeIamMetrics('week'), month: computeIamMetrics('month') },
+  // TASK-PC-FE-382 — `catalogue`/`sets`/`policies`/`summaries` are arrays of OBJECTS,
+  // so each row is classified by its OWN keys (the array's key name is not read).
+  'iam:domain_permission_sets': { catalogue: IAM_DOMAIN_ROLES, sets: IAM_DOMAIN_PERMISSION_SETS },
+  'iam:tenant_entry_policy': { policies: IAM_ENTRY_POLICIES, summaries: IAM_ENROLMENT_SUMMARIES },
 };

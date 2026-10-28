@@ -71,14 +71,13 @@ export const SURFACE_COVERAGE: readonly SurfaceCoverage[] = [
   { core: 'iam', surface: 'groups', status: 'ready', owner: IAM },
   // TASK-MONO-811 (ADR-MONO-084 P6) — the IAM 개요 «실적» strip read.
   { core: 'iam', surface: 'iam_metrics', status: 'ready', owner: 'TASK-MONO-811' },
-  // TASK-MONO-771 S5 — the tenant entry-policy control. 🔵 `pending` on purpose: no
-  // sample fixture yet, so a sample visitor's call answers 503 SAMPLE_NOT_READY, which
-  // the control maps to its own degraded note (the tenant detail page stays `ready`).
-  { core: 'iam', surface: 'tenant_entry_policy', status: 'pending', owner: 'TASK-MONO-771' },
-  // TASK-PC-FE-338 (ADR-MONO-083 D9) — the new 업무 권한 세트 surface. 🔵 `pending` on
-  // purpose: no sample fixture yet (P2 producer just merged to `main`); a sample visitor's
-  // call answers 503 SAMPLE_NOT_READY, which the screen maps to its own degraded note.
-  { core: 'iam', surface: 'domain_permission_sets', status: 'pending', owner: 'TASK-PC-FE-338' },
+  // TASK-MONO-771 S5 — the tenant entry-policy control (GET policy + enrolment-summary).
+  // Was `pending` (no fixture → 503 SAMPLE_NOT_READY → the control's degraded note);
+  // TASK-PC-FE-382 gave it a fixture, so it is `ready`.
+  { core: 'iam', surface: 'tenant_entry_policy', status: 'ready', owner: 'TASK-PC-FE-382' },
+  // TASK-PC-FE-338 (ADR-MONO-083 D9) — the 업무 권한 세트 surface (role catalogue + sets).
+  // Was `pending` («P2 producer just merged», no fixture); TASK-PC-FE-382 gave it a fixture.
+  { core: 'iam', surface: 'domain_permission_sets', status: 'ready', owner: 'TASK-PC-FE-382' },
 
   // ── ecommerce (`callEcommerceGateway`) — TASK-PC-FE-284 ────────────────────
   { core: 'ecommerce', surface: 'ecommerce', status: 'ready', owner: ECOMMERCE },
@@ -161,6 +160,9 @@ export const SURFACE_SAMPLE_PATH: Readonly<Record<string, string>> = {
   'iam:org_nodes': '/api/admin/org-nodes',
   'iam:groups': '/api/admin/groups?page=0&size=20',
   'iam:iam_metrics': '/api/admin/metrics?period=month&tenantId=sample',
+  // TASK-PC-FE-382
+  'iam:domain_permission_sets': '/api/admin/domain-permission-sets',
+  'iam:tenant_entry_policy': '/api/admin/tenants/sample/entry-policy',
   // TASK-PC-FE-284
   'ecommerce:ecommerce': '/api/admin/products?page=0&size=20',
   'ecommerce:ecommerce_image': '/api/admin/products/prod-sample-0001/images',
@@ -224,8 +226,8 @@ export const SCREEN_COVERAGE: Readonly<Record<string, ScreenStatus>> = {
   '/org-hierarchy': 'ready',
   '/partnerships': 'ready',
   '/permission-sets': 'ready',
-  // TASK-PC-FE-338 — pending: no sample fixture yet for the new domain-permission-sets surface.
-  '/domain-permission-sets': 'pending',
+  // TASK-PC-FE-338 → TASK-PC-FE-382 — ready: the `domain_permission_sets` surface has a fixture.
+  '/domain-permission-sets': 'ready',
   '/permissions': 'ready',
   '/subscriptions': 'ready',
   '/tenants': 'ready',
@@ -234,8 +236,8 @@ export const SCREEN_COVERAGE: Readonly<Record<string, ScreenStatus>> = {
   // 로그인), not the creation form (console-integration-contract § 2.6.4 «Sample mode»). `pending` would stack
   // the shell's «준비 중» note on top of it. Was `pending` + a redirect to `/` (TASK-MONO-773 S6).
   '/new-tenant': 'static',
-  // TASK-MONO-771 S5 — pending: its only data is the `tenant_entry_policy` surface (no fixture).
-  '/security-settings': 'pending',
+  // TASK-MONO-771 S5 → TASK-PC-FE-382 — ready: its only data is the `tenant_entry_policy` surface (now fixtured).
+  '/security-settings': 'ready',
 
   // ecommerce — TASK-PC-FE-284
   '/ecommerce': 'ready',
