@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-_(없음)_
+- `TASK-PC-FE-382-sample-domain-permission-sets-entry-policy.md` — **익명 샘플에 «업무 권한 세트» · «테넌트 진입 정책» 이 없다** (READY, 2026-10-28 UTC · 소유자 «진행»): 샘플 원장 `pending` 두 표면(`domain_permission_sets` · `tenant_entry_policy`)에 생산자 계약 모양의 iam 픽스처를 넣고 `ready` 로. `flat:fan` 은 의도된 `pending` 이라 범위 밖. Vercel 배포만. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 
