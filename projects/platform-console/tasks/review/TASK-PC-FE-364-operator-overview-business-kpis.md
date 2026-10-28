@@ -317,3 +317,11 @@ frontend
 ## CORRECTION — 36차 창 라이브 결과 (2026-10-28 UTC)
 
 - **AC-3 — 다시 측정 안 함 (⚪).** 권한 집합이 하나뿐인 운영자가 있어야 재는데 시드에 없다. review 유지.
+
+---
+
+## CORRECTION — AC-3 «시드에 없다» 는 측정 불가의 근거가 아니었다 (2026-10-28 UTC, 36차 창을 닫은 뒤)
+
+- 위 36차 CORRECTION 의 «권한 집합이 하나뿐인 운영자가 있어야 재는데 시드에 없다» 는 맞지만, 그것이 «측정 불가» 를 뜻하지는 않았다. 초대 API(`POST /api/admin/operator-invitations`, 메일은 `iam-mailpit`)와 세트 배정 API(`POST/DELETE /api/admin/operators/{id}/domain-permission-sets`)로 **창 안에서 그 운영자를 만들 수 있었고**, 36차 창에서 놓쳤다.
+- 시드 변경 · 굽기는 필요 없다. 다음 창 절차 = `TASK-MONO-672` § Order 22 (소유자 결정 2026-10-28 UTC: 다음 창에서 측정). 기존 시드 운영자를 좁혀 쓰지 않는 이유도 거기 있다(전부 `legacy-compat` · `MIGRATION` 한 행 — 회수 후 재배정은 `DIRECT`).
+- ⇒ review 유지 — 남은 것: AC-3 권한별 «권한 없음» 표(다음 창, 672 § Order 22).
