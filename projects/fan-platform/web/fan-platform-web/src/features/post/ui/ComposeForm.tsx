@@ -2,6 +2,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/Button';
+import { FORM_FIELD_CLASS } from '@/shared/ui/formField';
 import { publishFanPost } from '@/features/post/api/actions';
 import { FAN_POST_BODY_MAX, FAN_POST_TITLE_MAX } from '@/features/post/lib/post-limits';
 
@@ -58,7 +59,7 @@ export function ComposeForm() {
           maxLength={FAN_POST_TITLE_MAX}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="제목을 입력하세요"
-          className="rounded-md border border-ink-200 px-3 py-2 text-sm text-ink-900 dark:bg-ink-800 dark:text-ink-100 dark:border-ink-700"
+          className={FORM_FIELD_CLASS}
         />
       </label>
 
@@ -70,7 +71,7 @@ export function ComposeForm() {
           rows={10}
           onChange={(e) => setBody(e.target.value)}
           placeholder="어떤 이야기를 나누고 싶으신가요?"
-          className="rounded-md border border-ink-200 px-3 py-2 text-sm text-ink-900 dark:bg-ink-800 dark:text-ink-100 dark:border-ink-700"
+          className={FORM_FIELD_CLASS}
         />
         <span
           className={[
