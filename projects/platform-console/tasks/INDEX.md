@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-_(없음)_
+- `TASK-PC-FE-383-sample-operator-group-domain-sets-dialogs.md` — **익명 샘플의 운영자 «도메인 접근» · 그룹 «세트» 가 «준비 중»** (READY, 2026-10-28 UTC · 소유자 결정 «둘 다 채운다»): `ready` 표면(`operators` · `groups`) 안에서 픽스처가 빠진 GET 둘(`/operators/{id}/domain-access` · `/groups/{id}/domain-permission-sets`). 배정 `setId` 는 382 의 세트 목록 안에서만 · 없는 id 응답은 계약 원문대로. Vercel 배포만. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 
