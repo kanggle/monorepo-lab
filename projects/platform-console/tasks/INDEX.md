@@ -125,11 +125,11 @@ _(없음)_
 
 ## review
 
-- `TASK-PC-FE-382-sample-domain-permission-sets-entry-policy.md` — **익명 샘플에 «업무 권한 세트» · «테넌트 진입 정책» 이 없다** (REVIEW, 2026-10-28 UTC · 소유자 «진행»): 샘플 원장 `pending` 두 표면(`domain_permission_sets` · `tenant_entry_policy`)에 생산자 계약 모양의 iam 픽스처를 넣고 `ready` 로 (화면 원장 `/domain-permission-sets` · `/security-settings` 포함). AC-0~4 완료, AC-5(배포 뒤 라이브) 대기. `flat:fan` 은 의도된 `pending` 이라 범위 밖. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 - `TASK-PC-FE-364-operator-overview-business-kpis.md` — **운영자 통합 개요 카드 여섯을 업무 지표로 — 잠긴 계정 · 미출고 주문 · 제출 대기 발주 · 미해소 대사 차이 · 내 결재 대기 · 출고 대기 주문** — 카드당 호출 1개 그대로(1:1 교체) · 서버 변경 없음 · 계약 § 2.4.9.1 먼저 · 소유자 결정 2026-10-22 KST (REVIEW, 2026-10-22 UTC · 문구 · 권한 표 소유자 승인 · 콘솔 nightly · federation e2e success · AC-3 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ❌ — WMS 출고 · SCM 발주 카드 `DOWNSTREAM_ERROR` · «WMS 점검 불가» → `TASK-PC-FE-369`. · 🔵 **2026-10-28 UTC 36차 창:** AC-3 ⚪ 다시 측정 안 함 (단일 권한 집합 운영자가 시드에 없음) — review 유지
 
 ## done
+- ✅ `TASK-PC-FE-382-sample-domain-permission-sets-entry-policy.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4607(`f78e3466a`, 실패 0) · 샘플 원장 `domain_permission_sets` · `tenant_entry_policy` → `ready` · AC-5 운영 실측(쿠키 없는 방문 3화면 «준비 중» 0, 대조군 `/fan` 1).
 - ✅ `TASK-PC-FE-377-replenishment-table-reorder-point-bar.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4579(`c7e58e9ba`, 실패 0) · AC-7 36차 창 라이브 ✅
 - ✅ `TASK-PC-FE-373-wms-alert-row-key-id-vs-alertid-degrades-overview.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4565(`a733cac85`, 실패 0) · AC-8 36차 창 라이브 ✅
 - ✅ `TASK-PC-FE-380-sample-previous-week-rows.md` — **DONE 2026-10-27 UTC (4-dim verified)** — impl PR #4590(`11879fb11`, 실패 0) · AC-1~5 닫음 — 익명 샘플 «지난 주»(9/7~8) 를 이번 주와 눈에 띄게 다르게 채움(소유자 지적 «막대 차이가 없다» 로 머지 전 재조정: iam 1/3 · wms 20/45 · finance 35k/12k · erp 1/3). 운영 실측 여섯 카드 모두 두 막대 다름(배포 `7359306803`). 기록 = 티켓 끝 CORRECTION 둘.

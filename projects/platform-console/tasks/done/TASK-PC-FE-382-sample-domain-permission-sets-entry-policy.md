@@ -8,7 +8,7 @@ TASK-PC-FE-382
 
 # Status
 
-review
+done (2026-10-28 UTC — 4-dim verified · impl PR #4607 squash `f78e3466a` · AC-5 라이브)
 
 # Owner
 
@@ -59,7 +59,7 @@ frontend
 - [x] **AC-2** 새 픽스처 응답이 콘솔의 zod 스키마(`features/domain-permission-sets/api/types.ts` · `features/tenant-entry-policy/api/types.ts`)를 통과하는 시험 — 기존 `sample-fixtures-schema-*` 시험 관례를 따른다. 없는 id → 404 모양 시험.
 - [x] **AC-3** 쿠키 없는 렌더(단위 또는 로컬 `next dev` 샘플 방문)에서 `/domain-permission-sets` 와 `/tenants/<샘플 테넌트>` 진입 정책 칸에 «준비 중» 문구가 없고 샘플 행이 보인다. 같은 표면을 읽는 다른 화면(`operators` · `permission-sets` · `security-settings`)도 «준비 중» 이 사라졌는지 확인.
 - [x] **AC-4** console-web `lint` · `tsc` · vitest(`--maxWorkers=2 --minWorkers=1`) 전체 초록. 샘플 격리 가드(샘플 모듈이 네트워크 · 세션 · env 를 임포트하지 않음) 초록.
-- [ ] **AC-5 (라이브, 배포 뒤)** Vercel Production 에 배포된 뒤 로그아웃 상태로 `console.hubwang.com/domain-permission-sets` 와 샘플 테넌트 상세를 열어 «준비 중» 이 없음을 확인(데모 창 불필요).
+- [x] **AC-5 (라이브, 배포 뒤)** Vercel Production 에 배포된 뒤 로그아웃 상태로 `console.hubwang.com/domain-permission-sets` 와 샘플 테넌트 상세를 열어 «준비 중» 이 없음을 확인(데모 창 불필요).
 
 # Related Specs
 
@@ -120,3 +120,15 @@ AC-5 (배포 뒤 라이브 확인) — 미체크.
 
 ## CORRECTION (2026-10-28 UTC)
 위 Deviations 첫 항목(«진입 정책 GET 이 레지스트리에 없는 테넌트에 404 `TENANT_NOT_FOUND`»)은 더 이상 사실이 아니다. 티켓 Edge Case «레지스트리에 없는 테넌트 id 는 404» 는 생산자 계약(`admin-api.md` § GET …/entry-policy: «행이 없으면 `{tenantId, requireMfa:false, updatedAt:null, updatedBy:null}` — 404 가 아니다»)과 어긋났고, 픽스처는 계약을 따르도록 고쳤다: 정책 행이 없는 tenantId → 200 + 위 기본 본문(tenantId = 경로값). `…/enrolment-summary` 는 계약이 미등록 테넌트를 말하지 않는다(400 `'*'`/정규식 · 503 만) — 정책 엔드포인트와 일관되게 200 + 0 건수(소속 운영자 없음)로 했다; 읽기는 테넌트 존재 확인을 하지 않는다는 계약 문구와도 맞다. 없는 `setId` 404 `DOMAIN_PERMISSION_SET_NOT_FOUND` 는 계약(§ GET …/{setId} 오류표)대로 유지.
+
+---
+
+## Close (2026-10-28 UTC)
+
+- **AC-5 ✅ (라이브).** `Production – kanggle-console` 이 `f78e3466a` 로 배포(10:39:22Z, `merge-base --is-ancestor` 확인). 쿠키 없는 Playwright 로 `console.hubwang.com` 을 열었다:
+  - `/domain-permission-sets` 200 · `sample-screen-not-ready` 0 · «준비 중» 0 · «(샘플)» 35
+  - `/tenants/sample` 200 · not-ready 0 · «준비 중» 0 · `entry-policy-panel` 1
+  - `/security-settings` 200 · not-ready 0 · «준비 중» 0 · `entry-policy-panel` 1
+  - **대조군** `/fan`(원장에 아직 `pending`, 범위 밖) → `/fan/agencies` · not-ready **1** · «준비 중» **1** — 같은 술어가 «준비 중» 화면을 잡는다는 증거. 그래서 위의 0 은 «못 찾음» 이 아니라 «없음» 이다.
+- 4차원: (a) #4607 MERGED · (b) `f78e3466a` 는 origin/main 조상 · (c) #4607 실패·취소 0(프런트 단위 · E2E smoke 포함 SUCCESS) · (d) AC-0 ~ AC-5 전부 닫힘.
+- 범위 밖으로 남은 것(별도 티켓 후보, 구현 보고): 운영자 «도메인 접근» 대화상자(`GET /operators/{id}/domain-access`, `operators` 표면) · 그룹 «세트» 대화상자(`GET /groups/{id}/domain-permission-sets`, `groups` 표면)는 픽스처가 없어 샘플에서 503 일 수 있다.
