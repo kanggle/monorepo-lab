@@ -70,7 +70,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-FAN-FE-034-comment-compose-fields-dark-native-background.md` — **댓글 입력란 · 글쓰기 제목 · 본문 칸이 OS 다크에서 어두운 바탕에 검은 글씨** (READY, 2026-10-28 UTC · 출처 36차 창 소유자 관찰): `TASK-FAN-FE-026` 의 `FORM_FIELD_CLASS` 로 옮겨지지 않은 형제 셋(`CommentPanel.tsx:105` · `ComposeForm.tsx:54,67`)을 공용 상수로. 프런트만 · Vercel 배포만. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 ## in-progress
 
