@@ -219,10 +219,10 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-823-portfolio-sync-preflight-workflows-permission.md` — **동기화 프리플라이트 Workflows 쓰기 탐침 · portfolio.md 사본 표** (REVIEW, 2026-11-02 UTC). 기존 `.yml` 에 `sha=0×40` PUT → 409 무쓰기. run `41326996856` 7/7 ✔ · 전후 sha 동일. 🔴 첫 실측 run `41326859025` 이 `bash -e`×`gh` rc=1 즉사를 잡음 → `set +e`. AC-3 음성(403) ⚪ 못 잼.
 - `TASK-MONO-821-demo-seed-finance-backfill-four-weeks.md` — **라이브 데모 Finance «실적» 그래프가 부팅 당일 막대 하나뿐 — 820 백필을 finance(`transactions` + `balances`)로** (REVIEW, 2026-10-28 UTC · 소유자 결정: Finance = 직접 SQL 백필, 이커머스 = 그대로). `bf_finance_sql` — 하루 입금 0~3 · 이체 A→B(월요일 + 약 1/4), 잔액은 같은 트랜잭션에서 `ROW_COUNT()` 로 «새 행만큼» 보정(재실행 +0) · A 시점별 잔액 ≥ 0 · 금액 500000/100000 과 분리 · outbox/원장 안 씀(원장 과거 분개 없음 = 한계). 시드 입금 술어 `topup_txns` 는 페이지를 끝까지 넘긴다(AC-3). 자기시험 rc=0 59칸 · bite 4종 rc=1 · (y)/(y2)/(z8) 구간 rc=0. ⏳ AC-5 라이브 = 다음 굽기 뒤(`TASK-MONO-672` § Order 23).
 
 ## done
+- ✅ `TASK-MONO-823-portfolio-sync-preflight-workflows-permission.md` — **DONE 2026-11-02 UTC (4-dim verified)** — impl PR #4616(`6228e3803`, 실패 0) · 프리플라이트 Workflows 쓰기 탐침(409 무쓰기, run `41326996856` 7/7 · sha 불변) · portfolio.md 사본 표 7개 = 2026-11-01 · AC-3 음성 ⚪ 못 잼(사유·남는 위험 기록).
 - ✅ `TASK-MONO-822-readme-and-portfolio-refresh-2026-11.md` — **DONE 2026-11-02 UTC (4-dim verified)** — impl PR #4613(`b243c02ca`, 실패 0) · README 세 화면 표 · 기동 약 10분 · Recent decisions · portfolio.md WMS/SCM/콘솔 화면 배선 · `check-public-domains.sh` 퍼센트 인코딩 오탐 수선(CI `Public domains` pass). 🔴 squash 뒤 `main` INDEX 에 READY·REVIEW 두 행이 함께 남아 있던 것을 이 close 에서 함께 걷었다.
 - ✅ `TASK-MONO-819-capture-self-test-skipped-on-script-only-prs.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4550(`dfd7ad75f`, 실패 0) · AC-2 = 스크립트만 바꾼 PR #4602 에서 `capture-route-staleness` 출력 하나로 `Frontend E2E smoke` 가 돌고 self-test 단계 success(다른 필터 전부 false).
 - ✅ `TASK-MONO-820-demo-seed-backfill-four-weeks-history.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4593(`0777e56ea`, 실패 0) · AC-1 라이브 수렴(+0) · AC-2 · AC-3 · AC-6 36차 창 ✅ · AC-4 impl PR CI 실패 0 · AC-5 ✅ 라이브 IAM 행 로그인 178 + 잠금 6 = 184 ≤ 상한 11 × 28 = 308, 두 번째 시드 실행 +0
