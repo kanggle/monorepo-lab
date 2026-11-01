@@ -220,6 +220,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
+- `TASK-MONO-822-readme-and-portfolio-refresh-2026-11.md` — **루트 README · `docs/portfolio.md` 를 2026-11 현재 상태로** (REVIEW, 2026-11-01 UTC · 소유자 요청). README: 세 화면 표(로그인 없이/후) · 기동 약 10분 · 프로젝트 표 4행 · «Recent decisions (2026-10)» · portfolio.md 링크 · 74 skills. portfolio.md: WMS·SCM·콘솔 화면 배선 · «최근에 더한 것» · 사본 표 실측. 🔴 범위 추가: `check-public-domains.sh` 가 `%2F` 를 호스트명에 붙여 읽어 `main` 에서도 rc=1 이던 오탐 수선(구분자 인코딩만 풂 · 자기시험 (d)(e)).
 - `TASK-MONO-821-demo-seed-finance-backfill-four-weeks.md` — **라이브 데모 Finance «실적» 그래프가 부팅 당일 막대 하나뿐 — 820 백필을 finance(`transactions` + `balances`)로** (REVIEW, 2026-10-28 UTC · 소유자 결정: Finance = 직접 SQL 백필, 이커머스 = 그대로). `bf_finance_sql` — 하루 입금 0~3 · 이체 A→B(월요일 + 약 1/4), 잔액은 같은 트랜잭션에서 `ROW_COUNT()` 로 «새 행만큼» 보정(재실행 +0) · A 시점별 잔액 ≥ 0 · 금액 500000/100000 과 분리 · outbox/원장 안 씀(원장 과거 분개 없음 = 한계). 시드 입금 술어 `topup_txns` 는 페이지를 끝까지 넘긴다(AC-3). 자기시험 rc=0 59칸 · bite 4종 rc=1 · (y)/(y2)/(z8) 구간 rc=0. ⏳ AC-5 라이브 = 다음 굽기 뒤(`TASK-MONO-672` § Order 23).
 
 ## done

@@ -72,7 +72,8 @@ Elasticsearch 상품 검색 · MinIO 업로드 · 셀러 정산.
 
 **모노레포 전체의 OIDC IdP.** Spring Authorization Server 기반. PKCE public client ·
 refresh token rotation · revoke · 멀티테넌트 행 단위 격리 · RFC 8693 assume-tenant 토큰 교환.
-**모든 프로젝트가 여기에 붙습니다.**
+테넌트 진입 토큰에는 **그 운영자·그룹에 배정된 업무 권한 세트 ∩ 테넌트 구독 상한**만 실리고,
+각 도메인 서버가 그것으로 세분 인가합니다. **모든 프로젝트가 여기에 붙습니다.**
 
 <p align="center">
   <img src="../projects/iam-platform/docs/screenshots/02-iam-permissions.jpg" width="820" alt="IAM 권한 카탈로그 (운영자 콘솔)"><br>
@@ -103,10 +104,14 @@ refresh token rotation · revoke · 멀티테넌트 행 단위 격리 · RFC 869
 
 **7개 서비스**: 마스터(5 애그리거트 + Lot 유효기간) · 재고(예약 · 출고 saga 컨슈머 4종 ·
 저재고 알림) · 입고(ASN/검수/적치) · 출고(주문·피킹·패킹·배송 + saga 오케스트레이터) ·
-알림 · 어드민(CQRS 읽기 측) · 게이트웨이. **이커머스 주문을 실제로 처리합니다.**
+알림 · 어드민(CQRS 읽기 측) · 게이트웨이. **이커머스 주문을 실제로 처리합니다** — 그리고
+반대 방향도 받습니다: 스토어에서 주문이 취소되면 출고 취소 요청이 와서, 접수 단계면 취소 ·
+피킹 중이면 자동 취소 · 피킹이 끝났으면 운영자 경보로 갈립니다.
 
-⚪ *대표 화면 없음 — 데모 시드에 창고 데이터가 아직 없어 화면이 비어 있습니다.
-빈 표를 「제품」으로 보여주지 않기 위해 넣지 않았습니다.*
+<p align="center">
+  <img src="../projects/wms-platform/docs/screenshots/03-wms-outbound.jpg" width="820" alt="WMS 출고 (운영자 콘솔)"><br>
+  <em>운영자 콘솔 — 출고 주문과 saga 상태, 그 아래 출고 확정된 화물의 택배 행. 데모 시드가 스토어 주문을 실제로 wms 로 흘려 보낸 결과다</em>
+</p>
 
 ### SCM — [`projects/scm-platform`](../projects/scm-platform/)
 
@@ -114,7 +119,10 @@ refresh token rotation · revoke · 멀티테넌트 행 단위 격리 · RFC 869
 위의 교차 노드 read-model) · 수요 계획(저재고 알림 소비 + 야간 스윕 → 보충 제안) · 물류 ·
 게이트웨이.
 
-⚪ *대표 화면 없음 — 위와 같은 이유입니다.*
+<p align="center">
+  <img src="../projects/scm-platform/docs/screenshots/01-scm-procurement.jpg" width="820" alt="SCM 조달 발주 목록 (운영자 콘솔)"><br>
+  <em>운영자 콘솔 — 발주(PO) 목록. <code>DRAFT → ACKNOWLEDGED → CONFIRMED</code> 상태 기계를 지나는 발주들이 공급사·금액과 함께 선다</em>
+</p>
 
 ### 운영자 콘솔 — [`projects/platform-console`](../projects/platform-console/)
 
@@ -122,7 +130,26 @@ refresh token rotation · revoke · 멀티테넌트 행 단위 격리 · RFC 869
 교차 도메인 합성). **wms·scm·finance·erp 의 유일한 프런트엔드입니다** —
 위 화면들 중 「운영자 콘솔」이라 적힌 것이 전부 이 앱입니다.
 
-⚪ *콘솔 자신의 화면(카탈로그·구독·파트너십)은 아직 고르지 않았습니다.*
+도메인마다 「개요」 맨 위에 **실적 줄**이 있습니다 — 이번 주·이번 달을 같은 길이의 직전 기간과
+비교하고 일별 추이를 그립니다(한국 시간 기준, 집계는 각 도메인 백엔드가 합니다). 메뉴와 쓰기
+버튼은 그 운영자가 그 테넌트에서 받은 **업무 권한**대로 보이고 숨습니다.
+
+<p align="center">
+  <img src="../projects/platform-console/docs/screenshots/05-console-ecommerce-orders.jpg" width="820" alt="운영자 콘솔 이커머스 주문"><br>
+  <em>운영자 콘솔 — 스토어 주문을 운영자 쪽에서 본 화면. 결제 대기부터 배송 완료·취소까지 상태별로 선다</em>
+</p>
+
+---
+
+## 최근에 더한 것 (2026-10)
+
+| | 무엇이 바뀌었나 |
+|---|---|
+| **테넌트별 업무 권한 세트** ([ADR-MONO-083](adr/ADR-MONO-083-domain-permission-sets-per-tenant.md)) | 「운영자면 다 된다」에서 「이 테넌트에서 배정받은 일만 된다」로. 이커머스·SCM·ERP·Finance 가 서버에서 세분 인가하고, 콘솔은 권한 없는 메뉴·버튼을 숨깁니다 |
+| **도메인 실적 지표** ([ADR-MONO-084](adr/ADR-MONO-084-domain-overview-performance-metrics.md)) | 개요가 「지금 상태」만이 아니라 「이번 주·이번 달 얼마나」를 보여 줍니다. 매출·판매 수량, 입출고 처리량, 발주 금액, 결재 상신·승인, 이체 금액, 로그인 |
+| **주문 취소 → 출고 취소** | 스토어 주문 취소가 출고 전 배송을 취소하고 wms 에 출고 취소를 요청합니다 — 서비스 경계를 넘는 보상 흐름 |
+| **데드레터 이름 통일** ([ADR-MONO-085](adr/ADR-MONO-085-dead-letter-topic-suffix-dlt.md)) | 모든 Kafka 소비자의 실패 토픽을 `<topic>.DLT` 하나로, 실패 원인을 남기게 |
+| **4주 이력 시드** | 데모가 켜지면 wms·scm·erp·iam·finance 에 최근 4주 기록이 깔려, 실적 그래프가 부팅 당일 막대 하나가 아니라 한 달을 그립니다 |
 
 ---
 
@@ -154,12 +181,13 @@ refresh token rotation · revoke · 멀티테넌트 행 단위 격리 · RFC 869
 추출됩니다. 🔵 **위 링크는 전부 모노레포 안의 경로를 가리킵니다** — 사본은 추출본이고,
 이력·공용 라이브러리·이 문서가 모두 여기 있기 때문입니다.
 
-사본을 보고 싶으면 (**최종 동기화 2026-09-10 UTC 기준**):
+사본을 보고 싶으면 (**2026-11-01 UTC 확인**):
 
 | 사본 | 마지막 동기화 |
 |---|---|
-| [scm](https://github.com/kanggle/scm-platform) · [erp](https://github.com/kanggle/erp-platform) · [finance](https://github.com/kanggle/finance-platform) | 🟢 **2026-09-10** — 최신입니다 |
-| [wms](https://github.com/kanggle/wms-platform) · [iam](https://github.com/kanggle/iam-platform) · [ecommerce](https://github.com/kanggle/ecommerce-microservices-platform) · [fan](https://github.com/kanggle/fan-platform) | 🔴 **2026-08-04** — 그만큼 뒤처져 있습니다 |
+| [scm](https://github.com/kanggle/scm-platform) | 2026-09-11 |
+| [erp](https://github.com/kanggle/erp-platform) · [finance](https://github.com/kanggle/finance-platform) | 2026-09-10 |
+| [wms](https://github.com/kanggle/wms-platform) · [iam](https://github.com/kanggle/iam-platform) · [ecommerce](https://github.com/kanggle/ecommerce-microservices-platform) · [fan](https://github.com/kanggle/fan-platform) | 2026-08-04 |
 
-🔴 뒤처진 넷은 **그 프로젝트가 멈춘 것이 아니라 추출을 안 돌린 것**입니다. 그 넷의 최신
-상태는 위의 모노레포 링크에서 보실 수 있습니다.
+🔴 사본은 전부 **위 「최근에 더한 것」 이전 상태**입니다. 그 프로젝트가 멈춘 것이 아니라
+추출을 안 돌린 것이고, 최신 상태는 위의 모노레포 링크에서 보실 수 있습니다.

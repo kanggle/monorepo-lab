@@ -161,9 +161,16 @@ main() {
   [ "$miss" -eq 0 ] || return 1
   note "(1) 검색 대상 ${#searched[@]}개 파일 (서술 디렉터리 tasks/·docs/adr/ 제외)"
 
+  # 🔴 퍼센트 인코딩된 **URL 구분자**(`%2F`·`%3A` …)는 구분자로 읽는다(TASK-MONO-822).
+  #    안 그러면 `redirect_uri=https%3A%2F%2Fconsole.<apex>` 의 `2F` 끝 `2f` 가 호스트명에
+  #    붙어 선언된 이름이 «미선언» 으로 잡힌다 — 로그를 인용한 project `tasks/` 본문이 그렇게
+  #    `main` 을 빨갛게 만들었고, 경로 필터 때문에 README 를 고친 PR 에서야 드러났다.
+  # 🔴🔴 **모든 `%XX` 를 지우면 안 된다** — SQL `LIKE '%fan.<apex>%'` 의 `%fa` 도 16진수라
+  #    `fan.` 이 `n.` 으로 잘린다(초판이 실제로 그렇게 새 오탐을 냈다). 구분자만 푼다.
   while IFS= read -r s; do [ -n "$s" ] && seen+=("$s"); done < <(
     for f in "${searched[@]}"; do
-      grep -hoiE "[a-z0-9.-]*${apex//./\\.}" "$ROOT/$f" 2>/dev/null
+      sed -E 's/%(2F|3A|3F|23|26|3D|40)/ /gI' "$ROOT/$f" 2>/dev/null \
+        | grep -oiE "[a-z0-9.-]*${apex//./\\.}"
     done | tr 'A-Z' 'a-z' | sed 's/^[.-]*//' | sort -u
   )
   for s in "${seen[@]}"; do
@@ -288,6 +295,28 @@ self_test() {
   else
     git -C "$t" commit -qam mutate
     _expect "(c) 정본 표를 비움 -> 하한/파싱으로 문다" 1 "$(_run "$t")"
+  fi
+  rm -rf "$t"
+
+  # (d) 선언된 이름을 퍼센트 인코딩 URL 안에 심는다 -> **통과**한다(TASK-MONO-822 오탐).
+  #     (e) 같은 자리에 미선언 이름 -> 여전히 **문다**. 둘이 짝이어야 «구분자로 읽기» 가
+  #     오탐만 지우고 눈을 감지 않았음이 증명된다.
+  t="$(_mk)"
+  out="$(cd "$t" && git ls-files 'README.md' | head -1)"
+  lh="$(PUBDOM_GUARD_ROOT="$t" bash "$SELF" 2>/dev/null | sed -n 's/.*오리진 https:\/\/\([^ ]*\) 가.*/\1/p' | head -1)"
+  if [ -z "$lh" ]; then
+    echo "  x  (d) 주입 실패 — 선언된 이름을 못 읽었습니다."; rc=1
+  else
+    printf '\nredirect_uri=https%%3A%%2F%%2F%s%%2Fcallback\n' "$lh" >> "$t/$out"
+    if ! grep -q "%2F%2F${lh}%2F" "$t/$out"; then
+      echo "  x  (d) 주입 실패 — 이 칸은 아무것도 시험하지 않았습니다."; rc=1
+    else
+      git -C "$t" commit -qam mutate
+      _expect "(d) 퍼센트 인코딩 안의 선언된 이름 -> 통과" 0 "$(_run "$t")"
+      printf '\nredirect_uri=https%%3A%%2F%%2Ftypo.%s%%2Fcallback\n' "$lh" >> "$t/$out"
+      git -C "$t" commit -qam mutate2
+      _expect "(e) 퍼센트 인코딩 안의 미선언 이름 -> 문다" 1 "$(_run "$t")"
+    fi
   fi
   rm -rf "$t"
 
