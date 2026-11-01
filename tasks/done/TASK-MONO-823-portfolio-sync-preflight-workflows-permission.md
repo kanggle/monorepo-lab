@@ -96,3 +96,9 @@ monorepo
 - **AC-2** ✅ 같은 run: Preflight success · Sync(dry-run) success.
 - **AC-3** ⚪ **못 잼** — 음성(권한 없는 토큰 → 403)은 소유자 토큰 권한을 일부러 빼야 하고, 로컬 `gh` 토큰은 `workflow` scope 를 가져 대조군이 될 수 없다. 남는 위험: GitHub 가 sha 를 권한보다 먼저 검사하면 권한 없이도 409 → 오판 통과 ⇒ 결과는 이 스텝 이전과 같다(push 에서 거절).
 - **AC-4** ✅ 사본 표 = `pushed_at` 2026-11-01T16:16–16:18Z(7개). `check-readme-screenshots.mjs` rc=0.
+
+---
+
+## CORRECTION — 2026-11-01 UTC (TASK-MONO-824 기안 중 발견)
+
+위 본문의 «2026-11-02 UTC» 는 **한국 시간 날짜**였다. 이 작업이 끝난 시각의 UTC 날짜는 **2026-11-01** 이다(`date -u +%F` = `2026-11-01`, 커밋·PR 머지 시각 기준). KST 00:00–09:00 에 쓴 날짜를 UTC 라 표기한 사용자 CLAUDE.md § Date Stamps 함정이다. 위 기록은 지우지 않는다 — 측정·판정 내용은 그대로 유효하고 날짜 표기만 틀렸다.
