@@ -181,13 +181,11 @@ refresh token rotation · revoke · 멀티테넌트 행 단위 격리 · RFC 869
 추출됩니다. 🔵 **위 링크는 전부 모노레포 안의 경로를 가리킵니다** — 사본은 추출본이고,
 이력·공용 라이브러리·이 문서가 모두 여기 있기 때문입니다.
 
-사본을 보고 싶으면 (**2026-11-01 UTC 확인**):
+사본을 보고 싶으면:
 
 | 사본 | 마지막 동기화 |
 |---|---|
-| [scm](https://github.com/kanggle/scm-platform) | 2026-09-11 |
-| [erp](https://github.com/kanggle/erp-platform) · [finance](https://github.com/kanggle/finance-platform) | 2026-09-10 |
-| [wms](https://github.com/kanggle/wms-platform) · [iam](https://github.com/kanggle/iam-platform) · [ecommerce](https://github.com/kanggle/ecommerce-microservices-platform) · [fan](https://github.com/kanggle/fan-platform) | 2026-08-04 |
+| [wms](https://github.com/kanggle/wms-platform) · [iam](https://github.com/kanggle/iam-platform) · [ecommerce](https://github.com/kanggle/ecommerce-microservices-platform) · [fan](https://github.com/kanggle/fan-platform) · [scm](https://github.com/kanggle/scm-platform) · [erp](https://github.com/kanggle/erp-platform) · [finance](https://github.com/kanggle/finance-platform) | 🟢 **2026-11-01** — 일곱 개 모두 위 「최근에 더한 것」 까지 들어 있습니다 |
 
-🔴 사본은 전부 **위 「최근에 더한 것」 이전 상태**입니다. 그 프로젝트가 멈춘 것이 아니라
-추출을 안 돌린 것이고, 최신 상태는 위의 모노레포 링크에서 보실 수 있습니다.
+🔵 사본은 자동으로 따라오지 않습니다 — 동기화는 사람이 돌립니다(강제 푸시라서).
+그래서 이 날짜 뒤의 변경은 위의 모노레포 링크에서만 보입니다.

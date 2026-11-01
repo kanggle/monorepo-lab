@@ -68,7 +68,7 @@ jobs:
           if [ -z "${TOKEN:-}" ]; then
             echo "::error::PORTFOLIO_SYNC_TOKEN 이 비어 있습니다."
             echo "  → fine-grained PAT 를 만들어 리포 시크릿에 넣으세요 (TASK-MONO-663 AC-0)."
-            echo "  🔴 권한은 대상 7개 리포에 Contents: Read and write 하나면 됩니다."
+            echo "  🔴 권한은 대상 7개 리포에 Contents + Workflows: Read and write 둘이다 (TASK-MONO-823)."
             exit 1
           fi
           echo "PORTFOLIO_SYNC_TOKEN 존재 (길이 ${#TOKEN})"
@@ -98,6 +98,50 @@ jobs:
             exit 1
           fi
           echo "7/7 push 가능 — 계속합니다."
+
+      # 🔴🔴 TASK-MONO-823 — `.permissions.push` 는 **Workflows 권한을 모른다.** 2026-11-01
+      #    run 41324172383 이 위 스텝을 7/7 통과한 뒤 첫 push 에서 *"…without `workflow`
+      #    scope"* 로 거절됐다(사본은 모노레포의 `.github/workflows/` 를 싣는다).
+      # 🔵 탐침 = 사본에 **이미 있는** `.yml` 에 `sha=0×40` 으로 PUT. 권한이 있으면 sha 가
+      #    안 맞아 **409 이고 아무것도 안 쓴다**(기안 중 실측, 커밋 불변). 없으면 403 을 기대한다.
+      # 🔴 음성(403) 쪽은 **재지 못했다**(TASK-MONO-823 AC-3). GitHub 가 sha 를 권한보다
+      #    먼저 보면 권한 없이도 409 가 나와 통과한다 — 그래도 결과는 이 스텝이 없던 때와
+      #    같다(push 에서 죽는다). 더 나빠지지는 않는다.
+      - name: 7개 리포에 Workflows 쓰기가 되는가 — 쓰기 없는 탐침
+        env:
+          GH_TOKEN: ${{ secrets.PORTFOLIO_SYNC_TOKEN }}
+        run: |
+          set -uo pipefail
+          repos="wms-platform ecommerce-microservices-platform iam-platform fan-platform scm-platform finance-platform erp-platform"
+          zero=0000000000000000000000000000000000000000
+          bad=0
+          for r in $repos; do
+            f=$(gh api "repos/kanggle/$r/contents/.github/workflows" \
+                  --jq '[.[]|select(.name|endswith(".yml"))][0].path // empty' 2>/dev/null || true)
+            if [ -z "$f" ]; then
+              # 첫 동기화 전의 빈 사본에는 탐침할 파일이 없다 — 막으면 영원히 첫 동기화를 못 한다.
+              printf '  ⚠ %-40s 탐침 대상 .yml 없음 (첫 동기화?) — 판정 못 함, 통과\n' "$r"
+              continue
+            fi
+            code=$(gh api -i -X PUT "repos/kanggle/$r/contents/$f" \
+                     -f message="portfolio-sync preflight probe (must not land)" \
+                     -f content="eA==" -f sha="$zero" 2>/dev/null \
+                   | sed -n '1s/^HTTP\/[0-9.]* \([0-9]*\).*/\1/p')
+            case "$code" in
+              409) printf '  ✔ %-40s workflows 쓰기 가능 (409, 무쓰기)\n' "$r" ;;
+              403) printf '  ✗ %-40s 403 — 토큰에 Workflows: Read and write 가 없습니다\n' "$r"; bad=$((bad+1)) ;;
+              200|201)
+                   echo "::error::$r 에 탐침이 실제로 썼습니다 ($f, HTTP $code) — 즉시 멈춥니다. 사본을 확인하세요."
+                   exit 1 ;;
+              *)   printf '  ✗ %-40s 예상 밖 응답 (HTTP %s) — %s\n' "$r" "${code:-없음}" "$f"; bad=$((bad+1)) ;;
+            esac
+          done
+          if [ "$bad" -ne 0 ]; then
+            echo "::error::$bad 개 리포에 Workflows 쓰기가 안 됩니다 — 동기화를 시작하지 않습니다."
+            echo "  → github.com/settings/personal-access-tokens → 토큰 Edit → Add permissions → Workflows: Read and write"
+            exit 1
+          fi
+          echo "Workflows 탐침 통과 — 계속합니다."
 
       - uses: actions/checkout@v4
         with:
