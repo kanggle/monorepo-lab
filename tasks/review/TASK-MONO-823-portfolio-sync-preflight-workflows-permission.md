@@ -8,7 +8,7 @@ TASK-MONO-823
 
 # Status
 
-ready
+review (2026-11-02 UTC)
 
 # Owner
 
@@ -83,3 +83,16 @@ monorepo
 
 - 탐침이 실제로 파일을 쓴다 → AC-1 의 전후 sha 대조가 잡는다. 🔴 탐침 응답이 200/201 이면 즉시 ✗ 로 멈추고 «사본에 쓰기가 일어났다» 를 출력한다.
 - 탐침 실패를 경고로 흘림 → 403·기타는 반드시 exit 1.
+
+# Implementation — 2026-11-02 UTC
+
+- `portfolio-sync.yml` 프리플라이트에 스텝 «7개 리포에 Workflows 쓰기가 되는가 — 쓰기 없는 탐침» 추가(분기 409 ✔ · 403 ✗ · 200/201 즉시 정지 · 기타 ✗ · `.yml` 없음 ⚠ 통과). 시크릿 부재 문구를 «Contents + Workflows» 로.
+- `docs/portfolio.md` 사본 표 → 7개 = 2026-11-01 한 줄 + «사본은 사람이 돌린다» 한 문장.
+- 🔴 **첫 실측이 결함을 잡았다**: run `41326859025` 프리플라이트 **failure**, 탐침 스텝이 출력 0줄로 exit 1. 원인 = Actions 기본 셸 `bash -e` + 409 에 `gh` rc=1 + `pipefail` → 대입문 실패로 즉사. 로컬 첫 시험은 `-e` 없이 돌려 초록이었다(평가 맥락 차이). 수선 = 스텝 머리에 `set +e`. 로컬 `bash -e` 재현: 수정본 rc=0 · 수정 전 rc=1(bite). 🔵 결함은 **막는 쪽**으로 실패했다(동기화 미시작, 7개 sha 불변).
+
+# Verification
+
+- **AC-1** ✅ run `41326996856`(브랜치 `ci/mono-823-impl`, dry_run): 탐침 7/7 «409, 무쓰기». 실행 전후 7개 `commits/main` sha `diff` 동일.
+- **AC-2** ✅ 같은 run: Preflight success · Sync(dry-run) success.
+- **AC-3** ⚪ **못 잼** — 음성(권한 없는 토큰 → 403)은 소유자 토큰 권한을 일부러 빼야 하고, 로컬 `gh` 토큰은 `workflow` scope 를 가져 대조군이 될 수 없다. 남는 위험: GitHub 가 sha 를 권한보다 먼저 검사하면 권한 없이도 409 → 오판 통과 ⇒ 결과는 이 스텝 이전과 같다(push 에서 거절).
+- **AC-4** ✅ 사본 표 = `pushed_at` 2026-11-01T16:16–16:18Z(7개). `check-readme-screenshots.mjs` rc=0.
