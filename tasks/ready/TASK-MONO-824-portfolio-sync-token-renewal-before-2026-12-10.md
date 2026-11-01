@@ -23,7 +23,7 @@ monorepo
 ---
 
 > **분석 모델:** Opus 5.5 / **구현 권장:** Haiku 또는 Sonnet (소유자 토큰 작업 + 드라이런 1회)
-> 기안 2026-11-02 UTC. 소유자 요청 «토큰 만료 대비 태스크». 날짜는 UTC.
+> 기안 2026-11-01 UTC. 소유자 요청 «토큰 만료 대비 태스크». 날짜는 UTC.
 
 # ⏳ SCHEDULED — DO NOT START before 2026-12-01 (UTC)
 
@@ -50,14 +50,14 @@ monorepo
 
 ## In Scope
 
-**AC-0 사실 (기안 중 실측, 2026-11-02 UTC):**
+**AC-0 사실 (기안 중 실측, 2026-11-01 UTC):**
 
 | # | 사실 |
 |---|---|
 | F1 | 토큰 = fine-grained PAT `portfolio-sync` · 생성 2026-09-11 · **만료 2026-12-10** · 대상 리포 7개(소유자 화면 붙여넣기). |
 | F2 | 권한 = Contents + Metadata + **Workflows: Read and write**(2026-11-01 소유자 추가, `TASK-MONO-823` F2). |
 | F3 | 마지막 성공 실행 = run `41326996856`(dry-run, 프리플라이트 7/7 · Workflows 탐침 7/7 409). |
-| F5 | 시크릿 `PORTFOLIO_SYNC_TOKEN` `created_at` = `updated_at` = **2026-09-11T09:35:09Z** (`gh api …/actions/secrets/PORTFOLIO_SYNC_TOKEN`, 2026-11-02 실측) — 11-01 권한 추가는 값을 안 바꿨으므로 정상. 갱신 뒤 이 값이 바뀌어야 한다(Failure Scenarios). |
+| F5 | 시크릿 `PORTFOLIO_SYNC_TOKEN` `created_at` = `updated_at` = **2026-09-11T09:35:09Z** (`gh api …/actions/secrets/PORTFOLIO_SYNC_TOKEN`, 2026-11-01 실측) — 11-01 권한 추가는 값을 안 바꿨으므로 정상. 갱신 뒤 이 값이 바뀌어야 한다(Failure Scenarios). |
 | F4 | 이 호스트의 `CronCreate`/`ScheduleWakeup` 은 세션 한정이라 한 달 뒤 알림을 못 싣는다(사용자 CLAUDE.md § Scheduling) — 그래서 이 티켓이 그 알림이다. |
 
 - 소유자: 토큰 **Regenerate**(만료 기간 재설정) → 리포 시크릿 `PORTFOLIO_SYNC_TOKEN` 값 교체. 🔴 Regenerate 는 값을 바꾼다 — 시크릿 교체를 빼먹으면 옛 값이 만료일에 죽는다.
