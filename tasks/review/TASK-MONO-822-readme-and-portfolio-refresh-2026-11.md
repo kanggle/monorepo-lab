@@ -8,7 +8,7 @@ TASK-MONO-822
 
 # Status
 
-ready
+review (2026-11-01 UTC)
 
 # Owner
 
@@ -84,3 +84,16 @@ monorepo
 
 - 숫자를 손으로 옮기다 틀림 → 수치는 이 티켓 AC-0 표의 실측값만 쓴다.
 - 이미지를 걸었는데 빈 화면 → 거는 장은 기안 중 눈으로 연 것만(WMS 출고 · SCM 조달 · 콘솔 주문).
+
+# Implementation — 2026-11-01 UTC
+
+- **README**: F1 «DNS 미연결» 블록과 옛 CloudFront 서사 단락 → 세 화면 표(로그인 없이 / 로그인 후) + ADR-070·074 링크 + 옛 오리진 CORS 유지 한 문장 · F2 «~2–4 min» → 약 10분(09-09 실측) · F6 프로젝트 표 4행(wms·ecommerce·iam·console)에 한 구절씩 + «Recent decisions (2026-10)» 표(083/084/085 + 4주 시드) · F7 상단 안내 + Key documents 행 · F8 «74 skills».
+- **portfolio.md**: F3 WMS(`03-wms-outbound.jpg`)·SCM(`01-scm-procurement.jpg`) 화면 배선 · F4 콘솔(`05-console-ecommerce-orders.jpg`) + 실적 줄·업무 권한 한 문단 · F5 사본 표를 `pushed_at` 실측대로 · «최근에 더한 것 (2026-10)» 절 · IAM 절에 업무 권한 세트 한 문장.
+- **🔴 범위 추가 — `scripts/check-public-domains.sh` 술어 수선.** AC-3 를 돌리자 **`main` 에서도** rc=1 이었다: `'2fconsole.hubwang.com'` 미선언. 원인 = `projects/iam-platform/tasks/done/TASK-BE-641` 이 인용한 로그의 `post_logout_redirect_uri=https%3A%2F%2Fconsole…` — 가드가 `%2F` 의 `2F` 를 호스트명 앞에 붙여 읽는다(제외 `:!tasks/*` 는 **루트** `tasks/` 만 덮는다). 그 파일을 넣은 PR 은 README/TEMPLATE/terraform 을 안 건드려 이 잡이 **안 돌았고**, README 를 고치는 이 PR 이 처음 밟는다. 수선 = URL 구분자 퍼센트 인코딩(`%2F %3A %3F %23 %26 %3D %40`)만 공백으로 읽는다. 🔴 초판은 `%XX` 전부를 지웠고 **새 오탐**(`'n.hubwang.com'`)을 냈다 — `V0033` SQL 의 `LIKE '%fan.…'` 에서 `%fa` 가 16진수다. 그래서 구분자만으로 좁혔다. 자기시험에 짝 칸 (d) 선언된 이름이 인코딩 URL 안 → 통과 · (e) 미선언 이름이 같은 자리 → 문다.
+
+# Verification
+
+- AC-2 `node scripts/check-readme-screenshots.mjs` rc=0 — README 9개 · 쌍 40개 · 고아 0.
+- AC-3 `bash scripts/check-public-domains.sh` rc=0 — 출현 7종 전부 선언(수선 전 `main` rc=1).
+- AC-4 README · portfolio.md 의 `execute-api` · `cloudfront.net` 출현 = README 의 «붙이지 않는다» 설명문 1건뿐(`*.cloudfront.net` 일반형, 실제 도메인 아님).
+- AC-1 F1–F8 위 Implementation 대로.
