@@ -111,6 +111,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PORTFOLIO_SYNC_TOKEN }}
         run: |
+          # 🔴 `set +e` 가 필요하다: Actions 기본 셸은 `bash -e` 이고, 탐침이 기대하는 409 에
+          #    `gh` 는 rc=1 을 낸다 → pipefail 로 대입문이 실패 → 첫 리포에서 출력 없이 죽는다
+          #    (TASK-MONO-823 첫 실측 run 41326859025 이 정확히 그렇게 죽었다 — 로컬은 -e 없이 돌아 초록).
+          set +e
           set -uo pipefail
           repos="wms-platform ecommerce-microservices-platform iam-platform fan-platform scm-platform finance-platform erp-platform"
           zero=0000000000000000000000000000000000000000
