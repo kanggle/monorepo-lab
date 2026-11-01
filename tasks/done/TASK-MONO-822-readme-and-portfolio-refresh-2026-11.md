@@ -8,7 +8,7 @@ TASK-MONO-822
 
 # Status
 
-review (2026-11-01 UTC)
+done (2026-11-02 UTC — 4-dim verified · 기안 PR #4612 `e7c291dc0` · impl PR #4613 `b243c02ca`, 실패 0)
 
 # Owner
 
