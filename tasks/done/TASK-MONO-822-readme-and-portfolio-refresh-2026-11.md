@@ -97,9 +97,3 @@ monorepo
 - AC-3 `bash scripts/check-public-domains.sh` rc=0 — 출현 7종 전부 선언(수선 전 `main` rc=1).
 - AC-4 README · portfolio.md 의 `execute-api` · `cloudfront.net` 출현 = README 의 «붙이지 않는다» 설명문 1건뿐(`*.cloudfront.net` 일반형, 실제 도메인 아님).
 - AC-1 F1–F8 위 Implementation 대로.
-
----
-
-## CORRECTION — 2026-11-01 UTC (TASK-MONO-824 기안 중 발견)
-
-위 본문의 «2026-11-02 UTC» 는 **한국 시간 날짜**였다. 이 작업이 끝난 시각의 UTC 날짜는 **2026-11-01** 이다(`date -u +%F` = `2026-11-01`, 커밋·PR 머지 시각 기준). KST 00:00–09:00 에 쓴 날짜를 UTC 라 표기한 사용자 CLAUDE.md § Date Stamps 함정이다. 위 기록은 지우지 않는다 — 측정·판정 내용은 그대로 유효하고 날짜 표기만 틀렸다.
