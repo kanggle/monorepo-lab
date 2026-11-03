@@ -71,6 +71,7 @@ After Phase 1 completes, follow the full `/review-task` batch mode procedure. **
 3. If no tasks found, skip to Phase 3
 4. If `--dry-run`, show review targets and skip to Phase 3
 5. Launch all review agents in parallel with `isolation: "worktree"` and `subagent_type: "code-reviewer"` following `/review-task` batch mode rules:
+    - **Pass `model=` explicitly on every Agent call, per `/review-task` batch mode (canonical) and `CLAUDE.md` § Recommending Tasks and Dispatching Agents** — do not rely on session inheritance; pick the tier by the complexity of the task being reviewed from that table (do not restate it here)
     - Each agent reviews one task against specs, architecture, code quality, and testing checklists
     - **Review does not move the task file** — it returns a verdict (`approved` / `fix_needed`). The task stays in `tasks/review/`
     - Issues found → create fix task in `tasks/ready/`
