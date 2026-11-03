@@ -8,7 +8,7 @@ TASK-MONO-825
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -79,3 +79,13 @@ monorepo
 # Failure Scenarios
 
 - 정본 이름을 틀리게 적으면 링크가 끊긴다 → 리뷰에서 경로·절 이름을 대조한다.
+
+# Implementation — 2026-11-03 UTC
+
+- `process-tasks.md` Phase 2 step 5 아래 첫 하위 항목으로 `model=` 명시 지시 1줄 추가(`git diff --stat` = 1 file, 1 insertion). Phase 1(59행)과 같은 형식, tier 표는 복사하지 않음.
+
+# Verification
+
+- **AC-1** ✅ 추가 문구가 `/review-task` batch mode(`review-task.md:113` `## Batch Mode`) 와 `CLAUDE.md` § Recommending Tasks and Dispatching Agents(`CLAUDE.md:223`)를 가리킨다 — 두 절 모두 실재 확인.
+- **AC-2** ✅ 구현 diff = `.claude/commands/process-tasks.md` 한 파일. 문구에 서비스명·프로젝트명 없음.
+- **AC-3** ⏳ impl PR CI 결과로 닫는다(close chore 의 4-dim (c)).
