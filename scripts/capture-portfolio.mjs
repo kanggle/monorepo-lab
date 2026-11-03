@@ -68,7 +68,7 @@
 // =============================================================================
 
 import { mkdir, writeFile } from 'node:fs/promises';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -152,15 +152,34 @@ function fileToRoute(appDir, file) {
 //    임시 디렉터리에 가짜 `app/` 트리를 세워 **이 함수 자신**을 재기 때문이다(사본이 아니라).
 //    🔴 `join` 이면 임시 경로가 REPO_ROOT 뒤에 이어 붙어 «디렉터리가 없습니다» 로 죽는다.
 //    저장소의 세 앱에 대한 동작은 **한 글자도 안 바뀐다**(상대 경로는 join 과 같다).
+// 🔵 «리다이렉트 전용» 페이지 — `redirect()` 를 부르고 **JSX 를 하나도 안 그리는** 파일.
+//    촬영하면 넘어간 곳의 화면이 **중복으로** 찍히고(콘솔 `/` · `/console` → `/dashboards/overview`),
+//    동적 꼴이면 부모 목록도 리다이렉트라 «동적 해결 실패» 로 남는다(store `/orders/[id]` →
+//    `/my/orders/[id]` — 09-22 부터 «앱 쪽 사유» 로 잘못 적혀 있던 칸).
+//    🔴 인증 분기(`if (!session) redirect('/login')` 뒤에 화면을 그리는 것)는 **안 걸린다** —
+//       JSX 가 있으면 페이지다. 2026-11-03 세 앱 113쪽 실측: `redirect(` 37쪽 중 전용 5쪽.
+const JSX_RE = /<\/[A-Za-z]|\/>|<>/;
+export function isRedirectOnly(src) {
+  return /\bredirect\(/.test(src) && !JSX_RE.test(src);
+}
+
 export function deriveRoutes(app) {
   const dir = resolve(REPO_ROOT, app.appDir);
   if (!existsSync(dir)) return { error: `app 디렉터리가 없습니다: ${app.appDir}` };
-  const routes = walkPages(dir).map((f) => fileToRoute(dir, f));
+  const files = walkPages(dir);
+  const routes = files.map((f) => fileToRoute(dir, f));
   const uniq = [...new Set(routes)].sort();
+  const redirects = [...new Set(
+    files.filter((f) => isRedirectOnly(readFileSync(f, 'utf8'))).map((f) => fileToRoute(dir, f)),
+  )].sort();
+  // 🔴 `all` 은 리다이렉트 전용도 **그대로 담는다** — staleness 가드가 «라우트 파일이 실재하는가»
+  //    를 `all` 로 재고, 리다이렉트도 실재하는 라우트다. 빼는 것은 **촬영 계획**(static/dynamic)뿐이다.
+  const shoot = uniq.filter((r) => !redirects.includes(r));
   return {
     all: uniq,
-    static: uniq.filter((r) => !r.includes('[')),
-    dynamic: uniq.filter((r) => r.includes('[')),
+    static: shoot.filter((r) => !r.includes('[')),
+    dynamic: shoot.filter((r) => r.includes('[')),
+    redirects,
   };
 }
 
@@ -551,6 +570,41 @@ async function sanityCheck(page, app, probePath) {
 // 🔴 id 를 **손으로 박지 않는다**(TASK-MONO-648 AC-1). 시드가 바뀌는 날 404 를 찍고,
 //    그 실패는 **조용하다** — 이미지는 생기기 때문이다.
 //    목록 페이지에서 **실제 링크**를 하나 골라 따라간다.
+// 🔵 링크 고르기는 **순수 함수**다 — `--self-test` 가 브라우저 없이 같은 코드를 잰다.
+//    받는 꼴은 둘이다:
+//      · `${parent}/<seg>`        → 꼬리를 붙인다(`/x/1` + `/edit`)
+//      · `${parent}/<seg>${tail}` → 그대로 쓴다. 🔴 목록이 **편집 링크만** 그리는 화면이 있다 —
+//        알림 템플릿 표는 행마다 `/templates/<id>/edit` 뿐이고 `/templates/<id>` 는 라우트도 없다.
+//        옛 필터(«하위 경로가 더 붙은 것 제외»)가 그 링크를 버려서 09-22 부터 «목록에 상세 링크가
+//        없다» 로 적혔다 — 링크는 처음부터 있었다(`NotificationsTable.tsx`).
+//    `${parent}/new` 는 생성 화면이라 «어떤 항목» 이 아니다.
+export function pickDetailLink(hrefs, parent, tail) {
+  for (const h of hrefs) {
+    if (!h || !h.startsWith(parent + '/')) continue;
+    const rest = h.slice(parent.length + 1);
+    const slash = rest.indexOf('/');
+    const seg = slash === -1 ? rest : rest.slice(0, slash);
+    if (!seg || seg === 'new') continue;
+    if (slash === -1) return h + tail;
+    if (tail && rest.slice(slash) === tail) return h;
+  }
+  return null;
+}
+
+// 🔵 어느 페이지에서 링크를 찾는가 — 부모 → **조상** → 홈.
+//    🔴 조상 칸이 없어서 `/ecommerce/settlements/periods/[id]` 가 «부모 목록 404» 로 남았다:
+//       정산 기간 목록은 자기 라우트가 없고 `/ecommerce/settlements` 화면 안에 그려진다
+//       (`SettlementPeriodsTable.tsx`). fan `/posts/[id]` 는 조상이 없어 그대로 홈으로 간다.
+export function visitOrder(parent) {
+  const out = [parent];
+  for (let p = parent; p.lastIndexOf('/') > 0; ) {
+    p = p.slice(0, p.lastIndexOf('/'));
+    out.push(p);
+  }
+  if (!out.includes('/')) out.push('/');
+  return out;
+}
+
 async function resolveDynamic(page, app, route) {
   // "/ecommerce/products/[id]/edit" → 부모 목록 "/ecommerce/products", 꼬리 "/edit"
   const idx = route.indexOf('/[');
@@ -559,38 +613,26 @@ async function resolveDynamic(page, app, route) {
   // 🔴 «어느 페이지를 볼 것인가»(visit)와 «어떤 접두사의 링크를 찾을 것인가»(prefix)는
   //    **다른 것**이다. 처음엔 하나로 합쳐 뒀는데, 홈(`/`)에서 찾을 때 접두사가 `'//'` 가
   //    되어 **링크가 눈앞에 있는데 0건**이 나왔다(2026-09-09 실측: fan 홈에 `/posts/…` 10개).
-  const findLink = async (visit, prefix) => {
+  //    조상에서 찾을 때도 접두사는 **부모**다.
+  const findLink = async (visit) => {
     const res = await page.goto(app.baseUrl + visit, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    if (!res || res.status() !== 200) return { status: res ? res.status() : 0, href: null };
+    if (!res || res.status() !== 200) return { status: res ? res.status() : 0, path: null };
     await page.waitForTimeout(1500);
-    const href = await page.evaluate((p) => {
-      const links = [...document.querySelectorAll('a[href]')].map((a) => a.getAttribute('href'));
-      // `/x/new` 는 생성 화면이라 «어떤 항목» 이 아니다. 하위 경로가 더 붙은 것도 제외
-      // (`/x/1/edit` 를 잡으면 꼬리가 두 번 붙는다).
-      const cand = links.filter(
-        (h) => h && h.startsWith(p + '/') && h !== p + '/new' && h.slice(p.length + 1).indexOf('/') === -1,
-      );
-      return cand[0] || null;
-    }, prefix);
-    return { status: 200, href };
+    const hrefs = await page.evaluate(() =>
+      [...document.querySelectorAll('a[href]')].map((a) => a.getAttribute('href')));
+    return { status: 200, path: pickDetailLink(hrefs, parent, tail) };
   };
 
-  // ① 부모 목록에서 찾는다 — 대개 여기서 끝난다
-  const r = await findLink(parent, parent);
-  if (r.href) return { ok: true, path: r.href + tail, via: parent };
-
-  // ② 🔵 부모 «목록 페이지» 가 없는 경우가 실제로 있다 — fan 의 `/posts/[id]` 가 그렇다
-  //    (실측: `/posts` 는 404 이고 링크는 피드 `/` 에 있다). 앱 홈에서 **같은 접두사**로
-  //    한 번 더 찾는다. 🔴 그래도 못 찾으면 **실패로 세고 이름을 댄다** — 아무거나 집어넣지 않는다.
-  const home = await findLink('/', parent);
-  if (home.href) return { ok: true, path: home.href + tail, via: '/' };
-
+  // 부모 목록에서 대개 끝난다. 🔴 끝까지 못 찾으면 **실패로 세고 이름을 댄다** — 아무거나 집어넣지 않는다.
+  const tried = [];
+  for (const visit of visitOrder(parent)) {
+    const r = await findLink(visit);
+    if (r.path) return { ok: true, path: r.path, via: visit };
+    tried.push(`${visit}(${r.status})`);
+  }
   return {
     ok: false,
-    reason:
-      r.status === 200
-        ? `목록에 따라갈 항목이 없습니다: ${parent} (홈에서도 못 찾음)`
-        : `부모 목록이 ${r.status}: ${parent} — 홈(/)에서도 ${parent}/… 링크를 못 찾았습니다`,
+    reason: `${parent}/…${tail} 링크를 못 찾았습니다 — 본 곳: ${tried.join(' · ')}`,
   };
 }
 
@@ -793,6 +835,8 @@ async function main() {
     totalStatic += r.static.length;
     totalDynamic += r.dynamic.length;
     console.log(`  ${k.padEnd(8)} ${APPS[k].label.padEnd(12)} 정적 ${String(r.static.length).padStart(3)} · 동적 ${String(r.dynamic.length).padStart(2)} · 합계 ${r.all.length}`);
+    // 빠진 것은 **이름을 댄다** — 조용히 줄어든 계획은 «덜 찍었다» 와 구별이 안 된다
+    if (r.redirects.length) console.log(`           리다이렉트 전용 ${r.redirects.length} (안 찍음): ${r.redirects.join(' · ')}`);
   }
   console.log(`[portfolio] 합계 ${totalStatic + totalDynamic} 페이지 (정적 ${totalStatic} · 동적 ${totalDynamic})`);
 
@@ -962,6 +1006,36 @@ async function main() {
       console.log(`  ${ok ? '✔' : '✗'} ${c.name}  want=${c.want} got=${got}`);
     }
 
+    // --- 동적 경로 해결 · 리다이렉트 전용 (TASK-MONO-648 AC-1 — 09-22 부터 남은 셋) ---
+    // 🔴 양성 칸 셋은 «앱 쪽 사유» 로 적혀 있던 그 셋의 **실제 모양**이다. 대조군은 옛 동작이
+    //    옳았던 모양 — 고친 것이 그쪽을 깨면 빨갛다.
+    const routeCases = [
+      { name: 'link-edit-only-list', want: '/ecommerce/notifications/templates/t1/edit',
+        got: () => pickDetailLink(['/ecommerce/notifications/templates/new', '/ecommerce/notifications/templates/t1/edit'],
+          '/ecommerce/notifications/templates', '/edit') },
+      { name: 'link-plain-plus-tail', want: '/ecommerce/products/p1/edit',
+        got: () => pickDetailLink(['/ecommerce/products/new', '/ecommerce/products/p1'], '/ecommerce/products', '/edit') },
+      { name: 'link-control-no-tail-skips-subpath', want: '/ecommerce/orders/o2',
+        got: () => pickDetailLink(['/ecommerce/orders/o1/refund', '/ecommerce/orders/o2'], '/ecommerce/orders', '') },
+      { name: 'link-control-other-tail-rejected', want: null,
+        got: () => pickDetailLink(['/x/1/history', '/x/new', '/xy/2'], '/x', '/edit') },
+      { name: 'visit-ancestor-before-home', want: '/ecommerce/settlements/periods|/ecommerce/settlements|/ecommerce|/',
+        got: () => visitOrder('/ecommerce/settlements/periods').join('|') },
+      { name: 'visit-control-top-level', want: '/posts|/', got: () => visitOrder('/posts').join('|') },
+      { name: 'redirect-only-page', want: true,
+        got: () => isRedirectOnly("import { redirect } from 'next/navigation';\nexport default async function P({ params }: { params: Promise<{ id: string }> }) {\n  const { id } = await params;\n  redirect(`/my/orders/${id}`);\n}\n") },
+      { name: 'redirect-control-auth-gate-renders', want: false,
+        got: () => isRedirectOnly("if (!session) redirect('/login');\nreturn (<section><h1>개요</h1></section>);") },
+      { name: 'redirect-control-fragment-renders', want: false,
+        got: () => isRedirectOnly("if (x) redirect('/a');\nreturn <><Foo /></>;") },
+    ];
+    for (const c of routeCases) {
+      const got = c.got();
+      const ok = got === c.want;
+      if (!ok) bad++;
+      console.log(`  ${ok ? '✔' : '✗'} ${c.name}  want=${JSON.stringify(c.want)} got=${JSON.stringify(got)}`);
+    }
+
     // --- ③ 사전 확인이 저하를 **보는가** (TASK-MONO-711 ①) ---------------------
     // 🔴 위 ②는 `judgeDegraded()` 를 **직접** 부른다 — 그래서 «프로브가 그것을 부르는가» 는
     //    한 칸도 안 묻는다. 2026-09-18 창에서 프로브는 저하 화면을 `✔` 로 통과시켰고, 그때
@@ -1035,8 +1109,8 @@ async function main() {
       console.error(`[portfolio] ✗ self-test 픽스처가 공허합니다 (거부 ${pos}/${neg} · 저하 ${degPos}/${degNeg} · 프로브 저하${probeDeg}/정상${probeClean}/차단${probeBlocked} · 빈값 ${txt('empty', true)}/${txt('empty', false)} · 영문저하 ${txt('degraded', true)}/${txt('degraded', false)} · 장별문구 ${shotPos}/${shotNeg})`);
       process.exit(1);
     }
-    const total = cases.length + degCases.length + probeCases.length + textCases.length;
-    console.log(`[portfolio] self-test ${total - bad}/${total} (거부 ${pos} · 비거부 ${neg} · 저하 ${degPos} · 비저하 ${degNeg} · 프로브 ${probeCases.length} · 문구표지 ${textCases.length} · 장별문구 ${shotPos}/${shotNeg})`);
+    const total = cases.length + degCases.length + probeCases.length + textCases.length + routeCases.length;
+    console.log(`[portfolio] self-test ${total - bad}/${total} (거부 ${pos} · 비거부 ${neg} · 저하 ${degPos} · 비저하 ${degNeg} · 프로브 ${probeCases.length} · 문구표지 ${textCases.length} · 장별문구 ${shotPos}/${shotNeg} · 경로해결 ${routeCases.length})`);
     process.exit(bad ? 1 : 0);
   }
 
@@ -1162,6 +1236,7 @@ async function main() {
     apps: Object.fromEntries(keys.map((k) => [k, { label: APPS[k].label, baseUrl: APPS[k].baseUrl }])),
     counts: { planned: totalStatic + totalDynamic, captured: shots.length, failed: failures.length },
     probes,
+    redirects: keys.flatMap((k) => plan[k].redirects.map((route) => ({ app: k, route }))),
     shots,
     failures,
   };

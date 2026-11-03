@@ -1847,3 +1847,18 @@ IAM 쪽을 더 원하면 이 둘을 대체 후보로 쓸 수 있다.
 - 🔵 장별 판정의 `textHits`(사람이 열어 볼 `deniedTextOnly` 목록)는 계속 **페이지 전체** 글자에서 찾는다 — 카드 거부 문구가 그 목록에 오르는 것은 옛 동작 그대로다(기존 픽스처 `dashboard-card-forbidden` textHit=true 불변).
 - 🔴 **새 한계 (기록):** `allCardsDenied` 는 카드 컨테이너의 testid 모양(`…-card-<domain>`, 꼬리 없음)에 기댄다. 개요 DOM 이 그 모양을 버리면 «카드 전부 거부» 를 못 보고, 그때 프로브는 요소 밖 문구로만 막는다(틀리면 «찍는» 쪽 — 사진은 생기고 `partialDenied` 표지가 붙는다).
 - ⚪ 실제 콘솔에서의 확인은 다음 촬영 창이다 — 22차 창과 같은 설정(`demo-corp` · 개요 프로브)에서 콘솔이 0장이 아니어야 한다.
+
+# 🔴 CORRECTION (2026-11-03 UTC) — 동적 경로 «앱 쪽 사유» 셋은 앱이 아니라 **촬영 스크립트**였다 · 고침
+
+09-22 부터 세 절(§ 동적 경로 16개 · § 16차 AMI 창 · § ⏳ 남은 것)이 «앱 쪽 사유라 재촬영으로 안 풀린다» 고 적었다. 오늘 코드로 셋 다 열어 보니 **앱은 링크를 그리고 있었고**, 못 따라간 것은 `resolveDynamic()` 이었다.
+
+| 경로 | 적혀 있던 사유 | 실제 (file) | 고친 것 (`scripts/capture-portfolio.mjs`) |
+|---|---|---|---|
+| `/ecommerce/notifications/templates/[id]/edit` | 템플릿 목록에 상세 링크가 없다 | 목록은 행마다 `/templates/<id>/edit` 를 그린다(`NotificationsTable.tsx:86`, 07-06 부터). `/templates/<id>` 라우트는 없다 ⇒ 옛 필터 «하위 경로가 더 붙은 것 제외» 가 **유일한 링크를 버렸다** | `pickDetailLink()` 가 `${parent}/<seg>${tail}` 꼴도 받는다 |
+| `/ecommerce/settlements/periods/[id]` | 부모 목록이 404 | 기간 목록은 자기 라우트가 없고 `/ecommerce/settlements` 화면 안에서 `/settlements/periods/<id>` 링크를 그린다(`SettlementPeriodsTable.tsx:99`). 해결기는 부모 → 홈만 봤다 | `visitOrder()` = 부모 → **조상** → 홈 |
+| store `/orders/[id]` | (사유 미기재) | 페이지가 아니라 `/my/orders/[id]` 로의 **리다이렉트 전용**(`(store)/orders/[id]/page.tsx`) — 그 표적은 이미 찍히고 있다 | `deriveRoutes()` 가 리다이렉트 전용(`redirect(` 있고 JSX 없음)을 `redirects` 로 분리 → 촬영 계획에서 빼고 출력·매니페스트에 이름을 남긴다 |
+
+- **리다이렉트 전용 판정의 모집단 (2026-11-03 실측):** 세 앱 113쪽 중 `redirect(` 를 부르는 37쪽 → 전용 **5쪽**: 콘솔 `/` · `/console`(→ `/dashboards/overview`) · `/fan`(→ `/fan/agencies`) · store `/orders` · `/orders/[id]`. 나머지 32쪽은 인증 분기 뒤 화면을 그린다(JSX) ⇒ 안 걸린다. 🔵 앞의 넷은 지금까지 **표적 화면의 중복 사진**이었다. `all` 은 그대로라 staleness 가드(모드 A·B)는 영향 없음 — `node scripts/check-capture-route-staleness.mjs` rc=0 · `--self-test` 24/24.
+- **증거:** `--self-test` 에 «경로해결» 9칸(양성 = 위 셋의 실제 모양 · 대조군 = 옛 동작이 옳았던 모양: 꼬리 없는 경로의 하위 링크 제외 · 다른 꼬리 거부 · 최상위 부모 · 인증 분기/프래그먼트 페이지). 🔴 이 호스트에선 전체 `--self-test` 를 못 돌렸다 — 설치된 브라우저(`chromium-1248`)가 저장소의 Playwright 1.59.1/1.60.0 과 안 맞는다. 새 칸은 브라우저가 필요 없는 순수 함수라 같은 함수를 import 해 같은 입력으로 쟀다(8/8), 그리고 옛 필터가 편집 전용 목록에서 `null` 을 내는 것(= 09-22 실패)을 재현했다. 전체 self-test 는 CI `frontend-e2e-smoke` 가 돈다.
+- 🔴 **남는 조건 (창에서 확인):** 템플릿 편집 링크는 `canWrite`(ecommerce 영역 `*_WRITE`, `TASK-PC-FE-346` 10-18)일 때만 그려진다. 촬영 운영자에게 그 역할이 없으면 이 칸은 여전히 «링크를 못 찾았습니다 — 본 곳: …» 로 남는다 — 이번엔 **사유가 맞게** 적힌다. 정산 기간은 `ecommerce` 테넌트에 기간 행이 있어야 한다(22차 촬영본에 CLOSED/OPEN 2건 있었다).
+- ⇒ AC-1 동적 경로 칸은 **다음 촬영 창**에서 `DEMO_TENANT=ecommerce` 로 두 칸이 찍히는지 보고 닫는다. 재촬영으로 안 풀린다는 앞의 판정은 철회한다.
