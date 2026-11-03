@@ -8,7 +8,7 @@ TASK-MONO-825
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -89,3 +89,9 @@ monorepo
 - **AC-1** ✅ 추가 문구가 `/review-task` batch mode(`review-task.md:113` `## Batch Mode`) 와 `CLAUDE.md` § Recommending Tasks and Dispatching Agents(`CLAUDE.md:223`)를 가리킨다 — 두 절 모두 실재 확인.
 - **AC-2** ✅ 구현 diff = `.claude/commands/process-tasks.md` 한 파일. 문구에 서비스명·프로젝트명 없음.
 - **AC-3** ⏳ impl PR CI 결과로 닫는다(close chore 의 4-dim (c)).
+
+---
+
+## CORRECTION — 2026-11-03 UTC (close chore)
+
+위 AC-3 의 ⏳ 는 이제 사실이 아니다. **AC-3 ✅** — impl PR #4622(squash `6f9357a2d`) 머지 전 체크: 실패 0 · SUCCESS 7(필수 4개 `changes` · `INDEX queue drift …` · `Task ID collision …` · `Walkthrough limitation ledger drift …` 전부 실제로 돌았다 + `Claude reference integrity` · `Lifecycle stage dirs` · `Owner-only demo operator`) · SKIPPED 61. 🔵 그 PR 은 머지 직전 #4620 과 `tasks/INDEX.md` 인접 행에서 충돌해 `origin/main` 을 병합해 풀었다(824 행은 main 문구 채택) — 위 체크는 그 병합 뒤 head `122ac5e05` 의 것이다. 구현 줄은 `origin/main` 의 `process-tasks.md` 에 1건 있다.
