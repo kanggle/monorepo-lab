@@ -8,7 +8,7 @@ TASK-PC-FE-364
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -325,3 +325,32 @@ frontend
 - 위 36차 CORRECTION 의 «권한 집합이 하나뿐인 운영자가 있어야 재는데 시드에 없다» 는 맞지만, 그것이 «측정 불가» 를 뜻하지는 않았다. 초대 API(`POST /api/admin/operator-invitations`, 메일은 `iam-mailpit`)와 세트 배정 API(`POST/DELETE /api/admin/operators/{id}/domain-permission-sets`)로 **창 안에서 그 운영자를 만들 수 있었고**, 36차 창에서 놓쳤다.
 - 시드 변경 · 굽기는 필요 없다. 다음 창 절차 = `TASK-MONO-672` § Order 22 (소유자 결정 2026-10-28 UTC: 다음 창에서 측정). 기존 시드 운영자를 좁혀 쓰지 않는 이유도 거기 있다(전부 `legacy-compat` · `MIGRATION` 한 행 — 회수 후 재배정은 `DIRECT`).
 - ⇒ review 유지 — 남은 것: AC-3 권한별 «권한 없음» 표(다음 창, 672 § Order 22).
+
+---
+
+## CORRECTION — 37차 창 AC-3 권한별 표 (2026-11-09 UTC)
+
+- **AC-3 — ✅ (⚪ 하나, 소유자 선택).** `TASK-MONO-672` § Order 22 절차대로, 창 안에서 단일 세트 운영자를 만들었다(시드 · 굽기 변경 없음).
+  - 운영자: `narrow-1109@example.com`(`01a1bf6c-223c-76d1-b913-e6c8b580f37d`) — `demo@` 의 운영자 토큰으로 `POST /api/admin/operator-invitations`(역할 `SUPPORT_READONLY`) → `iam-mailpit` 링크 → `/operator-invitations/signup` → 이메일 인증 → 수락 200 «Demo Corporation 의 운영자가 되었습니다». 수락 직후 `GET …/domain-access` = 세트 0.
+  - 세트마다 `POST …/domain-permission-sets` → 그 운영자의 새 교환 토큰(`demo-corp`) → 카드 여섯 출처 호출 → `DELETE`(204). 토큰 역할은 세트마다 그 세트의 역할만 실렸다(예: `scm-procurement-operate` → `SCM_OPERATOR SCM_PROCUREMENT_READ SCM_PROCUREMENT_WRITE`).
+
+| 세트 | IAM | WMS | SCM | Finance | ERP | ecommerce |
+|---|---|---|---|---|---|---|
+| (없음) | 200 | 200 | 403 | 403 | 403 | 403 |
+| `scm-procurement-operate` | 200 | 200 | **200** | 403 | 403 | 403 |
+| `scm-inventory-visibility-operate` | 200 | 200 | 403 | 403 | 403 | 403 |
+| `finance-ledger-operate` | 200 | 200 | 403 | **200** | 403 | 403 |
+| `finance-account-operate` | 200 | 200 | 403 | 403 | 403 | 403 |
+| `erp-approval-operate` | 200 | 200 | 403 | 403 | **200** (`actorEmployeeId` 없음 → «직원 연결 없음») | 403 |
+| `erp-masterdata-operate` | 200 | 200 | 403 | 403 | 403 | 403 |
+| `ecommerce-order-operate` | 200 | 200 | 403 | 403 | 403 | **200** |
+| `ecommerce-product-operate` | 200 | 200 | 403 | 403 | 403 | 403 (`ACCESS_DENIED`) |
+| `scm-read`(대조군) | 200 | 200 | **200** | 403 | 403 | 403 |
+
+  - 판정: `## 권한별 «권한 없음» 변화` 표의 «이후» 열과 **전부 일치** — procurement · ledger · approval · order 는 자기 카드 ok, inventory-visibility · account · masterdata · product 는 권한 없음, 다른 도메인 카드는 전부 권한 없음, `*-read` 대조군은 자기 카드 ok.
+  - 화면 1회(`scm-procurement-operate` 배정, `https://console.hubwang.com` 실제 로그인 · Playwright): SCM 발주 «제출 대기 발주 (초안) 1», Finance 대사 · ERP 결재 · ecommerce 주문 «이 도메인 조회 권한이 없습니다. 사유: PERMISSION_DENIED», 사이드바 Finance · ERP · E-Co «업무 권한 없음», 도메인 상태 «정상 6».
+  - ⚪ 플랫폼 SUPER_ADMIN `'*'` 토큰의 ERP 행: 672 § Order 22 가 «소유자가 고를 때만» 으로 둔 행 — 이번 창에서 고르지 않았다(추정 행 그대로).
+  - 🔵 관측(이 티켓 범위 밖): WMS 카드는 WMS 세트가 **하나도 없는** 운영자에게도 200 이었다(전 행). 표가 적은 «WMS 게이트 `WMS_VIEWER` · 변화 없음» 의 «변화 없음» 은 성립하지만, 그 게이트가 WMS 역할 없는 토큰을 거절하지 않았다. 672 § 37th window Findings 2 에 기록.
+  - 정리: 배정 전부 회수(세트 0) · 운영자 `SUSPENDED`(볼륨에 남음 — 672 기록).
+- 35차의 로그인 ✅ · 익명 ✅ 와 합쳐 AC-3 의 세 부분(배포 · 익명 샘플 · 로그인 권한별 표)이 모두 측정됐다.
+- ⇒ done(4차원: #4469 MERGED · `db35564fc` ⊂ main · 실패 0 · AC 절 열어 확인). 체크 칸은 동결 규칙대로 고치지 않았다.
