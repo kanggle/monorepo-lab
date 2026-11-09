@@ -126,7 +126,8 @@ jobs:
   # ===========================================================================
   federation-hardening-e2e-fullstack:
     name: Federation Hardening E2E full-stack (Playwright + docker compose)
-    runs-on: ubuntu-latest
+    # TASK-MONO-826: Playwright 가 ubuntu26.04-x64 chromium 설치를 거부해 ubuntu-24.04 고정. 되돌릴 조건: Playwright 가 26.04 를 지원하는 버전으로 올라가고 그 버전에서 26.04 디스패치가 초록일 때 ubuntu-latest 로 복귀. ubuntu-24.04 러너 이미지 지원 종료일: 미확인.
+    runs-on: ubuntu-24.04
     needs: federation-hardening-boot-jars
     timeout-minutes: 50
     if: github.repository == 'kanggle/monorepo-lab'
