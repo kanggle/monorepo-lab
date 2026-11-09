@@ -670,8 +670,9 @@ A production deployment names neither, so it applies none of this seed and
 > global `WMS_SUPERADMIN` assignment under a UUID this repository publishes.
 >
 > Removing it from production closes no surface: authorisation reads the JWT
-> (`SecurityConfig` role claim + `entitled_domains` → `ROLE_WMS_VIEWER`
-> synthesis), never `admin_role`, and `permissions_json` is only ever read back
+> (`SecurityConfig` role claims — the `entitled_domains` → `ROLE_WMS_VIEWER`
+> synthesis it also used was removed by TASK-MONO-827), never `admin_role`, and
+> `permissions_json` is only ever read back
 > out through the role CRUD API. `DevSeedScopeIT` pins both halves.
 >
 > 🔴 A database seeded under the old arrangement **will refuse to boot with

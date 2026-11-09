@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 import java.util.UUID;
+import com.wms.admin.api.ReadGates;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** {@code admin-service-api.md § 1.2} — daily inbound + outbound counters. */
 @RestController
 @RequestMapping("/api/v1/admin/dashboard/throughput")
-@PreAuthorize("hasRole('WMS_VIEWER')")
+@PreAuthorize(ReadGates.ANY_WMS_BUSINESS_ROLE)
 public class ThroughputDashboardController {
 
     private static final int MAX_RANGE_DAYS = 90;

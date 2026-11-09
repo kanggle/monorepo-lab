@@ -15,15 +15,14 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Unit tests for the {@code jwtAuthenticationConverter} entitlement-trust
- * READ-visibility synthesis (ADR-MONO-019 § D5, ADR-MONO-020 D4, TASK-MONO-162).
+ * Unit tests for {@code SecurityConfig#jwtAuthenticationConverter}.
  *
- * <p>A wms-entitled token ({@code entitled_domains ∋ "wms"}) is granted
- * {@code ROLE_WMS_VIEWER} so the {@code @PreAuthorize("hasRole('WMS_VIEWER')")}
- * READ dashboards pass — but ONLY the VIEWER role: the WRITE-gated roles
- * (WMS_OPERATOR/WMS_ADMIN/WMS_SUPERADMIN) are never synthesised, so an
- * entitlement-only token cannot satisfy a WRITE check. Existing role/scope
- * tokens authorize exactly as before (net-zero).
+ * <p>TASK-MONO-827 (ADR-MONO-083 · owner decision Q1, 2026-11-09 UTC): authorities are the token's
+ * {@code roles} / {@code role} claims and nothing else. The converter used to synthesise
+ * {@code ROLE_WMS_VIEWER} from {@code entitled_domains ∋ "wms"} (TASK-MONO-162); these cells pin
+ * that it no longer does, for every claim shape the old synthesis reacted to. The end-to-end
+ * consequence (subscription only → dashboards 403) is pinned through the real chain by
+ * {@code DashboardBusinessRoleGateSliceTest}.
  */
 class SecurityConfigConverterTest {
 
@@ -38,56 +37,42 @@ class SecurityConfigConverterTest {
     }
 
     @Test
-    @DisplayName("entitled (entitled_domains ∋ wms) → ROLE_WMS_VIEWER granted (READ passes)")
-    void entitledGrantsViewer() {
+    @DisplayName("MONO-827: entitled_domains ∋ wms + 역할 없음 → 권한 0 (VIEWER 합성 없음)")
+    void entitlementAloneGrantsNothing() {
         Set<String> auth = authorities(Map.of(
                 "tenant_id", "globex-corp",
                 "entitled_domains", List.of("wms", "finance"),
                 "sub", "u"));
-        assertThat(auth).contains("ROLE_WMS_VIEWER");
+        assertThat(auth).isEmpty();
     }
 
     @Test
-    @DisplayName("entitlement-only token does NOT receive WRITE roles (WRITE stays denied)")
-    void entitledDoesNotGrantWriteRoles() {
+    @DisplayName("MONO-827: 업무 역할 토큰 → 그 역할만 (entitled_domains 가 VIEWER 를 덧붙이지 않는다)")
+    void businessRolesPassThroughWithoutViewer() {
         Set<String> auth = authorities(Map.of(
                 "tenant_id", "globex-corp",
                 "entitled_domains", List.of("wms"),
+                "roles", List.of("INVENTORY_READ"),
                 "sub", "u"));
-        assertThat(auth)
-                .contains("ROLE_WMS_VIEWER")
-                .doesNotContain("ROLE_WMS_OPERATOR", "ROLE_WMS_ADMIN", "ROLE_WMS_SUPERADMIN");
+        assertThat(auth).containsExactly("ROLE_INVENTORY_READ");
     }
 
     @Test
-    @DisplayName("neither role nor wms entitlement → no synthesised authority (denied)")
-    void neitherRoleNorEntitlementDenied() {
-        Set<String> auth = authorities(Map.of(
-                "tenant_id", "acme",
-                "entitled_domains", List.of("finance", "scm"),
-                "sub", "u"));
-        assertThat(auth).doesNotContain("ROLE_WMS_VIEWER");
-    }
-
-    @Test
-    @DisplayName("net-zero: explicit roles claim still resolves (entitlement adds, never replaces)")
-    void explicitRolesUnaffected() {
+    @DisplayName("roles 클레임은 그대로 ROLE_ 접두로 풀린다")
+    void explicitRolesResolve() {
         Set<String> auth = authorities(Map.of(
                 "tenant_id", "wms",
                 "roles", List.of("WMS_ADMIN"),
                 "sub", "u"));
-        assertThat(auth).contains("ROLE_WMS_ADMIN");
-        // No entitled_domains claim → no synthesised VIEWER (pure legacy path).
-        assertThat(auth).doesNotContain("ROLE_WMS_VIEWER");
+        assertThat(auth).containsExactly("ROLE_WMS_ADMIN");
     }
 
     @Test
-    @DisplayName("claim-shape safety: non-list entitled_domains → no VIEWER (fail-closed)")
-    void malformedEntitlementNoViewer() {
-        Set<String> auth = authorities(Map.of(
-                "tenant_id", "acme",
-                "entitled_domains", "wms",
-                "sub", "u"));
-        assertThat(auth).doesNotContain("ROLE_WMS_VIEWER");
+    @DisplayName("레거시 role 클레임(문자열·배열)도 ROLE_ 접두로 풀린다")
+    void legacyRoleClaimResolves() {
+        assertThat(authorities(Map.of("tenant_id", "wms", "role", "WMS_OPERATOR", "sub", "u")))
+                .containsExactly("ROLE_WMS_OPERATOR");
+        assertThat(authorities(Map.of("tenant_id", "wms", "role", List.of("WMS_VIEWER"), "sub", "u")))
+                .containsExactly("ROLE_WMS_VIEWER");
     }
 }

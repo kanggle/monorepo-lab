@@ -42,8 +42,9 @@ import org.springframework.test.web.servlet.MockMvc;
  * {@code ResourceServerChainAssembler} (ADR-MONO-058 § D4, TASK-BE-569 AC-3/AC-4).
  *
  * <p>admin-service is the divergent one of the five: it declares a {@code RoleHierarchy}
- * bean and its {@code jwtAuthenticationConverter} synthesises {@code ROLE_WMS_VIEWER}
- * from the verified {@code entitled_domains} claim. Both of those are load-bearing
+ * bean, and its {@code jwtAuthenticationConverter} used to synthesise {@code ROLE_WMS_VIEWER}
+ * from the verified {@code entitled_domains} claim (removed by TASK-MONO-827 — the cell
+ * below now pins the absence). Both of those are load-bearing
  * <em>through the assembled chain</em>, and neither is provable with a
  * {@code SecurityMockMvcRequestPostProcessors.jwt()} post-processor — that builds an
  * {@code Authentication} directly and never runs the chain's converter. The two tests
@@ -52,8 +53,9 @@ import org.springframework.test.web.servlet.MockMvc;
  * hierarchy decide the outcome:
  *
  * <ul>
- *   <li>{@link #entitlementOnlyToken_reachesViewerDashboard()} — AC-3, the
- *       entitlement-trust dual-accept, end-to-end rather than at converter-unit level.</li>
+ *   <li>{@link #entitlementOnlyToken_isForbidden()} — the entitlement-trust dual-accept
+ *       admits the token but no longer authorises it (TASK-MONO-827), end-to-end rather than at
+ *       converter-unit level.</li>
  *   <li>{@link #roleHierarchy_adminSatisfiesTheViewerGate()} — the {@code RoleHierarchy}
  *       bean still reaching method security after the chain was reassembled.</li>
  * </ul>
@@ -134,12 +136,31 @@ class SecurityChainAssemblyParityTest {
 
     // ─── admin-service's two service-specific authorization mechanisms ────────
 
+    /**
+     * TASK-MONO-827 (owner decision Q1) flipped this cell. It used to read «entitled_domains ∋ wms +
+     * no role → 200» (TASK-MONO-162 AC-3, the {@code ROLE_WMS_VIEWER} synthesis); the synthesis is
+     * gone, so a subscription alone is admitted but authorised for nothing. The full per-dashboard
+     * matrix is {@code DashboardBusinessRoleGateSliceTest}.
+     */
     @Test
-    @DisplayName("AC-3 entitlement-trust: entitled_domains ∋ wms + 역할 없음 → VIEWER 대시보드 200")
-    void entitlementOnlyToken_reachesViewerDashboard() throws Exception {
+    @DisplayName("MONO-827: entitled_domains ∋ wms + 역할 없음 → 대시보드 403 (구독만으로는 안 열린다)")
+    void entitlementOnlyToken_isForbidden() throws Exception {
         stubOnePage();
         decoderReturns(b -> b.claim("tenant_id", "globex-corp")
                 .claim("entitled_domains", List.of("wms")));
+
+        mockMvc.perform(get(DASHBOARD).header("Authorization", "Bearer x"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("MONO-827: INVENTORY_READ 업무 역할 → 재고 대시보드 200")
+    void inventoryReadRole_reachesInventoryDashboard() throws Exception {
+        stubOnePage();
+        decoderReturns(b -> b.claim("tenant_id", "globex-corp")
+                .claim("entitled_domains", List.of("wms"))
+                .claim("roles", List.of("INVENTORY_READ")));
 
         mockMvc.perform(get(DASHBOARD).header("Authorization", "Bearer x"))
                 .andExpect(status().isOk());

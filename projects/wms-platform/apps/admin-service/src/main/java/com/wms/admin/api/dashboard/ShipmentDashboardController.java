@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
+import com.wms.admin.api.ReadGates;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1/admin/dashboard/shipments")
-@PreAuthorize("hasRole('WMS_VIEWER')")
+@PreAuthorize(ReadGates.OUTBOUND)
 public class ShipmentDashboardController {
 
     private static final String DEFAULT_SORT = "shippedAt,desc";

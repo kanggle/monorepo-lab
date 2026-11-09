@@ -39,8 +39,9 @@ import org.testcontainers.utility.DockerImageName;
  *
  * <p><b>Why removing it from production closes no surface.</b> Authorisation
  * here reads the JWT, never {@code admin_role}: {@code SecurityConfig} builds
- * authorities from the token's role claim plus the {@code entitled_domains} →
- * {@code ROLE_WMS_VIEWER} synthesis. {@code permissions_json} is only ever read
+ * authorities from the token's role claims (until TASK-MONO-827 also from an
+ * {@code entitled_domains} → {@code ROLE_WMS_VIEWER} synthesis, now removed — still
+ * the JWT, never the table). {@code permissions_json} is only ever read
  * back out through the role CRUD API. The obvious objection — "this is the only
  * source of admin_role, so the eight dashboards die" — is false, and
  * {@link #production_locationsOnly_seedNothingButTheSchemaIsComplete()} pins the

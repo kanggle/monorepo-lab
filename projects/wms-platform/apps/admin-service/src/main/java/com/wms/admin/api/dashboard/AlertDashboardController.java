@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import com.wms.admin.api.ReadGates;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,7 +47,7 @@ public class AlertDashboardController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('WMS_VIEWER')")
+    @PreAuthorize(ReadGates.ANY_WMS_BUSINESS_ROLE)
     public PageResponse<AlertLogResponse> list(
             @RequestParam(required = false) String alertType,
             @RequestParam(required = false) UUID warehouseId,

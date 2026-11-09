@@ -365,8 +365,9 @@ Full schema reflection lives in [`database-design.md`](database-design.md); doma
 - Role-to-permission mapping stored in `admin_role.permissions_json`.
   🔴 **Stored, not enforced from** (measured TASK-BE-587). `@PreAuthorize` names
   role strings directly and the authorities come from the JWT — `SecurityConfig`
-  reads the token's role claim and synthesises `ROLE_WMS_VIEWER` from an
-  `entitled_domains` containing `wms`. No authorisation decision reads this
+  reads the token's role claims (until TASK-MONO-827 it also synthesised
+  `ROLE_WMS_VIEWER` from an `entitled_domains` containing `wms` — removed, see
+  below). No authorisation decision reads this
   column; it is surfaced only through the role CRUD API (`RoleResponse`). That
   is why an empty `admin_role` table closes no dashboard, and it is the premise
   the dev-seed placement decision rests on — check it here before changing it.
@@ -383,24 +384,23 @@ Full schema reflection lives in [`database-design.md`](database-design.md); doma
   longer ride the `account_type` leg — their domain authorization rides the JWT
   `roles` claim only. IAM is authoritative on issuance; the gateway forwards the
   claim as `X-User-Role` and admin-service's `@PreAuthorize` consumes it.
-- **Entitlement-trust READ dual-accept** (ADR-MONO-019 § D5, ADR-MONO-020 D4 —
-  TASK-MONO-162): the `jwtAuthenticationConverter` (`config/SecurityConfig`)
-  synthesises **only** `ROLE_WMS_VIEWER` when the RS256/JWKS-verified
-  `entitled_domains` claim contains `wms` (reusing `TenantClaimValidator.isEntitled`),
-  so a wms-entitled token with no WMS role claim passes the READ
-  `@PreAuthorize("hasRole('WMS_VIEWER')")` dashboards (e.g.
-  `GET /api/v1/admin/dashboard/inventory`). The **WRITE-gated** roles
-  (`WMS_OPERATOR`/`WMS_ADMIN`/`WMS_SUPERADMIN`) are **never** synthesised —
-  entitlement-trust grants READ visibility only, never mutation authority.
-  Net-zero for role/scope/SUPER_ADMIN tokens (the branch only ADDS the VIEWER
-  authority; `entitled_domains` is read only from the verified token, so it is
-  unforgeable, and an absent/malformed claim grants nothing — fail-closed).
-  Since ADR-MONO-035 step 4a a console operator's assume-tenant token for a
-  wms-entitled tenant **also** carries `roles ∋ WMS_OPERATOR` directly (see the
-  operator domain-role source above), so the VIEWER synthesis now primarily
-  serves **non-operator** wms-entitled token shapes (e.g. a cross-domain entitled
-  reader holding no WMS role); it is retained **net-zero** as defense-in-depth and
-  the live `jwtAuthenticationConverter` is unchanged.
+- **Entitlement-trust = admission only; reads are decided by business roles**
+  (TASK-MONO-827 · ADR-MONO-083 · owner decisions Q1/Q2/Q4, 2026-11-09 UTC).
+  `entitled_domains ∋ wms` still **admits** a customer-tenant token
+  (`OAuth2ResourceServerConfig` `.trustEntitledDomains()`, ADR-MONO-019 § D5), but it
+  no longer grants anything: the `ROLE_WMS_VIEWER` synthesis that the
+  `jwtAuthenticationConverter` used to add (ADR-MONO-020 D4 · TASK-MONO-162) is
+  removed, because with it a subscription alone opened every dashboard and a
+  read-only business set could not be told apart from "no set" (the reason ERP
+  TASK-MONO-793 and Finance TASK-MONO-794 removed theirs). Each read now names the
+  WMS business role that owns its data — `api/ReadGates`: orders · shipments
+  `OUTBOUND_*`, ASNs `INBOUND_*`, inventory · adjustments `INVENTORY_*`, master refs
+  `MASTER_READ`, and throughput · metrics · the alert list · settings reads any of
+  them — plus `WMS_VIEWER`-or-higher on every gate, so `WMS_OPERATOR`
+  (`wms-ops-actions` · `wms-full` · `legacy-compat`) reads everything through the
+  role hierarchy as before. A token with no WMS role is `403` on every read; the
+  WRITE gates are unchanged. Contract: `admin-service-api.md` § Read gates.
+  Pinned by `DashboardBusinessRoleGateSliceTest` (real chain, really-signed JWT).
 
 ### PII Handling
 

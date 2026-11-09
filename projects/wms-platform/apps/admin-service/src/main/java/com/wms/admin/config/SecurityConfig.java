@@ -118,15 +118,22 @@ public class SecurityConfig {
     }
 
     /**
-     * Domain key for the entitlement-trust READ-visibility synthesis. A token
-     * whose signed {@code entitled_domains} claim contains {@code wms} is granted
-     * {@code ROLE_WMS_VIEWER} (READ only) even when it carries no WMS role claim.
+     * Authorities = the signed {@code roles} claim ∪ the legacy {@code role} claim, each
+     * prefixed {@code ROLE_}. Nothing else.
+     *
+     * <p><b>No authority is derived from {@code entitled_domains} any more</b> (TASK-MONO-827 ·
+     * ADR-MONO-083 · owner decision Q1, 2026-11-09 UTC). Until then a token whose
+     * {@code entitled_domains} contained {@code wms} was granted {@code ROLE_WMS_VIEWER}
+     * (ADR-MONO-019 § D5 · ADR-MONO-020 D4 · TASK-MONO-162), which made every dashboard a
+     * subscription-level read: an operator with no business permission set was let through, and a
+     * read-only business set could never be told apart from "no set" — the same reason ERP
+     * (TASK-MONO-793 Q1) and Finance (TASK-MONO-794) removed theirs. {@code entitled_domains}
+     * still decides <em>admission</em> ({@code OAuth2ResourceServerConfig#tenantGate}
+     * {@code .trustEntitledDomains()}); what an admitted token may read is now its business roles
+     * ({@link com.wms.admin.api.ReadGates}). Do not reintroduce the synthesis to "fix" a 403 on a
+     * dashboard — give the operator the business set that owns that data.
+     * {@code DashboardBusinessRoleGateSliceTest} goes red if it comes back.
      */
-    static final String ENTITLEMENT_DOMAIN = "wms";
-
-    /** The single READ-visibility role synthesised from entitlement-trust. */
-    static final String VIEWER_ROLE = "ROLE_WMS_VIEWER";
-
     static JwtAuthenticationConverter jwtAuthenticationConverter() {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         JwtGrantedAuthoritiesConverter defaults = new JwtGrantedAuthoritiesConverter();
@@ -135,19 +142,7 @@ public class SecurityConfig {
         converter.setJwtGrantedAuthoritiesConverter(jwt -> {
             Collection<GrantedAuthority> authorities = new ArrayList<>(defaults.convert(jwt));
             Object roleClaim = jwt.getClaim("role");
-            authorities.addAll(extractRoles(roleClaim));
-            // Entitlement-trust dual-accept (ADR-MONO-019 § D5, ADR-MONO-020 D4 —
-            // TASK-MONO-162): a wms-entitled token (entitled_domains ∋ "wms") is
-            // granted ROLE_WMS_VIEWER so the @PreAuthorize("hasRole('WMS_VIEWER')")
-            // READ dashboards pass. This synthesises ONLY the VIEWER role — the
-            // WRITE-gated roles (WMS_OPERATOR/WMS_ADMIN/WMS_SUPERADMIN) are
-            // unaffected, so entitlement-trust never widens mutation authority
-            // (READ visibility only; net-zero for role/scope/SUPER_ADMIN tokens —
-            // entitled_domains is read only from the RS256/JWKS-verified token).
-            if (TenantClaimValidator.isEntitled(jwt, ENTITLEMENT_DOMAIN)) {
-                authorities.add(new SimpleGrantedAuthority(VIEWER_ROLE));
-            }
-            return authorities;
+            authorities.addAll(extractRoles(roleClaim));            return authorities;
         });
         return converter;
     }

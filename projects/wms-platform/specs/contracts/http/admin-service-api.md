@@ -68,7 +68,10 @@ when JWTs are minted; this contract uses the role names as a stable shorthand):
 | `WMS_SUPERADMIN` | yes | yes | yes | yes | yes (force-deactivate, force-revoke, role-deletion bypass) |
 
 The **Dashboard / settings read** column covers the `/dashboard/**` read-model
-queries (§ 1) and settings reads (§ 5.1 / 5.2), which are `WMS_VIEWER`-or-higher.
+queries (§ 1) and settings reads (§ 5.1 / 5.2). `WMS_VIEWER`-or-higher still opens all
+of them, but since TASK-MONO-827 so does — per area — the WMS **business role** that owns
+the data; see [§ Read gates](#read-gates). `WMS_VIEWER` is no longer granted by a
+subscription.
 The **User / Role / Assignment read** column (§ 2.2 / 2.3 / 3.2 / 3.3 / 4.2) is
 `WMS_ADMIN`-or-higher — a `WMS_VIEWER` / `WMS_OPERATOR` cannot list or fetch
 user / role / assignment records (the only carve-out is the § 2.3 self-lookup).
@@ -76,6 +79,31 @@ user / role / assignment records (the only carve-out is the § 2.3 self-lookup).
 `WMS_OPERATOR` is intentionally listed as non-writer on this admin surface.
 Operators perform inventory / inbound / outbound writes; admin-service writes
 are restricted to `WMS_ADMIN` and above.
+
+#### Read gates
+
+*TASK-MONO-827 (ADR-MONO-083 · owner decisions Q1/Q2/Q4, 2026-11-09 UTC).* Until then
+admin-service synthesised `ROLE_WMS_VIEWER` for every token whose signed `entitled_domains`
+contained `wms`, so a **subscription alone** opened every read below — an operator with no
+business permission set read orders, shipments, ASNs and stock. The synthesis is removed.
+`entitled_domains` still decides **admission** (§ Headers); what an admitted token may read is
+decided by its roles:
+
+| Read | Passes with |
+|---|---|
+| § 1.3 orders · shipments | `OUTBOUND_READ` · `OUTBOUND_WRITE` |
+| § 1.4 ASNs · inspection | `INBOUND_READ` · `INBOUND_WRITE` |
+| § 1.1 inventory (list · by-key) · § 1.5 adjustments | `INVENTORY_READ` · `INVENTORY_WRITE` |
+| § 1.7 master refs | `MASTER_READ` |
+| § 1.2 throughput · metrics · § 1.6 alert list · § 5.1 / 5.2 settings | any of the above |
+
+and, on every row, `WMS_VIEWER`-or-higher through the role hierarchy — so `WMS_OPERATOR`
+(iam presets `wms-ops-actions` · `wms-full` · `legacy-compat`) reads everything as before. iam's
+single-area presets (`wms-inventory-read`, `wms-outbound-operate`, …) read their own area plus the
+cross-area row. A token with no WMS role — no set, or only another domain's sets — gets
+`403 FORBIDDEN` on every read. The platform `'*'` wildcard is refused at admission
+(`403 TENANT_FORBIDDEN`) and is not given a read path (owner decision Q3). Writes are unchanged.
+Pinned by `DashboardBusinessRoleGateSliceTest` (real chain, really-signed JWT).
 
 ### Error Envelope
 
@@ -236,7 +264,7 @@ reads the same rows.
 
 #### `GET /api/v1/admin/dashboard/inventory` — List inventory snapshot rows
 
-Auth: `WMS_VIEWER` or higher (`hasAnyRole('WMS_VIEWER','WMS_OPERATOR','WMS_ADMIN','WMS_SUPERADMIN')`).
+Auth: **`INVENTORY_READ` / `INVENTORY_WRITE`**, or `WMS_VIEWER`-or-higher ([§ Read gates](#read-gates)). A subscription alone does not open it.
 
 Query parameters:
 
@@ -293,7 +321,7 @@ ignored the setting.)
 
 #### `GET /api/v1/admin/dashboard/inventory/by-key` — Lookup by composite key
 
-Auth: `WMS_VIEWER` or higher.
+Auth: **`INVENTORY_READ` / `INVENTORY_WRITE`**, or `WMS_VIEWER`-or-higher ([§ Read gates](#read-gates)). A subscription alone does not open it.
 
 Query parameters:
 
@@ -323,7 +351,7 @@ the operator runs the backfill in
 
 #### `GET /api/v1/admin/dashboard/throughput` — Daily inbound + outbound counters
 
-Auth: `WMS_VIEWER` or higher.
+Auth: **any WMS business role** (`OUTBOUND_*` · `INBOUND_*` · `INVENTORY_*` · `MASTER_READ`), or `WMS_VIEWER`-or-higher ([§ Read gates](#read-gates)).
 
 Query parameters:
 
@@ -361,7 +389,7 @@ Errors: `VALIDATION_ERROR` (400) if range > 90 days or `to < from`.
 ADR-MONO-084 P3 (TASK-MONO-808). The WMS row of the console overview's performance
 strip. **Warehouse-global** like throughput (§ 1.0) — the tenant claim does not filter it.
 
-Auth: `WMS_VIEWER` or higher.
+Auth: **any WMS business role** (`OUTBOUND_*` · `INBOUND_*` · `INVENTORY_*` · `MASTER_READ`), or `WMS_VIEWER`-or-higher ([§ Read gates](#read-gates)).
 
 Query parameters:
 
@@ -415,7 +443,7 @@ query parameter**.
 
 #### `GET /api/v1/admin/dashboard/orders` — List outbound orders
 
-Auth: `WMS_VIEWER` or higher. **Tenant-isolated** (§ 1.0).
+Auth: **`OUTBOUND_READ` / `OUTBOUND_WRITE`**, or `WMS_VIEWER`-or-higher ([§ Read gates](#read-gates)). **Tenant-isolated** (§ 1.0).
 
 Query parameters: `warehouseId`, `customerPartnerId`, `status`,
 `requiredShipDateFrom/To`, `sagaState`, pagination (default
@@ -427,7 +455,7 @@ the caller's tenant.
 
 #### `GET /api/v1/admin/dashboard/shipments` — List shipments
 
-Auth: `WMS_VIEWER` or higher. **Tenant-isolated** (§ 1.0).
+Auth: **`OUTBOUND_READ` / `OUTBOUND_WRITE`**, or `WMS_VIEWER`-or-higher ([§ Read gates](#read-gates)). **Tenant-isolated** (§ 1.0).
 
 Query parameters: `warehouseId`, `orderId`, `carrierCode`, `shippedAtFrom/To`,
 pagination (default `shippedAt,desc`).
@@ -450,7 +478,7 @@ tenant; not partitioned.
 
 #### `GET /api/v1/admin/dashboard/asns` — List ASN summaries
 
-Auth: `WMS_VIEWER` or higher.
+Auth: **`INBOUND_READ` / `INBOUND_WRITE`**, or `WMS_VIEWER`-or-higher ([§ Read gates](#read-gates)).
 
 Query parameters: `warehouseId`, `supplierPartnerId`, `status`, `source`,
 `expectedArriveDateFrom/To`, pagination (default `receivedAt,desc`).
@@ -459,7 +487,7 @@ Response `200`: paginated list of `AsnSummary` rows.
 
 #### `GET /api/v1/admin/dashboard/asns/{asnId}/inspection` — Inspection summary
 
-Auth: `WMS_VIEWER` or higher.
+Auth: **`INBOUND_READ` / `INBOUND_WRITE`**, or `WMS_VIEWER`-or-higher ([§ Read gates](#read-gates)).
 
 Response `200`: single `InspectionSummary` row.
 Errors: `NOT_FOUND` (404) if no inspection has been projected yet.
@@ -471,7 +499,7 @@ not partitioned by tenant.
 
 #### `GET /api/v1/admin/dashboard/adjustments` — List adjustments
 
-Auth: `WMS_VIEWER` or higher.
+Auth: **`INVENTORY_READ` / `INVENTORY_WRITE`**, or `WMS_VIEWER`-or-higher ([§ Read gates](#read-gates)). A subscription alone does not open it.
 
 Query parameters: `warehouseId`, `locationId`, `skuId`, `bucket`, `reasonCode`,
 `occurredAtFrom/To`, pagination (default `occurredAt,desc`).
@@ -488,7 +516,7 @@ acknowledge mutation.
 
 #### `GET /api/v1/admin/dashboard/alerts` — List alert log
 
-Auth: `WMS_VIEWER` or higher.
+Auth: **any WMS business role** (`OUTBOUND_*` · `INBOUND_*` · `INVENTORY_*` · `MASTER_READ`), or `WMS_VIEWER`-or-higher ([§ Read gates](#read-gates)). Acknowledging (§ below) stays `WMS_OPERATOR`-or-higher.
 
 Query parameters: `alertType`, `warehouseId`, `acknowledged` (boolean),
 `detectedAtFrom/To`, pagination (default `detectedAt,desc`).
@@ -546,7 +574,7 @@ partners) is shared reference data; not partitioned by tenant.
 
 `{type}` ∈ `warehouses | zones | locations | skus | lots | partners`.
 
-Auth: `WMS_VIEWER` or higher.
+Auth: **`MASTER_READ`**, or `WMS_VIEWER`-or-higher ([§ Read gates](#read-gates)).
 
 Query parameters (TASK-BE-630 — previously "vary by `{type}`" with none
 implemented, so a search box sent `q` and the producer silently ignored it):
@@ -906,7 +934,7 @@ already REVOKED), `CONFLICT` (409), `DUPLICATE_REQUEST` (409).
 
 ### 5.1 `GET /api/v1/admin/settings` — List settings
 
-Auth: `WMS_VIEWER` or higher (settings are operationally readable; values may
+Auth: **any WMS business role** (`OUTBOUND_*` · `INBOUND_*` · `INVENTORY_*` · `MASTER_READ`), or `WMS_VIEWER`-or-higher ([§ Read gates](#read-gates)) — settings are operationally readable; values may
 be cached by consumers via `admin.settings.changed`).
 
 Query: `keyPrefix`, `scope`, `warehouseId`, pagination (default `key,asc`).
@@ -935,7 +963,7 @@ Response `200`:
 
 ### 5.2 `GET /api/v1/admin/settings/{key}` — Get a setting
 
-Auth: `WMS_VIEWER` or higher.
+Auth: **any WMS business role** (`OUTBOUND_*` · `INBOUND_*` · `INVENTORY_*` · `MASTER_READ`), or `WMS_VIEWER`-or-higher ([§ Read gates](#read-gates)).
 
 Query parameter `warehouseId` is required for `WAREHOUSE`-scoped keys; omitted
 for `GLOBAL`.

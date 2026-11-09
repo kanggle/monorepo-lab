@@ -11,6 +11,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import com.wms.admin.api.ReadGates;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** {@code admin-service-api.md § 1.4} — ASN summary + per-ASN inspection. */
 @RestController
 @RequestMapping("/api/v1/admin/dashboard/asns")
-@PreAuthorize("hasRole('WMS_VIEWER')")
+@PreAuthorize(ReadGates.INBOUND)
 public class AsnDashboardController {
 
     private static final String DEFAULT_SORT = "receivedAt,desc";

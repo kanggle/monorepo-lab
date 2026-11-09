@@ -66,10 +66,11 @@ public class OAuth2ResourceServerConfig {
      * {@code WmsTenantGatePolicyTest} asserts the refusal and not just the acceptance
      * (TASK-MONO-355 found this gate had zero coverage for its rejection).
      *
-     * <p>{@code .trustEntitledDomains()} is the token-validation half of admin-service's
-     * entitlement-trust dual-accept; the authority half (the {@code ROLE_WMS_VIEWER}
-     * synthesis) lives in {@code SecurityConfig#jwtAuthenticationConverter()} and is
-     * untouched by D4.
+     * <p>{@code .trustEntitledDomains()} is admin-service's entitlement-trust dual-accept —
+     * <b>admission only</b>. It used to have an authority half (a {@code ROLE_WMS_VIEWER}
+     * synthesis in {@code SecurityConfig#jwtAuthenticationConverter()}); TASK-MONO-827
+     * (ADR-MONO-083 · owner decision Q1) removed it, so an admitted token reads only what its
+     * business roles allow ({@link com.wms.admin.api.ReadGates}).
      *
      * <p>Both beans above build their own instance from this method; the validators are
      * stateless, so the two chains are behaviourally identical to the single shared

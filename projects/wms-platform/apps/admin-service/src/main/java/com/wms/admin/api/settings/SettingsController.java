@@ -5,6 +5,7 @@ import com.wms.admin.api.dashboard.PageableSupport;
 import com.wms.admin.api.dto.PageResponse;
 import com.wms.admin.api.settings.dto.SettingResponse;
 import com.wms.admin.api.settings.dto.UpsertSettingRequest;
+import com.wms.admin.api.ReadGates;
 import com.wms.admin.application.settings.SettingsService;
 import com.wms.admin.application.settings.UpsertSettingCommand;
 import com.wms.admin.domain.Setting;
@@ -13,6 +14,7 @@ import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -42,6 +44,7 @@ public class SettingsController {
         this.objectMapper = objectMapper;
     }
 
+    @PreAuthorize(ReadGates.ANY_WMS_BUSINESS_ROLE)
     @GetMapping
     public PageResponse<SettingResponse> list(
             @RequestParam(required = false) String keyPrefix,
@@ -55,6 +58,7 @@ public class SettingsController {
         return PageResponse.from(result, sort, s -> SettingResponse.from(s, objectMapper));
     }
 
+    @PreAuthorize(ReadGates.ANY_WMS_BUSINESS_ROLE)
     @GetMapping("/{key}")
     public ResponseEntity<SettingResponse> getByKey(@PathVariable String key,
                                                     @RequestParam(required = false) UUID warehouseId) {
