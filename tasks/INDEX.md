@@ -207,7 +207,6 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-826-pin-playwright-jobs-to-ubuntu-24-04.md` — **`ubuntu-latest` → Ubuntu 26.04 이전으로 Playwright 설치가 죽는다 — Playwright 를 쓰는 5개 잡(`nightly-e2e.yml` 3 · `federation-hardening-e2e.yml` 1 · `ci.yml` `frontend-e2e-smoke` 1)의 `runs-on` 을 `ubuntu-24.04` 로 고정** (IN-PROGRESS, 착수 2026-11-09 UTC). 같은 커밋 `e1ad3f577` 이 11-04 까지 초록, 11-05 이후 두 야간 워크플로 스케줄 런이 매일 빨강 — `Playwright does not support chromium on ubuntu26.04-x64`. 🔴 이전이 점진적이라 11-05 은 1개 잡, 11-06 부터 전부. 🟠 `ci.yml` 스모크 잡은 이전 후 한 번도 실행되지 않은 잠복 건. AC-2 = 영향 워크플로별 `workflow_dispatch` + `Image: ubuntu-24.04` 줄 직접 인용 · AC-4 = main 의 다음 **스케줄** 런 초록(푸시 런은 예고일 뿐). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 
@@ -221,7 +220,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-_(없음)_
+- `TASK-MONO-826-pin-playwright-jobs-to-ubuntu-24-04.md` — **`ubuntu-latest` → Ubuntu 26.04 이전으로 Playwright 설치가 죽는다 — Playwright 를 쓰는 5개 잡(`nightly-e2e.yml` 3 · `federation-hardening-e2e.yml` 1 · `ci.yml` `frontend-e2e-smoke` 1)의 `runs-on` 을 `ubuntu-24.04` 로 고정** (REVIEW, 2026-11-09 UTC · impl PR #4630 · 디스패치 J1–J5 전부 success + Image ubuntu-24.04 · AC-4 스케줄 런 대기). 같은 커밋 `e1ad3f577` 이 11-04 까지 초록, 11-05 이후 두 야간 워크플로 스케줄 런이 매일 빨강 — `Playwright does not support chromium on ubuntu26.04-x64`. 🔴 이전이 점진적이라 11-05 은 1개 잡, 11-06 부터 전부. 🟠 `ci.yml` 스모크 잡은 이전 후 한 번도 실행되지 않은 잠복 건. AC-2 = 영향 워크플로별 `workflow_dispatch` + `Image: ubuntu-24.04` 줄 직접 인용 · AC-4 = main 의 다음 **스케줄** 런 초록(푸시 런은 예고일 뿐). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 ## done
 - ✅ `TASK-MONO-821-demo-seed-finance-backfill-four-weeks.md` — **DONE 2026-11-09 UTC (4-dim verified)** — impl PR #4605(`6475a0e51`, 실패 0) · 37차 굽기 `ami-03c8db6ad7360cbed`(`e1ad3f577`) · AC-5 라이브 ✅: 첫 부팅 «창 안 67 건 (이번에 +67)» · 같은 날 2회차 «수렴, +0 · 잔액 불변» · A/B 잔액 = DB 이력 합 = API 이력 합 · 주간 직전 이체 40,000 > 0 · ⚪ 월간 막대 ≥ 10일(11-09 은 달력 9일 — DB 28일 중 25일 입금).

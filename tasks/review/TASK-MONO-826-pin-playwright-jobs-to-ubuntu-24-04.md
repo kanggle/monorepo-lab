@@ -8,7 +8,7 @@ TASK-MONO-826
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -127,3 +127,22 @@ monorepo
 - **`ubuntu-24.04` 가 폐기 공지를 받음** → 고정은 시한부다. AC-5 의 지원 종료 날짜 기록이 다음 사람의 입구.
 - **기안 이후 상황이 바뀜**: 구현 시점에 GitHub 가 Playwright 호환 이미지를 되돌리거나 Playwright 새 버전이 26.04 를 지원할 수 있다. AC-0 (b) 가 로그를 다시 읽는 이유 — 원인이 달라졌으면 STOP 하고 이 티켓을 고쳐 쓴다.
 - **측정 오차**: M3 의 줄 번호는 기안 시점 `main`(`c34671b9b`) 기준. 워크플로가 그 사이 바뀌었으면 AC-0 (a) 에서 어긋난다.
+
+
+# Implementation Notes (2026-11-09 UTC)
+
+- 구현 PR: #4630 · 브랜치 `task/mono-826-pin-playwright-runner`. 변경 = `runs-on: ubuntu-latest` → `ubuntu-24.04` 5줄 + 줄마다 주석 1줄(사유 · 되돌릴 조건 · TASK-MONO-826). 다른 워크플로 줄 · 잡 `name:` 변경 0.
+- **AC-0**: 기안 표와 일치. `playwright install` 7줄(nightly 684·817·1369 · federation 519 · ci 3557·3588·3611) · 줄 번호 436/749/1214/129/3516 모두 `ubuntu-latest`. 최근 실패 잡 `128874831912` 로그: `Image: ubuntu-26.04` + `Error: ERROR: Playwright does not support chromium on ubuntu26.04-x64` — 원인 불변.
+- **AC-5**: `ubuntu-24.04` 러너 이미지 지원 종료일은 **미확인**(확인하지 못해 주석에 «미확인» 으로 적음, 추정 아님).
+- **AC-2/3 결과** (PR 브랜치, head `5631753df`):
+
+| 잡 | run | job id | 잡 conclusion | `Image:` 줄 | Install Playwright 스텝 |
+|---|---|---|---|---|---|
+| J1 Frontend E2E full-stack (nightly) | 42590436064 (dispatch) | 129070990990 | success | `Image: ubuntu-24.04` | success |
+| J2 Web-store GAP logout (nightly) | 42590436064 | 129070468692 | success | `Image: ubuntu-24.04` | success |
+| J3 Platform Console E2E (nightly) | 42590436064 | 129070806951 | success | `Image: ubuntu-24.04` | success |
+| J4 Federation Hardening full-stack | 42590441666 (dispatch) | 129071026673 | success | `Image: ubuntu-24.04` | success |
+| J5 Frontend E2E smoke (ci.yml, PR 런) | 42590436742 | 129070549086 | success | `Image: ubuntu-24.04` | success ×3 (web-store · fan-platform-web · platform-console-web) |
+
+  두 디스패치 런 전체 conclusion = success. 설치 뒤 스펙 실패 없음 → 분리할 새 티켓 없음.
+- **AC-4 · AC-6(d) 미충족(머지 뒤)**: main 의 다음 **스케줄** 런(Nightly 18:00Z · Federation 19:00Z) 초록을 기다린다. 이 PR 은 닫지 않는다.
