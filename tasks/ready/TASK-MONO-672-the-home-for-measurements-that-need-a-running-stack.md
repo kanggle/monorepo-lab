@@ -1980,10 +1980,12 @@ The console (Vercel) has nothing to do with the bake. PC-FE-338 a `56a15be8b` ·
     - **Expected** = the «이후» column of that table: the operator's own domain card is ok for the `*-procurement` / `*-ledger` / `*-approval` / `*-order` sets and **권한 없음 (403)** for `*-inventory-visibility` / `*-account` / `*-masterdata` / `*-product`; every other domain's card is 권한 없음. `erp-approval-operate` shows «직원 연결 없음» (the new operator has no employee link) — that is the expected ok-shape, not a failure. Owner screen once (any one set) so the «권한 없음» wording is seen, not just the 403.
     - The ⚪ row (platform SUPER_ADMIN `'*'` token on the ERP card) needs `owner-operator.sh activate` (§ 35th window — preparation, step 5); measure it only if the owner opts in, then `deactivate`.
     - **Undo:** cancel nothing (the invitation is accepted); `PATCH …/operators/{id}/status` → `SUSPENDED` (or «이 회사에서 내보내기»). Record the leftover operator on the volume.
+    - 🟢 37th window (2026-11-09 UTC): measured — see § 37th window — results.
 23. 🆕 **`TASK-MONO-821` — demo-seed backfill of the past 28 KST days for Finance (`transactions` + `balances`)** (added 2026-10-28 UTC). 🔴 **Needs a bake** — the seed change (impl branch `task/mono-821-finance-backfill`) reaches the demo only through the next AMI. Measurement targets only — the ticket stays in `review/` and owns them (821 AC-5):
     - The SQL really runs on `finance-platform-mysql` / `finance_db` as `finance`: seed log shows «생성 과거 입금·이체 … (이번에 +N · 잔액 A +x · B +y)» on the first boot and «존재 … (수렴, +0 · 잔액 불변)» on a same-day second boot; no ✗ «잔액 변화가 새 행의 증분과 다르다»; the `topup()` lines for A/B still pass on the second boot (the TOPUP predicate now pages — 821 AC-3).
     - Logged-in `demo-corp` `/finance` «실적» `topupCount` bars ≥ 10 days (🔴 calendar month — measure on or after the 11th, or read `GET /api/finance/accounts/metrics` and count the last 28 days), operator-overview Finance card «지난 주» 이체 금액 > 0.
     - Account A/B balance = the sum of that account's transaction history: `GET /api/finance/accounts/{id}/balances` `ledger` vs Σ over `GET …/{id}/transactions` (all pages) TOPUP + incoming TRANSFER − outgoing TRANSFER. 🔴 Incoming transfers live on A's rows (`counterpartyAccountId` = B), not on B's list — read A's list for B's credits. `/ledger` is expected to hold today's API rows only (documented limitation).
+    - 🟢 37th window (2026-11-09 UTC): measured — see § 37th window — results.
 
 ### Not measured, and owned by no open AC (recorded so the gap is visible — not carried)
 
@@ -2344,3 +2346,41 @@ The 34th window left five ACs ⚪ because the demo volume did not hold the state
 - `TASK-MONO-820` — the ERP inbox §9 bullet.
 - `TASK-MONO-648` — capture window.
 - `TASK-MONO-819` AC-2 — script-only PR.
+
+## 37th window — results (2026-11-09 UTC, 08:09Z–08:37Z · budget 0 → 24 / 2400 — November)
+
+**Bake.** `bake.sh --ref bake-e1ad3f577` (owner «재굽기 진행»), AMI `ami-03c8db6ad7360cbed`, tag RepoCommit `e1ad3f577` → provenance `ami-tag`; pin #4625 · apply record #4626; instance `i-0275dc3f60c28bd4e` (fresh volume — everything the 36th left behind is gone). 🔴 The first two attempts died on **GitHub Releases HTTP 504** (gradle-8.14.3-bin.zip at 1 min 54 s · opentelemetry-javaagent.jar v2.12.0 at 8 min 9 s); no AMI registered, no orphans; the third attempt on the same ref passed (52 min 37 s). The bake has no retry around those downloads.
+
+**Window.** `/bundle/start` with `console` + the five console domains at 08:09:40Z → all six `ready` at 08:19:26Z. Measurement from the host over SSM (`AWS-RunShellScript`); the owner screen by a local Playwright login to `https://console.hubwang.com`. `/stop` at 08:36:13Z → EC2 `stopped` 08:37:46Z, `/status` stopped (used 24).
+
+**Results.** Evidence is in each ticket's `## CORRECTION — 37차 창` section.
+
+| Ticket | AC | Result | Where it goes |
+|---|---|---|---|
+| `TASK-MONO-821` | AC-5 | ✅ first boot `생성 과거 입금·이체 2026-10-12 ~ 2026-11-08 (KST) — 창 안 67 건 (이번에 +67 · 잔액 A +6355000 · B +4695000)`, finance seed 실패 0; same-day second run `존재 … (수렴, +0 · 잔액 불변)`, `transactions` 70 → 70, balances unchanged, TOPUP lines «기존 … 재생, 이중 입금 없음». A/B balance 6,755,000 / 5,295,000 = DB history sum = API history sum (all pages, A's rows carry B's credits). Week metrics previous `transferAmount:KRW` 40,000 > 0. ⚪ monthly bars ≥ 10 days: 9 calendar days exist on 11-09 (7 nonzero); no 28-day series API exists (`period` is `week`/`month` only) — DB: TOPUP on 25 of the last 28 KST days | done |
+| `TASK-PC-FE-364` | AC-3 | ✅ narrow operator `narrow-1109@example.com` made in the window; table matches the «이후» column for all eight sets + baseline + `scm-read` control (below); owner screen with `scm-procurement-operate`: SCM card value 1, Finance · ERP · ecommerce «이 도메인 조회 권한이 없습니다. 사유: PERMISSION_DENIED», sidebar «업무 권한 없음». ⚪ SUPER_ADMIN `'*'` ERP row — owner opt-in not taken | done |
+
+Per-set table (card status; `iam` with the operator's own admin token, the rest with its exchanged `demo-corp` token):
+
+| Set | IAM | WMS | SCM | Finance | ERP | ecommerce |
+|---|---|---|---|---|---|---|
+| (none) | 200 | 200 | 403 | 403 | 403 | 403 |
+| `scm-procurement-operate` | 200 | 200 | **200** | 403 | 403 | 403 |
+| `scm-inventory-visibility-operate` | 200 | 200 | 403 | 403 | 403 | 403 |
+| `finance-ledger-operate` | 200 | 200 | 403 | **200** | 403 | 403 |
+| `finance-account-operate` | 200 | 200 | 403 | 403 | 403 | 403 |
+| `erp-approval-operate` | 200 | 200 | 403 | 403 | **200** (no `actorEmployeeId` → «직원 연결 없음») | 403 |
+| `erp-masterdata-operate` | 200 | 200 | 403 | 403 | 403 | 403 |
+| `ecommerce-order-operate` | 200 | 200 | 403 | 403 | 403 | **200** |
+| `ecommerce-product-operate` | 200 | 200 | 403 | 403 | 403 | 403 (`ACCESS_DENIED`) |
+| `scm-read` (control) | 200 | 200 | **200** | 403 | 403 | 403 |
+
+**Findings:**
+1. 🔴 **Correction of the 36th finding 2.** The IAM admin API's 401 `TOKEN_INVALID` from a host-minted token is **not** the issuer: the exchanged token's `iss` is already `https://auth.hubwang.com`. `OperatorAuthenticationFilter` wants `token_type=admin` — an operator token minted by admin-service. Route: `user_token platform-console-web` → `POST /api/admin/auth/token-exchange` (subject token in the JSON body) → `accessToken`. With it, invitation · set grant/revoke · status all answered from inside the host. The IAM admin metrics are therefore measurable by API in the next window.
+2. The WMS card answered 200 for the operator with **no** WMS set (every row above). The ticket's table records the WMS gate as `WMS_VIEWER` «unchanged»; the measured «unchanged» holds, but the gate did not refuse a token without any WMS role. Recorded, not ticketed — needs a read of the WMS dashboard gate first.
+3. `X-Operator-Reason` with a non-ASCII character (`—`) is refused before the controller: 400 `BAD_REQUEST` «disallowed header or value». ASCII reason passed.
+4. Invitation acceptance needs a verified email: the `/operator-invitations/signup` account is unverified, so the first accept POST answered 403 «먼저 이메일을 인증해야 합니다»; `/email-verification` → mailpit link → `/verify-email` POST → accept 200.
+
+**Left behind on the demo volume:** operator `narrow-1109@example.com` (`01a1bf6c-223c-76d1-b913-e6c8b580f37d`) `SUSPENDED` with 0 domain sets; its pool account (email verified); a second `seed.sh finance` run.
+
+**Still open → next window:** `TASK-MONO-648` — capture window (`TASK-MONO-819` and `TASK-MONO-820` are already in `done/`, so the 36th list's lines for them are not carried).

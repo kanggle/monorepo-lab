@@ -125,10 +125,10 @@ _(없음)_
 
 ## review
 
-
-- `TASK-PC-FE-364-operator-overview-business-kpis.md` — **운영자 통합 개요 카드 여섯을 업무 지표로 — 잠긴 계정 · 미출고 주문 · 제출 대기 발주 · 미해소 대사 차이 · 내 결재 대기 · 출고 대기 주문** — 카드당 호출 1개 그대로(1:1 교체) · 서버 변경 없음 · 계약 § 2.4.9.1 먼저 · 소유자 결정 2026-10-22 KST (REVIEW, 2026-10-22 UTC · 문구 · 권한 표 소유자 승인 · 콘솔 nightly · federation e2e success · AC-3 Vercel/샘플/라이브 열림). 분석=Opus 5.5 / 구현 권장=Opus. · 🔵 **33차 창(2026-10-23 UTC)**: AC-3 ❌ — WMS 출고 · SCM 발주 카드 `DOWNSTREAM_ERROR` · «WMS 점검 불가» → `TASK-PC-FE-369`. · 🔵 **2026-10-28 UTC 36차 창:** AC-3 ⚪ 다시 측정 안 함 (단일 권한 집합 운영자가 시드에 없음) — review 유지
+_(없음)_
 
 ## done
+- ✅ `TASK-PC-FE-364-operator-overview-business-kpis.md` — **DONE 2026-11-09 UTC (4-dim verified)** — impl PR #4469(`db35564fc`, 실패 0) · AC-3 ✅: 35차 로그인·익명 화면 + 37차 창 권한별 표 — 창 안에서 만든 단일 세트 운영자로 8세트 + 세트 없음 + `scm-read` 대조군 전부 «이후» 열과 일치, 소유자 화면(SCM 값 · 나머지 «권한 없음») · ⚪ SUPER_ADMIN `'*'` ERP 행은 소유자 선택 안 함.
 - ✅ `TASK-PC-FE-383-sample-operator-group-domain-sets-dialogs.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4610(`49fb0abfc`, 실패 0) · 샘플 운영자 «도메인 접근» · 그룹 «세트» 픽스처(출처 DIRECT · MIGRATION · GROUP, 382 세트 id 만 참조) · AC-5 운영 실측(«준비 중» 0, 대조군 `/fan` 1).
 - ✅ `TASK-PC-FE-382-sample-domain-permission-sets-entry-policy.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4607(`f78e3466a`, 실패 0) · 샘플 원장 `domain_permission_sets` · `tenant_entry_policy` → `ready` · AC-5 운영 실측(쿠키 없는 방문 3화면 «준비 중» 0, 대조군 `/fan` 1).
 - ✅ `TASK-PC-FE-377-replenishment-table-reorder-point-bar.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4579(`c7e58e9ba`, 실패 0) · AC-7 36차 창 라이브 ✅

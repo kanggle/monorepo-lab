@@ -221,9 +221,10 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-821-demo-seed-finance-backfill-four-weeks.md` — **라이브 데모 Finance «실적» 그래프가 부팅 당일 막대 하나뿐 — 820 백필을 finance(`transactions` + `balances`)로** (REVIEW, 2026-10-28 UTC · 소유자 결정: Finance = 직접 SQL 백필, 이커머스 = 그대로). `bf_finance_sql` — 하루 입금 0~3 · 이체 A→B(월요일 + 약 1/4), 잔액은 같은 트랜잭션에서 `ROW_COUNT()` 로 «새 행만큼» 보정(재실행 +0) · A 시점별 잔액 ≥ 0 · 금액 500000/100000 과 분리 · outbox/원장 안 씀(원장 과거 분개 없음 = 한계). 시드 입금 술어 `topup_txns` 는 페이지를 끝까지 넘긴다(AC-3). 자기시험 rc=0 59칸 · bite 4종 rc=1 · (y)/(y2)/(z8) 구간 rc=0. ⏳ AC-5 라이브 = 다음 굽기 뒤(`TASK-MONO-672` § Order 23).
+_(없음)_
 
 ## done
+- ✅ `TASK-MONO-821-demo-seed-finance-backfill-four-weeks.md` — **DONE 2026-11-09 UTC (4-dim verified)** — impl PR #4605(`6475a0e51`, 실패 0) · 37차 굽기 `ami-03c8db6ad7360cbed`(`e1ad3f577`) · AC-5 라이브 ✅: 첫 부팅 «창 안 67 건 (이번에 +67)» · 같은 날 2회차 «수렴, +0 · 잔액 불변» · A/B 잔액 = DB 이력 합 = API 이력 합 · 주간 직전 이체 40,000 > 0 · ⚪ 월간 막대 ≥ 10일(11-09 은 달력 9일 — DB 28일 중 25일 입금).
 - ✅ `TASK-MONO-825-process-tasks-review-phase-model-explicit.md` — **DONE 2026-11-03 UTC (4-dim verified)** — (impl PR #4622 머지, `6f9357a2d`) · 실패 0 · `process-tasks.md` Phase 2 리뷰 발주에 `model=` 명시 1줄(정본 `review-task.md` § Batch Mode 가리킴) · 출처 `/validate-rules` Warning 1건.
 - ✅ `TASK-MONO-823-portfolio-sync-preflight-workflows-permission.md` — **DONE 2026-11-01 UTC (4-dim verified)** — impl PR #4616(`6228e3803`, 실패 0) · 프리플라이트 Workflows 쓰기 탐침(409 무쓰기, run `41326996856` 7/7 · sha 불변) · portfolio.md 사본 표 7개 = 2026-11-01 · AC-3 음성 ⚪ 못 잼(사유·남는 위험 기록). 🔴 **날짜는 이 행이 정본** — 파일 본문의 «2026-11-02 UTC»(Status · 기안 · Implementation)는 **KST 날짜**였다(머지 2026-11-01T17:12Z). `done/` 은 동결이라 파일은 고치지 않는다.
 - ✅ `TASK-MONO-822-readme-and-portfolio-refresh-2026-11.md` — **DONE 2026-11-01 UTC (4-dim verified)** — impl PR #4613(`b243c02ca`, 실패 0) · README 세 화면 표 · 기동 약 10분 · Recent decisions · portfolio.md WMS/SCM/콘솔 화면 배선 · `check-public-domains.sh` 퍼센트 인코딩 오탐 수선(CI `Public domains` pass). 🔴 squash 뒤 `main` INDEX 에 READY·REVIEW 두 행이 함께 남아 있던 것을 이 close 에서 함께 걷었다. 🔴 **날짜는 이 행이 정본** — 파일 본문 Status 의 «2026-11-02 UTC» 는 **KST 날짜**였다. `done/` 은 동결이라 파일은 고치지 않는다.
