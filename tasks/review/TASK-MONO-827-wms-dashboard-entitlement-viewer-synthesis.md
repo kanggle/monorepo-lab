@@ -8,7 +8,7 @@ TASK-MONO-827
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -61,15 +61,15 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 착수 시점 코드로 재측정하고 § AC-0 기록에 file:line 으로 적는다. 🔴 끝에 STOP 하고 § 질문을 소유자에게 올린다.
+- [x] **AC-0** — ✅ 2026-11-09 UTC § AC-0 기록 · STOP → § 소유자 결정(Q1–Q4) 수령. 착수 시점 코드로 재측정하고 § AC-0 기록에 file:line 으로 적는다. 🔴 끝에 STOP 하고 § 질문을 소유자에게 올린다.
   1. 합성 지점과 `hasRole('WMS_VIEWER')` 게이트 전수(기안 시점 `api/dashboard/` 의 9 컨트롤러 — 알림 목록 포함 — 와, 같은 `AlertDashboardController` 의 확인(쓰기) `WMS_OPERATOR`).
   2. 각 대시보드가 **무엇을 보여 주는지**(주문 · 출하 · ASN · 재고 · 조정 · 기준정보 · 처리량 · 지표 · 알림)와 대응하는 WMS 업무 역할 후보(`OUTBOUND_READ` · `INBOUND_READ` · `INVENTORY_READ` · `MASTER_READ` …) 표.
   3. 시스템 프리셋 7개가 지금 주는 역할(기안 시점 `V0052__create_domain_permission_sets_and_backfill.sql:144-152`: `WMS_VIEWER` 이상을 주는 것은 `wms-ops-actions`(`WMS_OPERATOR`) · `wms-full` 뿐) — 🔴 **합성만 지우면 `wms-outbound-operate` · `wms-inventory-read` 등만 가진 운영자는 자기 업무 대시보드도 403** 이 된다. 이 사실이 질문 Q2 의 이유다.
   4. 호출자 전수: 콘솔(`features/wms-ops/**` · `shared/composition/operator-overview-*.ts` · 샘플 `fixtures/wms.ts`), 데모 시드(`infra/demo/seed/seed-wms.sh` · `lib-backfill.sh`), `scripts/console-demo/**`, CI(`.github/workflows/federation-hardening-e2e.yml` 등), 서비스 간 호출(워크로드 토큰) — 각 호출이 어떤 토큰 · 어떤 역할로 오는지와 제거 후 결과.
   5. 37차 측정 재현 방법(창 필요 여부): 슬라이스 시험으로 «세트 없음 + `entitled_domains=[wms]` → 지금 200» 을 먼저 고정한다(제거 전 빨강이 될 대조군).
-- [ ] **AC-1** — 소유자 결정 수령 후 계약(`projects/wms-platform/specs/contracts/http/admin-service-api.md` 인가 절 · iam `admin-api.md` § 카탈로그/프리셋)부터 바꾸고 구현한다.
-- [ ] **AC-2** — 대조군 시험(실 체인 · 실서명 JWT): 세트 없음 + 구독 → 대시보드 전 경로 403 · 결정된 업무 역할 → 그 대시보드 200 · 다른 도메인 세트만 → 403 · `legacy-compat` 보유자 → 이전과 같은 200 집합(이전 호환) · `'*'` 와일드카드 GET 은 결정대로. bite: 합성을 되살리면 «세트 없음 → 403» 이 빨강.
-- [ ] **AC-3** — 데모 시드 · 콘솔 · CI 호출자가 깨지지 않는다(AC-0 ④ 의 각 행을 시험 또는 실행으로). 깨지는 행은 이 PR 에서 고치거나 소유자 결정으로 별도 티켓.
+- [x] **AC-1** — 소유자 결정 수령 후 계약(`projects/wms-platform/specs/contracts/http/admin-service-api.md` 인가 절 · iam `admin-api.md` § 카탈로그/프리셋)부터 바꾸고 구현한다. ✅ `admin-service-api.md` § Authorization 표 설명 · 새 § Read gates · Auth 줄 13곳(§ 1.1–1.7 · § 5.1/5.2). 같은 PR 의 구현 커밋에 함께 실었다(커밋을 나누지 않음 — 순서는 계약 → 코드로 작성). iam `admin-api.md` 는 **무변경** — Q2 가 이미 발급되는 업무 역할로 판정하므로 카탈로그 · 프리셋이 바뀌지 않는다(§ 소유자 결정 끝 줄). 명세 동반 정정: admin-service `architecture.md` § Authorisation · `domain-model.md` · `integration/iam-integration.md` · `ADR-MONO-083` § WMS 행 정정.
+- [x] **AC-2** — 대조군 시험(실 체인 · 실서명 JWT): 세트 없음 + 구독 → 대시보드 전 경로 403 · 결정된 업무 역할 → 그 대시보드 200 · 다른 도메인 세트만 → 403 · `legacy-compat` 보유자 → 이전과 같은 200 집합(이전 호환) · `'*'` 와일드카드 GET 은 결정대로. bite: 합성을 되살리면 «세트 없음 → 403» 이 빨강. ✅ `DashboardBusinessRoleGateSliceTest` 12셀(실 `SecurityConfig` 체인 · 실 테넌트 게이트 `OAuth2ResourceServerConfig#jwtTokenValidator` · RS256 서명 JWT · 실 컨트롤러 10개, 읽기 경로 20개): 세트 없음 · 다른 도메인 카탈로그 역할 전부 → 전 경로 `403 FORBIDDEN` · `'*'` → `403 TENANT_FORBIDDEN`(입장) · 단일 영역 프리셋 5종 + 쓰기 전용 맞춤 세트 → 자기 영역 + 공통만 · `WMS_OPERATOR` · `legacy-compat`(카탈로그 전부) · 고유 `WMS_ADMIN` → 전부 · 알림 목록 vs 확인. 🔴 통과 판정은 «400/401/403 아님» — 파라미터 바인딩 400 은 게이트보다 먼저 나서 «통과» 셀을 공허하게 만든다(첫 실행에서 `/throughput` 이 정확히 그랬고, 고친 뒤 `/metrics` 의 `period` 누락도 같은 술어가 잡았다). **bite 실측**: 합성 한 줄을 되살리면 이 시험 7 · `SecurityConfigConverterTest` 2 · `SecurityChainAssemblyParityTest` 1 빨강 → 되돌린 뒤 admin-service `test` 전체 62클래스 375개 실패 0(rc=0).
+- [ ] **AC-3** — 데모 시드 · 콘솔 · CI 호출자가 깨지지 않는다(AC-0 ④ 의 각 행을 시험 또는 실행으로). 깨지는 행은 이 PR 에서 고치거나 소유자 결정으로 별도 티켓. 🟡 **판독은 끝났고 실행 증거는 아직이다** — AC-0 ④ 의 행 전부가 `legacy-compat`(→ `WMS_OPERATOR`) 이거나 서버를 부르지 않아 깨질 행이 없다(위 표). 그 «`legacy-compat` → 전부 통과» 는 AC-2 의 시험 셀이 잰다. 남은 실행 증거 = 머지 후 첫 **Federation Hardening** 스케줄 런의 `entitlement-trust-crossdomain` · `operator-overview-composition`(WMS 카드 not-forbidden). 콘솔 화면 변화(세트 없는 운영자의 WMS 카드 «권한 없음»)는 의도된 결과이며 콘솔 후속 티켓의 몫.
 - [ ] **AC-4** — 배포 상태를 따로 적는다: 굽기 → 다음 창에서 `TASK-MONO-672` 의 세트별 표를 WMS 행까지 다시 잰다(37차 절차 — 창 안 단일 세트 운영자 · admin 토큰 교환).
 
 # Related Specs
@@ -159,3 +159,9 @@ monorepo
 | Q4 | **설정 조회 GET 2곳도 이 티켓에 포함** — WMS 업무 역할 아무거나 |
 
 iam 카탈로그 · 프리셋 · 마이그레이션은 **바뀌지 않는다**(Q2 는 이미 발급되는 업무 역할로 판정) — Scope 의 «iam 카탈로그 · 시스템 프리셋(`V0052` 계열 새 마이그레이션)» 항목은 이 결정으로 불필요해졌다.
+
+## 구현 메모 (2026-11-09 UTC)
+
+- 🔵 **일부러 남긴 낡은 문장 하나**: admin-service `db/seed/R__seed_dev_data.sql:74-81` 주석이 아직 합성을 현재형으로 적는다. **repeatable** 마이그레이션이라 주석 한 글자만 바꿔도 체크섬이 달라져 기존 볼륨(데모 `wms-devseed.override.yml`)에서 시드가 다시 돈다 — 문구 정정에 그 위험을 걸지 않았다. 같은 사실은 `DevSeedScopeIT` · `domain-model.md` 에서 고쳤다. 다음에 이 파일을 내용 때문에 바꿀 때 함께 고친다.
+- 🔵 게이트 표현식은 `api/ReadGates` 상수 하나 — 컨트롤러 10곳이 문자열을 따로 들지 않는다(한 곳만 고쳐지는 결함 방지).
+- 콘솔 후속(Out of Scope): `shared/guide/permission-map.ts:722-725` 의 «구독만으로 열린다» 주석과 `gate` 정의, 개요 WMS 카드 · 샘플 — 793 · 794 와 같이 굽기 라이브 확인 뒤 별도 콘솔 티켓.
