@@ -8,7 +8,7 @@ TASK-MONO-827
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -110,3 +110,52 @@ monorepo
 | **Q2** | (Q1 = 지운다면) 대시보드 9곳을 어느 업무 역할로 판정하나 | **대시보드별 대응 READ**(주문 · 출하 = `OUTBOUND_READ ∨ WRITE` · ASN = `INBOUND_*` · 재고 · 조정 = `INVENTORY_*` · 기준정보 = `MASTER_READ` · 처리량 · 지표 · 알림 목록 = WMS 업무 역할 아무거나) + `WMS_OPERATOR` 이상은 지금처럼 전부 | (나) 대시보드 전부 «WMS 업무 역할 아무거나» 하나 — 단순, 세분 없음 · (다) 프리셋 READ 세트들에 `WMS_VIEWER` 를 넣는다 — 서비스 코드는 합성 제거만, 세분 없음 |
 | **Q3** | `'*'` 와일드카드(플랫폼 SUPER_ADMIN) 토큰의 대시보드 GET | Finance 의 `ROLE_FINANCE_SUPERADMIN_READ` 처럼 GET 만 유지(AC-0 이 지금 동작을 잰 뒤) | 막는다 |
 | 순서 | 콘솔 반영 | 별도 콘솔 티켓, 굽기 라이브 뒤(793 · 794 와 같음) | — |
+
+---
+
+## AC-0 기록 (2026-11-09 UTC · 착수 시점 origin/main `4e203365f`)
+
+**① 합성 · 게이트 전수**
+- 합성 지점은 한 곳 — wms admin-service `SecurityConfig.java:147-149`(`TenantClaimValidator.isEntitled(jwt, "wms")` → `ROLE_WMS_VIEWER`). 입장은 별개 — `OAuth2ResourceServerConfig.java:78-82` `trustEntitledDomains()`.
+- `hasRole('WMS_VIEWER')` = `api/dashboard/` 9 컨트롤러: `OrderDashboardController:29` · `ShipmentDashboardController:28` · `AsnDashboardController:24`(목록 + `/{asnId}/inspection`) · `InventoryDashboardController:27`(목록 + `/by-key`) · `AdjustmentAuditController:20` · `MasterRefController:28` · `ThroughputDashboardController:25` · `MetricsDashboardController:19` · `AlertDashboardController:49`(목록). 같은 컨트롤러의 확인(쓰기) `:68` = `WMS_OPERATOR`. `OperationsController:18` = `WMS_ADMIN`(합성 무관).
+- 🔴 **기안에 없던 10번째**: `SettingsController` 의 GET 두 곳(`list` · `getByKey`)에는 **역할 게이트가 없다**(`SettingsService:61` 은 쓰기만 `WMS_ADMIN+`). 계약 § 5.1/5.2 는 `WMS_VIEWER` 이상 — 합성이 입장한 모두를 VIEWER 로 만들어 이 어긋남이 보이지 않았다 → 소유자 질문 Q4.
+- 다른 WMS 서비스에는 합성이 없다. outbound `CallerScope` · `SecurityContextCallerScopeProvider` 가 `entitled_domains` 를 언급하는 것은 **입장 · 테넌트 격리**(어느 주문을 보나)이고 역할을 만들지 않는다. inventory · inbound · master 는 `hasRole('INVENTORY_READ')` 식 업무 역할 판정.
+
+**② 대시보드 ↔ 업무 역할** (원천 서비스가 같은 데이터를 판정하는 역할)
+
+| 대시보드 | 보여 주는 것 | 대응 |
+|---|---|---|
+| orders · shipments | 출고 주문 · 출하 (테넌트 격리) | `OUTBOUND_READ` · `OUTBOUND_WRITE` |
+| asns · inspection | 입고 예정 · 검수 | `INBOUND_READ` · `INBOUND_WRITE` |
+| inventory · adjustments | 재고 스냅샷 · 조정 감사 | `INVENTORY_READ` · `INVENTORY_WRITE` |
+| refs | 기준정보 6종 | `MASTER_READ` |
+| throughput · metrics · alerts 목록 | 출고 · 입고 · 재고 합산 | 단일 대응 없음 → WMS 업무 역할 아무거나 |
+
+**③ 프리셋** — `V0052…sql:121-152`(뒤 마이그레이션 V0053–V0059 는 wms 행을 건드리지 않는다). 🔴 **`WMS_VIEWER` 는 iam `DomainRoleCatalog.java:39-46` 에도, 발급 상한 `OperatorRoleDerivation.java:62-67`(wms 갈래)에도 없다** — 어떤 세트로도 토큰에 실릴 수 없고, 지금은 합성이 유일한 출처다. 따라서 합성만 지우면 대시보드를 여는 세트 = `wms-ops-actions` · `wms-full` · `all-domains-full` · `legacy-compat`(전부 `WMS_OPERATOR` → 계층) 뿐. 기안의 Q2 대안 (다) «프리셋 READ 세트에 `WMS_VIEWER` 추가» 는 세트만으로는 안 되고 상한까지 넓혀야 한다. 역할 이름 충돌: `roles` 클레임은 도메인 접두가 없지만 카탈로그의 비-wms 역할은 전부 접두(`SCM_*` · `ERP_*` · …)라 겹치는 이름이 없다.
+
+**④ 호출자**
+
+| 호출자 | 토큰 · 역할 | 제거 후 |
+|---|---|---|
+| CI `federation-hardening-e2e.yml:485-492`(개요 WMS 카드 → `/dashboard/inventory`) | 운영자 assume-tenant — 전원 `legacy-compat`(`tests/federation-hardening-e2e/fixtures/seed.sql:737-749`) | 무영향 (`WMS_OPERATOR`) |
+| 데모 시드(`infra/demo/seed/*`) | 데모 운영자 `legacy-compat`(`lib.sh:208` · admin `R__seed_zz_demo_domain_permission_sets.sql`) | 무영향. 시드 스크립트는 대시보드 API 를 부르지 않는다 |
+| `scripts/console-demo/**` | `legacy-compat`(`seed/01-iam.sql:128-140`) · `05-wms-admin.sql` 은 데이터만 | 무영향 |
+| 콘솔 `features/wms-ops/**` · `operator-overview-*` | 교환된 운영자 토큰 | 세트 없는 운영자 → 403 → 카드 «권한 없음». `shared/guide/permission-map.ts:722-725` 주석이 합성을 전제 → **콘솔 후속 티켓**(Out of Scope) |
+| 콘솔 샘플(`fixtures/wms.ts`) · 콘솔 단위 시험 | 서버 없음(HTTP mock) | 무영향 |
+| 워크로드 토큰 | `WorkloadRoleCatalog` 는 wms 에 `MASTER_*` 만 · `entitled_domains` 없음(`TenantClaimTokenCustomizer` cc 경로) | 합성과 무관했다 |
+| admin-service IT(`SettingsListLiveShapeIT:48` · `InventoryLowStockThresholdIT:56`) | `@WithMockUser(WMS_ADMIN, WMS_VIEWER)` | 무영향 |
+
+**⑤ 재현** — 창 불필요. 실 체인 `SecurityChainAssemblyParityTest.java:138-145`(«`entitled_domains=[wms]` + 역할 없음 → 200») 와 `SecurityConfigConverterTest#entitledGrantsViewer` 가 이미 합성을 고정한다 = 제거 시 빨강이 될 대조군.
+
+**`'*'` (Q3 근거)** — WMS 입장 게이트는 와일드카드를 거부한다(`OAuth2ResourceServerConfig.java:60-67`, ADR-MONO-048 § D5 — `allowSuperAdminWildcard()` 미호출). `'*'` 토큰이 들어올 길은 `entitled_domains ∋ wms` 뿐인데 그 값은 tenant `'*'` 의 구독에서 나오고(`TenantClaimTokenCustomizer` `populateEntitledDomains`), account-service 마이그레이션에 `'*'` 의 구독 행은 없다. 들어와도 `SecurityContextReadScopeProvider` 가 `restrictedTo("*")` → 행 0(ADR-MONO-064 D3).
+
+## 소유자 결정 (2026-11-09 UTC · 선택창 응답 — 네 개 모두 추천안)
+
+| Q | 결정 |
+|---|---|
+| Q1 | **합성 제거** — `entitled_domains` 는 입장만 |
+| Q2 | **대시보드별 업무 역할**(② 표) + 모든 행 `WMS_VIEWER` 이상(계층 — `WMS_OPERATOR` 보유 세트는 이전과 같다) |
+| Q3 | **`'*'` 별도 처리 없음** — 대조군에 «입장 거부» 한 줄만 |
+| Q4 | **설정 조회 GET 2곳도 이 티켓에 포함** — WMS 업무 역할 아무거나 |
+
+iam 카탈로그 · 프리셋 · 마이그레이션은 **바뀌지 않는다**(Q2 는 이미 발급되는 업무 역할로 판정) — Scope 의 «iam 카탈로그 · 시스템 프리셋(`V0052` 계열 새 마이그레이션)» 항목은 이 결정으로 불필요해졌다.
