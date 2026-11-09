@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import com.wms.admin.api.ReadGates;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,7 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
  * {@code admin-service-api.md § 1.6}.
  *
  * <ul>
- *   <li>{@code GET /alerts} — list (VIEWER+)</li>
+ *   <li>{@code GET /alerts} — list (any WMS business role or VIEWER+ —
+ *       {@link com.wms.admin.api.ReadGates#ANY_WMS_BUSINESS_ROLE}, TASK-MONO-827)</li>
  *   <li>{@code POST /alerts/{alertId}/acknowledge} — acknowledge alert
  *       (OPERATOR+, the only application-layer write path on a read-model
  *       table).</li>
@@ -46,7 +48,7 @@ public class AlertDashboardController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('WMS_VIEWER')")
+    @PreAuthorize(ReadGates.ANY_WMS_BUSINESS_ROLE)
     public PageResponse<AlertLogResponse> list(
             @RequestParam(required = false) String alertType,
             @RequestParam(required = false) UUID warehouseId,

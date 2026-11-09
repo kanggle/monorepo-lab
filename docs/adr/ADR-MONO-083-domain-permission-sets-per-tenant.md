@@ -294,3 +294,16 @@ ADR-MONO-083 ACCEPTED — <A|B|C>
 | P8 E-commerce 세분 인가 | `TASK-MONO-795` | 루트 (ecommerce + iam 카탈로그) |
 | P9 773 연동(OD-5) | `TASK-MONO-773` 개정(선행 · AC) | 루트 `tasks/ready/` |
 | § Outstanding — 관리 역할 그룹 fan-out 단일 출처 | `TASK-BE-633` | `projects/iam-platform/tasks/ready/` |
+
+## WMS 행 정정 — 대시보드 구독 합성 제거 (`TASK-MONO-827`, 2026-11-09 UTC · 덧붙임 — 위 AS-IS 표는 2026-10-14 실측 기록이라 그대로 둔다)
+
+AS-IS 표의 WMS 행은 admin-service 의 «`WMS_VIEWER`(대시보드, `entitled_domains∋wms` 면 합성)» 을 **적었지만** 판정 열을 «✅ 업무 · 조회/변경 둘 다 있음» 으로 두어 단계(P5–P8)를 만들지 않았다. 그래서 ERP(P6 · `TASK-MONO-793` Q1) · Finance(P7 · `TASK-MONO-794`)가 지운 같은 합성이 WMS 에만 남았고, 37차 창(`TASK-MONO-672` § 37th window)에서 **세트 0 운영자가 WMS 대시보드 200** 으로 드러났다. D3 · D6 의 원칙(조회 전용 세트와 «세트 없음» 을 서버가 구분한다)을 WMS 에도 적용한다.
+
+| 날짜 (UTC) | 질문 | 소유자 결정 | 근거 (AC-0 실측) |
+|---|---|---|---|
+| 2026-11-09 | Q1 합성 | **제거** — `entitled_domains` 는 입장만 정한다(`trustEntitledDomains` 유지) | `WMS_VIEWER` 는 iam `DomainRoleCatalog` · 발급 상한(`OperatorRoleDerivation` wms 갈래)에 없다 — 합성이 유일한 출처였다 |
+| 2026-11-09 | Q2 판정 | **대시보드별 업무 역할** — 주문 · 출하 `OUTBOUND_*` · ASN `INBOUND_*` · 재고 · 조정 `INVENTORY_*` · 기준정보 `MASTER_READ` · 처리량 · 지표 · 알림 목록 = WMS 업무 역할 아무거나 · 모든 행에 `WMS_VIEWER` 이상(역할 계층 — `WMS_OPERATOR` 보유 세트는 이전과 같다) | 원천 서비스(inventory · inbound · outbound · master)가 같은 역할로 판정한다 — 대시보드만 더 넓을 이유가 없다. 합성만 지우면 조회 세트 운영자가 자기 대시보드도 403(V0052 프리셋 중 `WMS_VIEWER` 이상 = `wms-ops-actions` · `wms-full` 뿐) |
+| 2026-11-09 | Q3 `'*'` | **별도 처리 없음** | WMS 입장 게이트가 `'*'` 를 거부하고(ADR-MONO-048 § D5), `'*'` 테넌트는 WMS 구독이 없어 `entitled_domains` 로도 들어오지 못한다 — 게이트 도달 불가(들어와도 `ReadScope` 가 행 0, ADR-MONO-064 D3) |
+| 2026-11-09 | Q4 설정 조회 | **같은 티켓에 포함** — `GET /settings`(`/{key}`) = WMS 업무 역할 아무거나 | 계약은 `WMS_VIEWER` 이상이었으나 코드에 역할 게이트가 없었다 — 합성이 모두를 VIEWER 로 만들어 안 보였을 뿐 |
+
+호출자 영향(AC-0 ④): CI(federation) · 데모 시드 · console-demo 운영자는 전원 `legacy-compat`(→ `WMS_OPERATOR`) — 무영향. 워크로드 토큰은 `entitled_domains` 가 없어 합성과 무관했다. 콘솔(권한 맵 · 개요 WMS 카드)은 793 · 794 와 같이 굽기 라이브 뒤 별도 콘솔 티켓.

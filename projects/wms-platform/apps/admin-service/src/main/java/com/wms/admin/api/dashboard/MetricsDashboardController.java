@@ -4,6 +4,7 @@ import com.example.common.metrics.PerformanceMetrics;
 import com.example.common.time.MetricsPeriod;
 import com.wms.admin.application.dashboard.WarehouseMetricsService;
 import java.util.UUID;
+import com.wms.admin.api.ReadGates;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1/admin/dashboard/metrics")
-@PreAuthorize("hasRole('WMS_VIEWER')")
+@PreAuthorize(ReadGates.ANY_WMS_BUSINESS_ROLE)
 public class MetricsDashboardController {
 
     private final WarehouseMetricsService metricsService;
