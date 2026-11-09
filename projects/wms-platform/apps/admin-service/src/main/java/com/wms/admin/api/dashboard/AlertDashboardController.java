@@ -24,7 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
  * {@code admin-service-api.md § 1.6}.
  *
  * <ul>
- *   <li>{@code GET /alerts} — list (VIEWER+)</li>
+ *   <li>{@code GET /alerts} — list (any WMS business role or VIEWER+ —
+ *       {@link com.wms.admin.api.ReadGates#ANY_WMS_BUSINESS_ROLE}, TASK-MONO-827)</li>
  *   <li>{@code POST /alerts/{alertId}/acknowledge} — acknowledge alert
  *       (OPERATOR+, the only application-layer write path on a read-model
  *       table).</li>
