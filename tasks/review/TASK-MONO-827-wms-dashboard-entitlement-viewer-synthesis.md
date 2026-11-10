@@ -165,3 +165,12 @@ iam 카탈로그 · 프리셋 · 마이그레이션은 **바뀌지 않는다**(Q
 - 🔵 **일부러 남긴 낡은 문장 하나**: admin-service `db/seed/R__seed_dev_data.sql:74-81` 주석이 아직 합성을 현재형으로 적는다. **repeatable** 마이그레이션이라 주석 한 글자만 바꿔도 체크섬이 달라져 기존 볼륨(데모 `wms-devseed.override.yml`)에서 시드가 다시 돈다 — 문구 정정에 그 위험을 걸지 않았다. 같은 사실은 `DevSeedScopeIT` · `domain-model.md` 에서 고쳤다. 다음에 이 파일을 내용 때문에 바꿀 때 함께 고친다.
 - 🔵 게이트 표현식은 `api/ReadGates` 상수 하나 — 컨트롤러 10곳이 문자열을 따로 들지 않는다(한 곳만 고쳐지는 결함 방지).
 - 콘솔 후속(Out of Scope): `shared/guide/permission-map.ts:722-725` 의 «구독만으로 열린다» 주석과 `gate` 정의, 개요 WMS 카드 · 샘플 — 793 · 794 와 같이 굽기 라이브 확인 뒤 별도 콘솔 티켓.
+
+## CORRECTION — AC-3 실행 증거 (2026-11-10 UTC · 분석=Opus 5.5)
+
+AC-3 의 «남은 실행 증거» 가 나왔다 → **AC-3 ✅**(체크박스는 review 동결이라 그대로 두고 이 절이 닫힘 기록이다). **AC-4 는 여전히 열려 있다** — 이 티켓은 `review/` 에 남는다.
+
+- 런 = 머지 뒤 첫 **Federation Hardening 스케줄 런** `42739017018`(2026-11-10 01:54Z, head `ed2f64240`, `git merge-base --is-ancestor aaaad2dfa ed2f64240` = 참 → #4632 포함). 잡 `129575780335` success · Playwright `21 passed`, 실패 0.
+- 두 스펙 모두 **실제로 실행됐다**. 로그 리포터가 합계만 찍으므로 산출물 `federation-hardening-playwright-report-nightly` 의 `test-results/` 에서 확인했다: `entitlement-trust-crossdom-…-domains-finance-wms-are-not-chromium/trace.zip` · `operator-overview-composit-…-heading-only--chromium/trace.zip`.
+- 🔴 **WMS 카드 not-forbidden 단언은 `entitlement-trust-crossdomain` 하나에만 있다.** 그 스펙(`specs/entitlement-trust-crossdomain.spec.ts:66-70`)은 `acme-corp` 운영자(`legacy-compat`, AC-0 ④ CI 행)의 토큰으로 `ENTITLED_DOMAINS = ['finance','wms']` 카드가 `data-status != forbidden` 임을 단언한다 — 합성 제거 뒤 `WMS_OPERATOR` 계층으로 통과하는 것이 이 행의 기대값이다. `operator-overview-composition` 은 SUPER_ADMIN 으로 개요 화면이 뜨는지(URL · 제목 · 헤딩)만 단언한다(`:37`). 위 AC-3 본문의 «두 스펙(WMS 카드 not-forbidden)» 은 이 구분을 뭉뚱그렸다 — 증거를 지는 것은 앞의 스펙이다.
+- AC-0 ④ 의 나머지 행(데모 시드 · console-demo · 콘솔 샘플 · 워크로드 · IT)은 서버를 안 부르거나 `legacy-compat` 이라 이 런과 무관하다. 그 판정은 AC-2 시험 셀이 이미 잰다.

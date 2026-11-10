@@ -8,7 +8,7 @@ TASK-MONO-826
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -146,3 +146,24 @@ monorepo
 
   두 디스패치 런 전체 conclusion = success. 설치 뒤 스펙 실패 없음 → 분리할 새 티켓 없음.
 - **AC-4 · AC-6(d) 미충족(머지 뒤)**: main 의 다음 **스케줄** 런(Nightly 18:00Z · Federation 19:00Z) 초록을 기다린다. 이 PR 은 닫지 않는다.
+
+## CORRECTION — AC-4 충족 · 닫기 (2026-11-10 UTC · 분석=Opus 5.5)
+
+위 줄의 «AC-4 · AC-6(d) 미충족» 은 이제 사실이 아니다. **AC-4 ✅ — 머지 뒤 첫 스케줄 런(event `schedule`, branch `main`).** 두 런 모두 head `ed2f64240` 이고 `git merge-base --is-ancestor aceba5086 ed2f64240` = 참(#4630 포함). `Image:` 줄은 잡 로그(`gh api …/actions/jobs/<id>/logs`)에서 직접 읽었다.
+
+| 잡 | run (생성) | job id | conclusion | `Image:` 줄 |
+|---|---|---|---|---|
+| J1 Frontend E2E full-stack | Nightly `42735541264` (11-10 01:24Z) | 129564322292 | success | `Image: ubuntu-24.04` |
+| J2 Web-store GAP logout | 같은 런 | 129563745818 | success | `Image: ubuntu-24.04` |
+| J3 Platform Console E2E full-stack | 같은 런 | 129564122852 | success | `Image: ubuntu-24.04` |
+| J4 Federation Hardening full-stack | Federation `42739017018` (11-10 01:54Z) | 129575780335 | success | `Image: ubuntu-24.04` |
+
+- 두 런 전체 conclusion = success(Nightly 15개 잡 전부 success · Federation 2개 잡 success, Playwright `21 passed`). 머지 전 기준선(11-05 ~ 11-08 스케줄 런 8개)은 전부 failure였다.
+- 🔵 J5(`ci.yml` 스모크)는 AC-4 의 대상이 아니다(스케줄 없음) — AC-2 의 PR 런 `42590436742` 증거로 닫혔다.
+- 🔵 Edge Case 1(boot-jars 잡과 OS 가 갈라지는 경계): 스케줄 런에서도 `Package … boot jars` 잡들이 success, 그 산출물을 받은 J1/J3/J4 도 success — 경계에서 실패 없음.
+
+**4차원 머지 검증 (AC-6)**
+- (a) `gh pr view 4630` → `MERGED` · 2026-11-09T09:33:23Z · `aceba50869ca4b2890004708f2ece868f7a5d1f6`.
+- (b) `aceba5086` ⊂ `origin/main`(`git merge-base --is-ancestor` 참).
+- (c) #4630 `statusCheckRollup` = SUCCESS 39 · SKIPPED 32 · 실패 0. 필수 4개(`changes` · `INDEX queue drift …` · `Task ID collision …` · `Walkthrough limitation ledger drift …`)는 모두 **실제 실행된 SUCCESS**.
+- (d) § Acceptance Criteria 를 열어 읽었다: AC-0 · AC-1 · AC-2 · AC-3 · AC-5 = § Implementation Notes(2026-11-09) · AC-4 = 위 표 · AC-6 = 이 절.
