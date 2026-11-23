@@ -8,7 +8,7 @@ Gradle 의존성 버전 드리프트 정렬 — 같은 좌표가 모듈마다 �
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -107,3 +107,9 @@ monorepo
 - **AC-2** — 영향 15개 모듈 `compileTestJava` 한 호출, `BUILD SUCCESSFUL` rc=0.
 - **AC-4** — iam security-service 시험 3개가 `com.github.tomakehurst.wiremock` 패키지 그대로 컴파일(AC-2 에 포함).
 - **AC-3** — PR CI 에서 판정(아래 PR 본문).
+
+## CORRECTION (close chore, 2026-11-23 UTC)
+
+- **AC-3 닫힘(실측)** — impl PR #4636(squash `aa46c4361`) 의 CI 에서 실행되어 success: `Build & Test (JDK 21, Linux)` · `Integration (iam A/B)` · `Integration (ecommerce A/B/C)` · `Integration (scm-platform)` · `Integration (inventory + inbound + gateway-service)` · `Integration (master-service + notification-service + outbound-service)` · `E2E smoke (iam docker-compose)`. 실패·취소 0.
+- **Failure Scenario 2 닫힘** — 머지 커밋 `aa46c4361` 의 nightly-e2e(run `45265362304`, push 트리거)에서 `E2E full (iam docker-compose)` **success**.
+- **날짜 정정** — 이 파일의 «2026-11-24 UTC» 는 KST 날짜를 UTC 로 잘못 적은 것이다. 기안 · 구현 · 머지는 모두 **2026-11-23 UTC**(KST 11-24 새벽 — 이 호스트의 KST 00:00–09:00 함정). 날짜를 읽는 게이트가 이 파일을 보지 않아 CI 는 초록이었다.
