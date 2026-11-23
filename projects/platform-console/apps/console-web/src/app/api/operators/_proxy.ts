@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { ApiError, OperatorsUnavailableError } from '@/shared/api/errors';
-import { logger, newRequestId } from '@/shared/lib/logger';
+import { OperatorsUnavailableError } from '@/shared/api/errors';
+import { newRequestId } from '@/shared/lib/logger';
+import { makeIamProxyErrorMapper } from '@/shared/api/proxy-factory';
 
 /**
  * Shared error → HTTP mapping for the operators proxy routes
@@ -239,52 +239,12 @@ export const InvitationReasonBodySchema = z
   .strict();
 export type InvitationReasonBody = z.infer<typeof InvitationReasonBodySchema>;
 
-export function mapError(err: unknown, requestId: string): NextResponse {
-  if (err instanceof ApiError && err.status === 401) {
-    return NextResponse.json(
-      { code: err.code, message: 'session expired' },
-      { status: 401 },
-    );
-  }
-  if (err instanceof ApiError && err.code === 'NO_ACTIVE_TENANT') {
-    return NextResponse.json(
-      { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
-      { status: 400 },
-    );
-  }
-  if (err instanceof ApiError) {
-    // 403 PERMISSION_DENIED / 403 TENANT_SCOPE_DENIED /
-    // 409 OPERATOR_EMAIL_CONFLICT / 400 ROLE_NOT_FOUND|VALIDATION_ERROR|
-    // STATE_TRANSITION_INVALID|SELF_SUSPEND_FORBIDDEN|
-    // CURRENT_PASSWORD_MISMATCH|PASSWORD_POLICY_VIOLATION /
-    // 404 OPERATOR_NOT_FOUND → inline actionable (passthrough, no crash).
-    return NextResponse.json(
-      { code: err.code, message: err.message },
-      { status: err.status },
-    );
-  }
-  if (err instanceof OperatorsUnavailableError) {
-    logger.warn('operators_proxy_degraded', {
-      requestId,
-      reason: err.reason,
-    });
-    return NextResponse.json(
-      { code: err.code, message: 'operators unavailable' },
-      { status: 503 },
-    );
-  }
-  logger.error('operators_proxy_error', { requestId });
-  return NextResponse.json(
-    { code: 'DOWNSTREAM_ERROR', message: 'operators unavailable' },
-    { status: 503 },
-  );
-}
+export const mapError = makeIamProxyErrorMapper({
+  logPrefix: 'operators',
+  UnavailableErrorClass: OperatorsUnavailableError,
+  unavailableMessage: 'operators unavailable',
+});
 
-export function badRequest(): NextResponse {
-  return NextResponse.json(
-    { code: 'VALIDATION_ERROR', message: 'invalid request body' },
-    { status: 422 },
-  );
-}
+export { badRequest } from '@/shared/api/proxy-factory';
 
 export { newRequestId };

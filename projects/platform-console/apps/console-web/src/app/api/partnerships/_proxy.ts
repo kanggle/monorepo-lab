@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { ApiError, PartnershipsUnavailableError } from '@/shared/api/errors';
-import { logger, newRequestId } from '@/shared/lib/logger';
+import { PartnershipsUnavailableError } from '@/shared/api/errors';
+import { newRequestId } from '@/shared/lib/logger';
+import { makeIamProxyErrorMapper } from '@/shared/api/proxy-factory';
 
 /**
  * Shared body/param schemas + error → HTTP mapping for the partnership proxy
@@ -57,54 +57,12 @@ export type ParticipantAddBody = z.infer<typeof ParticipantAddBodySchema>;
 /** Path param — a non-empty id / operatorId. Validated via `.safeParse`. */
 export const IdParamSchema = z.string().min(1);
 
-export function mapError(err: unknown, requestId: string): NextResponse {
-  if (err instanceof ApiError && err.status === 401) {
-    return NextResponse.json(
-      { code: err.code, message: 'session expired' },
-      { status: 401 },
-    );
-  }
-  if (err instanceof ApiError && err.code === 'NO_ACTIVE_TENANT') {
-    return NextResponse.json(
-      { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
-      { status: 400 },
-    );
-  }
-  if (err instanceof ApiError) {
-    // 403 PERMISSION_DENIED / PARTNERSHIP_SCOPE_DENIED /
-    // 400 REASON_REQUIRED|VALIDATION_ERROR /
-    // 422 PARTNERSHIP_SCOPE_INVALID|PARTICIPANT_NOT_OWN_OPERATOR|
-    //     PARTICIPANT_SCOPE_EXCEEDS_DELEGATION /
-    // 404 PARTNERSHIP_NOT_FOUND|OPERATOR_NOT_FOUND|PARTICIPANT_NOT_FOUND /
-    // 409 PARTNERSHIP_ALREADY_EXISTS|PARTNERSHIP_TRANSITION_INVALID
-    // → inline actionable passthrough.
-    return NextResponse.json(
-      { code: err.code, message: err.message },
-      { status: err.status },
-    );
-  }
-  if (err instanceof PartnershipsUnavailableError) {
-    logger.warn('partnerships_proxy_degraded', {
-      requestId,
-      reason: err.reason,
-    });
-    return NextResponse.json(
-      { code: err.code, message: 'partnerships unavailable' },
-      { status: 503 },
-    );
-  }
-  logger.error('partnerships_proxy_error', { requestId });
-  return NextResponse.json(
-    { code: 'DOWNSTREAM_ERROR', message: 'partnerships unavailable' },
-    { status: 503 },
-  );
-}
+export const mapError = makeIamProxyErrorMapper({
+  logPrefix: 'partnerships',
+  UnavailableErrorClass: PartnershipsUnavailableError,
+  unavailableMessage: 'partnerships unavailable',
+});
 
-export function badRequest(): NextResponse {
-  return NextResponse.json(
-    { code: 'VALIDATION_ERROR', message: 'invalid request body' },
-    { status: 422 },
-  );
-}
+export { badRequest } from '@/shared/api/proxy-factory';
 
 export { newRequestId };

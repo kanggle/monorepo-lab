@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { ApiError, OrgNodesUnavailableError } from '@/shared/api/errors';
-import { logger, newRequestId } from '@/shared/lib/logger';
+import { OrgNodesUnavailableError } from '@/shared/api/errors';
+import { newRequestId } from '@/shared/lib/logger';
+import { makeIamProxyErrorMapper } from '@/shared/api/proxy-factory';
 import { CeilingSchema } from '@/features/org-hierarchy/api/types';
 
 /**
@@ -90,47 +90,12 @@ export const PlaceTenantBodySchema = z
   .strict();
 export type PlaceTenantBody = z.infer<typeof PlaceTenantBodySchema>;
 
-export function mapError(err: unknown, requestId: string): NextResponse {
-  if (err instanceof ApiError && err.status === 401) {
-    return NextResponse.json(
-      { code: err.code, message: 'session expired' },
-      { status: 401 },
-    );
-  }
-  if (err instanceof ApiError && err.code === 'NO_ACTIVE_TENANT') {
-    return NextResponse.json(
-      { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
-      { status: 400 },
-    );
-  }
-  if (err instanceof ApiError) {
-    // 403 PERMISSION_DENIED / ORG_NODE_SELF_CEILING_DENIED /
-    // 404 ORG_NODE_NOT_FOUND / 422 ORG_NODE_* / 400 VALIDATION_ERROR →
-    // inline actionable passthrough (verbatim code + message).
-    return NextResponse.json(
-      { code: err.code, message: err.message },
-      { status: err.status },
-    );
-  }
-  if (err instanceof OrgNodesUnavailableError) {
-    logger.warn('org_nodes_proxy_degraded', { requestId, reason: err.reason });
-    return NextResponse.json(
-      { code: err.code, message: 'org-node hierarchy unavailable' },
-      { status: 503 },
-    );
-  }
-  logger.error('org_nodes_proxy_error', { requestId });
-  return NextResponse.json(
-    { code: 'DOWNSTREAM_ERROR', message: 'org-node hierarchy unavailable' },
-    { status: 503 },
-  );
-}
+export const mapError = makeIamProxyErrorMapper({
+  logPrefix: 'org_nodes',
+  UnavailableErrorClass: OrgNodesUnavailableError,
+  unavailableMessage: 'org-node hierarchy unavailable',
+});
 
-export function badRequest(): NextResponse {
-  return NextResponse.json(
-    { code: 'VALIDATION_ERROR', message: 'invalid request body' },
-    { status: 422 },
-  );
-}
+export { badRequest } from '@/shared/api/proxy-factory';
 
 export { newRequestId };

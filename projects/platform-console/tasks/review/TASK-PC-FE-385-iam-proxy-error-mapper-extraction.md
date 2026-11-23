@@ -8,7 +8,7 @@ console-web IAM 계열 `_proxy.ts` 7개의 손으로 짠 `mapError` 를 공유 �
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -66,11 +66,11 @@ platform-console
 
 # Acceptance Criteria
 
-- [ ] AC-1: 7개 `_proxy.ts` 에 `function mapError` 정의가 0개이고, 13개에 `function badRequest` 정의가 0개다.
-- [ ] AC-2: 이 7개 도메인의 **기존** route/proxy 시험이 **수정 없이** 통과한다(동작 불변의 판정). 시험 파일을 고쳐야 통과한다면 동작이 바뀐 것이다 → 멈추고 보고.
-- [ ] AC-3: 새 단위 시험이 표의 IAM 열 다섯 분기를 각각 단언한다 — 특히 ① 403 이 서버 `code`·`message` 를 **그대로** 낸다 ② `details` 가 응답에 **없다** ③ 폴백 코드가 `DOWNSTREAM_ERROR` 다 ④ 로그 이벤트 이름이 `<logPrefix>_proxy_degraded` / `_proxy_error` 다.
-- [ ] AC-4: 새 시험 bite — 팩토리의 403 분기를 비-IAM 동작으로 바꾸면 AC-3 시험이 빨강, 되돌리면 초록(복원된 트리에서 재실행).
-- [ ] AC-5: `tsc --noEmit` · `lint` · console-web vitest 전체 rc=0(각각 독립 실행 + 명시 rc).
+- [x] AC-1: 7개 `_proxy.ts` 에 `function mapError` 정의가 0개이고, 13개에 `function badRequest` 정의가 0개다.
+- [x] AC-2: 이 7개 도메인의 **기존** route/proxy 시험이 **수정 없이** 통과한다(동작 불변의 판정). 시험 파일을 고쳐야 통과한다면 동작이 바뀐 것이다 → 멈추고 보고.
+- [x] AC-3: 새 단위 시험이 표의 IAM 열 다섯 분기를 각각 단언한다 — 특히 ① 403 이 서버 `code`·`message` 를 **그대로** 낸다 ② `details` 가 응답에 **없다** ③ 폴백 코드가 `DOWNSTREAM_ERROR` 다 ④ 로그 이벤트 이름이 `<logPrefix>_proxy_degraded` / `_proxy_error` 다.
+- [x] AC-4: 새 시험 bite — 팩토리의 403 분기를 비-IAM 동작으로 바꾸면 AC-3 시험이 빨강, 되돌리면 초록(복원된 트리에서 재실행).
+- [x] AC-5: `tsc --noEmit` · `lint` · console-web vitest 전체 rc=0(각각 독립 실행 + 명시 rc).
 
 # Related Specs
 

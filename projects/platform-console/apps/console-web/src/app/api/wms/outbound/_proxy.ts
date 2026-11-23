@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { WmsOutboundUnavailableError } from '@/shared/api/errors';
 import { makeProxyErrorMapper } from '@/shared/api/proxy-factory';
@@ -48,11 +47,6 @@ export const mapOutboundError = makeProxyErrorMapper(
   WmsOutboundUnavailableError,
 );
 
-export function badRequest(): NextResponse {
-  return NextResponse.json(
-    { code: 'VALIDATION_ERROR', message: 'invalid request body' },
-    { status: 422 },
-  );
-}
+export { badRequest } from '@/shared/api/proxy-factory';
 
 export { newRequestId };
