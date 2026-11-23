@@ -220,11 +220,13 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-829-gradle-versions-to-gradle-properties.md` — **서드파티 버전 13종 → `gradle.properties` 속성 + 재발 가드** (REVIEW, 2026-11-24 UTC · 828 #4636 머지 뒤). 해석 그래프 전후 diff **0줄**(84 프로젝트) · 가드 `check-gradle-managed-versions.sh` 실트리 bite. 🔴 AC-1 = 전 프로젝트 해석 그래프 전후 **바이트 동일**. 카탈로그 · convention plugin 은 범위 밖(ADR 감). `scripts/` 추가 → 가드 전수 재실행. 분석=Opus 5.5 / 구현 권장=Sonnet.
-- `TASK-MONO-828-gradle-dependency-version-drift-alignment.md` — **Gradle 의존성 버전 드리프트 정렬** (REVIEW, 2026-11-24 UTC · 전후 해석 그래프 대조 = 바뀐 프로젝트 정확히 15개 · 시험 클래스패스만 · 소유자 «리팩토링 검토 → 전부 진행»). `nimbus-jose-jwt` 9.48/9.40/9.37.3 · `wiremock` 3.9.1/3.10.0 + 옛 좌표 · iam e2e 낡은 6개를 저장소 다수 버전으로. 🔴 AC-3 = 영향 잡이 SKIPPED 아닌 **실행** success. 후속 = 829. 분석=Opus 5.5 / 구현 권장=Sonnet.
 - `TASK-MONO-827-wms-dashboard-entitlement-viewer-synthesis.md` — **WMS admin-service 대시보드 · 설정 조회를 구독이 아닌 업무 역할로 판정 — `ROLE_WMS_VIEWER` 합성 제거** (REVIEW, 2026-11-09 UTC · 소유자 결정 Q1–Q4 · AC-0–AC-2 ✅ · AC-3 ✅ 2026-11-10 Federation 스케줄 런 `42739017018`(§ CORRECTION — WMS 단언은 `entitlement-trust-crossdomain` 하나) · 🔴 AC-4 = 굽기 뒤 창에서 `TASK-MONO-672` 세트별 표 WMS 행 재측정 대기 — `MONO-648` 촬영 창과 묶음). 대조군 `DashboardBusinessRoleGateSliceTest`(실 체인 · 실서명 JWT · 12셀, bite 확인). 콘솔 반영(권한 맵 · 개요 WMS 카드)은 별도 콘솔 티켓. 분석=Opus 5.5 / 구현 권장=Opus.
 
 ## done
+
+- ✅ `TASK-MONO-829-gradle-versions-to-gradle-properties.md` — **DONE 2026-11-23 UTC (4-dim verified)** — impl PR #4638(`ced51f247`, 실패 0 · 42 잡 실행). 서드파티 버전 13종 → `gradle.properties` 속성(57 파일 366곳) · 해석 그래프 전후 diff **0줄**(84 프로젝트) · 새 가드 `check-gradle-managed-versions.sh`(실트리 bite + self-test 6칸) · `scripts/` 28/68 산문 갱신. 🔴 기안 «2026-11-24 UTC» 는 KST 오기 — `## CORRECTION`.
+
+- ✅ `TASK-MONO-828-gradle-dependency-version-drift-alignment.md` — **DONE 2026-11-23 UTC (4-dim verified)** — impl PR #4636(`aa46c4361`, 실패 0). nimbus 3종 · wiremock 2종+옛 좌표 · iam e2e 6개를 저장소 다수 버전으로. 전후 덤프 = 바뀐 프로젝트 정확히 15개 · 시험 클래스패스만. AC-3 = 통합 · iam e2e smoke 실행 success · 머지 커밋 nightly `E2E full (iam docker-compose)` success.
 
 - ✅ `TASK-MONO-826-pin-playwright-jobs-to-ubuntu-24-04.md` — **DONE 2026-11-10 UTC (4-dim verified)** — impl PR #4630(`aceba5086`, 실패 0, 필수 4개 실제 실행) · AC-4 = 머지 뒤 첫 스케줄 런 Nightly `42735541264`(J1–J3) · Federation `42739017018`(J4) 전부 success + 잡 로그 `Image: ubuntu-24.04` 직접 인용 · 기준선 11-05~11-08 스케줄 런 8개 전부 failure. Playwright 5개 잡 `runs-on` 고정 · 되돌릴 조건은 주석(AC-5, 24.04 지원 종료일 미확인).
 - ✅ `TASK-MONO-821-demo-seed-finance-backfill-four-weeks.md` — **DONE 2026-11-09 UTC (4-dim verified)** — impl PR #4605(`6475a0e51`, 실패 0) · 37차 굽기 `ami-03c8db6ad7360cbed`(`e1ad3f577`) · AC-5 라이브 ✅: 첫 부팅 «창 안 67 건 (이번에 +67)» · 같은 날 2회차 «수렴, +0 · 잔액 불변» · A/B 잔액 = DB 이력 합 = API 이력 합 · 주간 직전 이체 40,000 > 0 · ⚪ 월간 막대 ≥ 10일(11-09 은 달력 9일 — DB 28일 중 25일 입금).

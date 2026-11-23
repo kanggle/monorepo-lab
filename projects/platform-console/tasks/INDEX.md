@@ -125,10 +125,11 @@ _(없음)_
 
 ## review
 
-- `TASK-PC-FE-385-iam-proxy-error-mapper-extraction.md` — **IAM 계열 `_proxy.ts` 7개 `mapError` → 공유 팩토리 · `badRequest()` 13벌 → 한 곳** (REVIEW, 2026-11-24 UTC · 소유자 «리팩토링 검토 → 전부 진행»). 🔴 기존 `makeProxyErrorMapper` 로 옮기면 403 · 폴백 코드 · `details` 가 바뀐다 → IAM 동작 그대로의 두 번째 팩토리 `makeIamProxyErrorMapper`. AC-2 = 기존 시험 **무수정** 통과.
 
 ## done
 - ✅ `TASK-PC-FE-364-operator-overview-business-kpis.md` — **DONE 2026-11-09 UTC (4-dim verified)** — impl PR #4469(`db35564fc`, 실패 0) · AC-3 ✅: 35차 로그인·익명 화면 + 37차 창 권한별 표 — 창 안에서 만든 단일 세트 운영자로 8세트 + 세트 없음 + `scm-read` 대조군 전부 «이후» 열과 일치, 소유자 화면(SCM 값 · 나머지 «권한 없음») · ⚪ SUPER_ADMIN `'*'` ERP 행은 소유자 선택 안 함.
+- ✅ `TASK-PC-FE-385-iam-proxy-error-mapper-extraction.md` — **DONE 2026-11-23 UTC (4-dim verified)** — impl PR #4637(`5ef196ee0`, 실패 0). IAM 계열 `_proxy.ts` 7개 `mapError` → `makeIamProxyErrorMapper`(응답 불변 — 로그 접두사 · 메시지 원본 7/7 대조) · `badRequest()` 13벌 → 한 곳. 기존 시험 무수정 · vitest 5641 칸 · bite 확인.
+
 - ✅ `TASK-PC-FE-383-sample-operator-group-domain-sets-dialogs.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4610(`49fb0abfc`, 실패 0) · 샘플 운영자 «도메인 접근» · 그룹 «세트» 픽스처(출처 DIRECT · MIGRATION · GROUP, 382 세트 id 만 참조) · AC-5 운영 실측(«준비 중» 0, 대조군 `/fan` 1).
 - ✅ `TASK-PC-FE-382-sample-domain-permission-sets-entry-policy.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4607(`f78e3466a`, 실패 0) · 샘플 원장 `domain_permission_sets` · `tenant_entry_policy` → `ready` · AC-5 운영 실측(쿠키 없는 방문 3화면 «준비 중» 0, 대조군 `/fan` 1).
 - ✅ `TASK-PC-FE-377-replenishment-table-reorder-point-bar.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4579(`c7e58e9ba`, 실패 0) · AC-7 36차 창 라이브 ✅

@@ -8,7 +8,7 @@ TASK-MONO-829
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -112,3 +112,8 @@ monorepo
 - **AC-3** — 실트리 bite: `projects/ecommerce-microservices-platform/tests/e2e/build.gradle` 에 `'org.awaitility:awaitility:4.2.2'` 를 되살려 스테이지 → rc=1 + `:46` 줄 출력. 백업 파일로 복원 → rc=0. `--self-test` 6칸(깨끗한 트리 통과 · R1 물기 · R1 대조군(속성 형태는 안 문다) · R2 · R3 · 하한) 전부 기대값. 🔴 첫 self-test 에서 하한 칸이 **주입 실패**(`m*/` glob 이 합성 트리가 아니라 현재 디렉터리에서 펼쳐짐)였고, 주입 검증 줄을 넣어 고쳤다 — 그 칸은 그전까지 아무것도 시험하지 않았다.
 - **AC-4** — 스테이지 후 `scripts/check-*` 46개 전부 실행. 실패 둘은 이 변경의 결과였고 고쳤다: `check-ls-files-guard-count`(28/68 → CLAUDE.md · git-workflow-policy.md 산문 갱신 후 rc=0), `check-index-queue-drift`(라이프사이클 이동 뒤 재실행). 남은 둘은 **환경 의존이라 로컬 미측정**이고 `main` 에서도 같은 rc=1: `check-erp-single-tenant-ratchet`(ERP 스택 필요, CI 밖 수동 가드) · `check-prerendered-demo-verdict`(`next build` 산출물 필요, CI 는 빌드 다음 스텝).
 - **AC-5** — PR CI 로 판정.
+
+## CORRECTION (close chore, 2026-11-23 UTC)
+
+- **AC-5 닫힘(실측)** — impl PR #4638(squash `ced51f247`) 의 CI 에서 42개 잡 실행 · 전부 success(실패 0) — `Build & Test (JDK 21, Linux)` 와 새 잡 `Gradle managed versions (gradle.properties, not literals)` 포함.
+- **날짜 정정** — 이 파일의 «2026-11-24 UTC» 는 KST 날짜를 UTC 로 잘못 적은 것이다. 기안 · 구현 · 머지는 모두 **2026-11-23 UTC**(KST 11-24 새벽 — 이 호스트의 KST 00:00–09:00 함정). 날짜를 읽는 게이트가 이 파일을 보지 않아 CI 는 초록이었다.

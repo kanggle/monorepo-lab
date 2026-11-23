@@ -8,7 +8,7 @@ console-web IAM 계열 `_proxy.ts` 7개의 손으로 짠 `mapError` 를 공유 �
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -110,3 +110,8 @@ platform-console
 # Definition of Done
 
 - AC 전부 · PR CI 초록 · 머지.
+
+## CORRECTION (close chore, 2026-11-23 UTC)
+
+- impl PR #4637(squash `5ef196ee0`) CI 실패 0 — `Frontend unit tests` · `Frontend E2E smoke` 실행 success. 라우트 · testid · 제목 변경 없음 ⇒ nightly 전용 e2e 영향 없음.
+- **날짜 정정** — 이 파일의 «2026-11-24 UTC» 는 KST 날짜를 UTC 로 잘못 적은 것이다. 기안 · 구현 · 머지는 모두 **2026-11-23 UTC**(KST 11-24 새벽 — 이 호스트의 KST 00:00–09:00 함정). 날짜를 읽는 게이트가 이 파일을 보지 않아 CI 는 초록이었다.
