@@ -62,7 +62,7 @@ dependencies {
     testImplementation 'com.redis:testcontainers-redis:2.2.2'
     testImplementation 'org.assertj:assertj-core'
     testImplementation 'org.awaitility:awaitility:4.2.2'
-    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.40'
+    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
 }
 
 dependencyManagement {

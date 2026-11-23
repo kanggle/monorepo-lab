@@ -79,7 +79,7 @@ dependencies {
     testImplementation 'org.testcontainers:junit-jupiter'
     // WireMock — stubs account-service /internal/** for the seller-provisioning client
     // fail-soft unit test (TASK-BE-402, mirrors admin-service AccountServiceClientUnitTest).
-    testImplementation 'org.wiremock:wiremock-standalone:3.9.1'
+    testImplementation 'org.wiremock:wiremock-standalone:3.10.0'
 }
 
 // Docker / Testcontainers env (DOCKER_HOST, DOCKER_API_VERSION, api.version) is

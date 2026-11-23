@@ -63,7 +63,7 @@ dependencies {
     testImplementation 'org.springframework.kafka:spring-kafka-test'
     testImplementation 'com.jayway.jsonpath:json-path'
     testImplementation 'org.awaitility:awaitility'
-    testImplementation 'org.wiremock:wiremock-standalone:3.9.1'
+    testImplementation 'org.wiremock:wiremock-standalone:3.10.0'
 }
 
 dependencyManagement {
