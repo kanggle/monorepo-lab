@@ -70,11 +70,6 @@ export const mapReplenishmentError = makeProxyErrorMapper(
   ],
 );
 
-export function badRequest(): NextResponse {
-  return NextResponse.json(
-    { code: 'VALIDATION_ERROR', message: 'invalid request body' },
-    { status: 422 },
-  );
-}
+export { badRequest } from '@/shared/api/proxy-factory';
 
 export { newRequestId };

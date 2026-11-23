@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { EcommerceUnavailableError } from '@/shared/api/errors';
 import { makeProxyErrorMapper } from '@/shared/api/proxy-factory';
@@ -56,12 +55,7 @@ export const mapEcommerceError = makeProxyErrorMapper(
 );
 
 /** A 422 for an invalid request body (Zod parse failure). */
-export function badRequest(): NextResponse {
-  return NextResponse.json(
-    { code: 'VALIDATION_ERROR', message: 'invalid request body' },
-    { status: 422 },
-  );
-}
+export { badRequest } from '@/shared/api/proxy-factory';
 
 // Re-export the producer-matched body schemas so the route handlers validate
 // the client payload before it reaches the upstream (defence-in-depth — the

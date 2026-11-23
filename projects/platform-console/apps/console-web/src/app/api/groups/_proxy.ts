@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { ApiError, GroupsUnavailableError } from '@/shared/api/errors';
-import { logger, newRequestId } from '@/shared/lib/logger';
+import { GroupsUnavailableError } from '@/shared/api/errors';
+import { newRequestId } from '@/shared/lib/logger';
+import { makeIamProxyErrorMapper } from '@/shared/api/proxy-factory';
 
 /**
  * Shared error → HTTP mapping + body schemas for the operator-group proxy
@@ -103,50 +103,12 @@ export const AddGroupDomainSetBodySchema = z
   .strict();
 export type AddGroupDomainSetBody = z.infer<typeof AddGroupDomainSetBodySchema>;
 
-export function mapError(err: unknown, requestId: string): NextResponse {
-  if (err instanceof ApiError && err.status === 401) {
-    return NextResponse.json(
-      { code: err.code, message: 'session expired' },
-      { status: 401 },
-    );
-  }
-  if (err instanceof ApiError && err.code === 'NO_ACTIVE_TENANT') {
-    return NextResponse.json(
-      { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
-      { status: 400 },
-    );
-  }
-  if (err instanceof ApiError) {
-    // 403 PERMISSION_DENIED / TENANT_SCOPE_DENIED / ROLE_GRANT_FORBIDDEN /
-    // 404 GROUP_NOT_FOUND / GROUP_MEMBER_NOT_FOUND / OPERATOR_NOT_FOUND /
-    // 409 GROUP_NAME_CONFLICT / GROUP_MEMBER_ALREADY_EXISTS /
-    // GROUP_GRANT_ALREADY_EXISTS / 422 GROUP_MEMBER_TENANT_MISMATCH /
-    // GROUP_GRANT_NO_ESCALATION / 400 VALIDATION_ERROR / ROLE_NOT_FOUND →
-    // inline actionable passthrough (verbatim code + message).
-    return NextResponse.json(
-      { code: err.code, message: err.message },
-      { status: err.status },
-    );
-  }
-  if (err instanceof GroupsUnavailableError) {
-    logger.warn('groups_proxy_degraded', { requestId, reason: err.reason });
-    return NextResponse.json(
-      { code: err.code, message: 'operator-group service unavailable' },
-      { status: 503 },
-    );
-  }
-  logger.error('groups_proxy_error', { requestId });
-  return NextResponse.json(
-    { code: 'DOWNSTREAM_ERROR', message: 'operator-group service unavailable' },
-    { status: 503 },
-  );
-}
+export const mapError = makeIamProxyErrorMapper({
+  logPrefix: 'groups',
+  UnavailableErrorClass: GroupsUnavailableError,
+  unavailableMessage: 'operator-group service unavailable',
+});
 
-export function badRequest(): NextResponse {
-  return NextResponse.json(
-    { code: 'VALIDATION_ERROR', message: 'invalid request body' },
-    { status: 422 },
-  );
-}
+export { badRequest } from '@/shared/api/proxy-factory';
 
 export { newRequestId };

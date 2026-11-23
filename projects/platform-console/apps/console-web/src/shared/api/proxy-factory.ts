@@ -120,3 +120,63 @@ export function makeProxyErrorMapper(
     );
   };
 }
+
+/**
+ * Error → HTTP mapping shared by the IAM-family proxies (tenants / operators /
+ * groups / org-nodes / partnerships / subscriptions / domain-permission-sets).
+ * TASK-PC-FE-385 — extracted verbatim from the hand-written per-file `mapError`.
+ *
+ * 🔴 Behaviour differs from {@link makeProxyErrorMapper}: 403 passes through
+ * with the server's own code + message, `details` is dropped, and the final
+ * fallback code is `DOWNSTREAM_ERROR`.
+ */
+export function makeIamProxyErrorMapper(opts: {
+  logPrefix: string;
+  UnavailableErrorClass: UnavailableErrorCtor;
+  unavailableMessage: string;
+}): (err: unknown, requestId: string) => NextResponse {
+  const { logPrefix, UnavailableErrorClass, unavailableMessage } = opts;
+  return (err: unknown, requestId: string): NextResponse => {
+    if (err instanceof ApiError && err.status === 401) {
+      return NextResponse.json(
+        { code: err.code, message: 'session expired' },
+        { status: 401 },
+      );
+    }
+    if (err instanceof ApiError && err.code === 'NO_ACTIVE_TENANT') {
+      return NextResponse.json(
+        { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
+        { status: 400 },
+      );
+    }
+    if (err instanceof ApiError) {
+      return NextResponse.json(
+        { code: err.code, message: err.message },
+        { status: err.status },
+      );
+    }
+    if (err instanceof UnavailableErrorClass) {
+      logger.warn(`${logPrefix}_proxy_degraded`, {
+        requestId,
+        reason: err.reason,
+      });
+      return NextResponse.json(
+        { code: err.code, message: unavailableMessage },
+        { status: 503 },
+      );
+    }
+    logger.error(`${logPrefix}_proxy_error`, { requestId });
+    return NextResponse.json(
+      { code: 'DOWNSTREAM_ERROR', message: unavailableMessage },
+      { status: 503 },
+    );
+  };
+}
+
+/** 422 body-validation failure — one copy for every `_proxy.ts`. */
+export function badRequest(): NextResponse {
+  return NextResponse.json(
+    { code: 'VALIDATION_ERROR', message: 'invalid request body' },
+    { status: 422 },
+  );
+}

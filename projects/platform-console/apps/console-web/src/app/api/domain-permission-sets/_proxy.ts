@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { ApiError, DomainPermissionSetsUnavailableError } from '@/shared/api/errors';
-import { logger, newRequestId } from '@/shared/lib/logger';
+import { DomainPermissionSetsUnavailableError } from '@/shared/api/errors';
+import { newRequestId } from '@/shared/lib/logger';
+import { makeIamProxyErrorMapper } from '@/shared/api/proxy-factory';
 
 /**
  * Shared error → HTTP mapping + body schemas for the ADR-MONO-083
@@ -60,53 +60,12 @@ export type UpdateSetBody = z.infer<typeof UpdateSetBodySchema>;
 export const SetReasonBodySchema = z.object({ reason: z.string() }).strict();
 export type SetReasonBody = z.infer<typeof SetReasonBodySchema>;
 
-export function mapError(err: unknown, requestId: string): NextResponse {
-  if (err instanceof ApiError && err.status === 401) {
-    return NextResponse.json(
-      { code: err.code, message: 'session expired' },
-      { status: 401 },
-    );
-  }
-  if (err instanceof ApiError && err.code === 'NO_ACTIVE_TENANT') {
-    return NextResponse.json(
-      { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
-      { status: 400 },
-    );
-  }
-  if (err instanceof ApiError) {
-    // 403 PERMISSION_DENIED / TENANT_SCOPE_DENIED /
-    // 404 DOMAIN_PERMISSION_SET_NOT_FOUND /
-    // 409 DOMAIN_PERMISSION_SET_READ_ONLY / DOMAIN_PERMISSION_SET_IN_USE /
-    // 422 DOMAIN_ROLE_NOT_ASSIGNABLE / DOMAIN_NOT_SUBSCRIBED /
-    // 400 VALIDATION_ERROR / REASON_REQUIRED → inline actionable passthrough
-    // (verbatim code + message).
-    return NextResponse.json(
-      { code: err.code, message: err.message },
-      { status: err.status },
-    );
-  }
-  if (err instanceof DomainPermissionSetsUnavailableError) {
-    logger.warn('domain_permission_sets_proxy_degraded', {
-      requestId,
-      reason: err.reason,
-    });
-    return NextResponse.json(
-      { code: err.code, message: '업무 권한 세트 service unavailable' },
-      { status: 503 },
-    );
-  }
-  logger.error('domain_permission_sets_proxy_error', { requestId });
-  return NextResponse.json(
-    { code: 'DOWNSTREAM_ERROR', message: '업무 권한 세트 service unavailable' },
-    { status: 503 },
-  );
-}
+export const mapError = makeIamProxyErrorMapper({
+  logPrefix: 'domain_permission_sets',
+  UnavailableErrorClass: DomainPermissionSetsUnavailableError,
+  unavailableMessage: '업무 권한 세트 service unavailable',
+});
 
-export function badRequest(): NextResponse {
-  return NextResponse.json(
-    { code: 'VALIDATION_ERROR', message: 'invalid request body' },
-    { status: 422 },
-  );
-}
+export { badRequest } from '@/shared/api/proxy-factory';
 
 export { newRequestId };

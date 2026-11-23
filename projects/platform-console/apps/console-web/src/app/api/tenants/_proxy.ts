@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { ApiError, TenantsUnavailableError } from '@/shared/api/errors';
-import { logger, newRequestId } from '@/shared/lib/logger';
+import { TenantsUnavailableError } from '@/shared/api/errors';
+import { newRequestId } from '@/shared/lib/logger';
+import { makeIamProxyErrorMapper } from '@/shared/api/proxy-factory';
 import {
   TENANT_TYPES,
   TENANT_PATCH_STATUSES,
@@ -83,48 +83,12 @@ export const UpdateTenantBodySchema = z
   );
 export type UpdateTenantBody = z.infer<typeof UpdateTenantBodySchema>;
 
-export function mapError(err: unknown, requestId: string): NextResponse {
-  if (err instanceof ApiError && err.status === 401) {
-    return NextResponse.json(
-      { code: err.code, message: 'session expired' },
-      { status: 401 },
-    );
-  }
-  if (err instanceof ApiError && err.code === 'NO_ACTIVE_TENANT') {
-    return NextResponse.json(
-      { code: 'NO_ACTIVE_TENANT', message: 'no active tenant selected' },
-      { status: 400 },
-    );
-  }
-  if (err instanceof ApiError) {
-    // 403 PERMISSION_DENIED / TENANT_SCOPE_DENIED (not SUPER_ADMIN) /
-    // 400 VALIDATION_ERROR / TENANT_ID_RESERVED /
-    // 404 TENANT_NOT_FOUND / 409 TENANT_ALREADY_EXISTS /
-    // 503(as ApiError, if any) → inline actionable passthrough.
-    return NextResponse.json(
-      { code: err.code, message: err.message },
-      { status: err.status },
-    );
-  }
-  if (err instanceof TenantsUnavailableError) {
-    logger.warn('tenants_proxy_degraded', { requestId, reason: err.reason });
-    return NextResponse.json(
-      { code: err.code, message: 'tenant management unavailable' },
-      { status: 503 },
-    );
-  }
-  logger.error('tenants_proxy_error', { requestId });
-  return NextResponse.json(
-    { code: 'DOWNSTREAM_ERROR', message: 'tenant management unavailable' },
-    { status: 503 },
-  );
-}
+export const mapError = makeIamProxyErrorMapper({
+  logPrefix: 'tenants',
+  UnavailableErrorClass: TenantsUnavailableError,
+  unavailableMessage: 'tenant management unavailable',
+});
 
-export function badRequest(): NextResponse {
-  return NextResponse.json(
-    { code: 'VALIDATION_ERROR', message: 'invalid request body' },
-    { status: 422 },
-  );
-}
+export { badRequest } from '@/shared/api/proxy-factory';
 
 export { newRequestId };

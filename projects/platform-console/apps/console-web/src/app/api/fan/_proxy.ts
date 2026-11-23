@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import type { z } from 'zod';
 import { FanUnavailableError } from '@/shared/api/errors';
 import { makeProxyErrorMapper } from '@/shared/api/proxy-factory';
@@ -24,12 +23,7 @@ export const mapFanError = makeProxyErrorMapper('fan', FanUnavailableError);
 export { newRequestId };
 
 /** A 422 for a body the console refuses to forward. */
-export function badRequest(): NextResponse {
-  return NextResponse.json(
-    { code: 'VALIDATION_ERROR', message: 'invalid request body' },
-    { status: 422 },
-  );
-}
+export { badRequest } from '@/shared/api/proxy-factory';
 
 /** Parses the JSON body with `schema`; `null` when it is not JSON or does not match. */
 export async function parseBody<T extends z.ZodTypeAny>(

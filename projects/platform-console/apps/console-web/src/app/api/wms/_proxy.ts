@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { WmsUnavailableError } from '@/shared/api/errors';
 import { makeProxyErrorMapper } from '@/shared/api/proxy-factory';
@@ -46,11 +45,6 @@ export type AckBody = z.infer<typeof AckBodySchema>;
 
 export const mapWmsError = makeProxyErrorMapper('wms', WmsUnavailableError);
 
-export function badRequest(): NextResponse {
-  return NextResponse.json(
-    { code: 'VALIDATION_ERROR', message: 'invalid request body' },
-    { status: 422 },
-  );
-}
+export { badRequest } from '@/shared/api/proxy-factory';
 
 export { newRequestId };
