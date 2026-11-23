@@ -41,14 +41,14 @@ dependencies {
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
     // JJWT (operator JWT parsing)
-    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
-    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
-    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+    implementation "io.jsonwebtoken:jjwt-api:${jjwtVersion}"
+    runtimeOnly "io.jsonwebtoken:jjwt-impl:${jjwtVersion}"
+    runtimeOnly "io.jsonwebtoken:jjwt-jackson:${jjwtVersion}"
 
     // Resilience4j
-    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'
-    implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.2.0'
-    implementation 'io.github.resilience4j:resilience4j-retry:2.2.0'
+    implementation "io.github.resilience4j:resilience4j-spring-boot3:${resilience4jVersion}"
+    implementation "io.github.resilience4j:resilience4j-circuitbreaker:${resilience4jVersion}"
+    implementation "io.github.resilience4j:resilience4j-retry:${resilience4jVersion}"
 
     // Test
     // TASK-BE-084: AbstractIntegrationTest lives in testFixtures source set so
@@ -59,11 +59,11 @@ dependencies {
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:mysql'
     testImplementation 'org.testcontainers:kafka'
-    testImplementation 'com.redis:testcontainers-redis:2.2.2'
+    testImplementation "com.redis:testcontainers-redis:${testcontainersRedisVersion}"
     testImplementation 'org.springframework.kafka:spring-kafka-test'
     testImplementation 'com.jayway.jsonpath:json-path'
     testImplementation 'org.awaitility:awaitility'
-    testImplementation 'org.wiremock:wiremock-standalone:3.10.0'
+    testImplementation "org.wiremock:wiremock-standalone:${wiremockVersion}"
 }
 
 dependencyManagement {

@@ -33,8 +33,8 @@ dependencies {
     runtimeOnly 'org.postgresql:postgresql'
 
     // ShedLock — distributed scheduler lock (batch-heavy trait first code, Failure Scenario F)
-    implementation 'net.javacrumbs.shedlock:shedlock-spring:6.2.0'
-    implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:6.2.0'
+    implementation "net.javacrumbs.shedlock:shedlock-spring:${shedlockVersion}"
+    implementation "net.javacrumbs.shedlock:shedlock-provider-jdbc-template:${shedlockVersion}"
 
     // Observability
     implementation 'io.micrometer:micrometer-registry-prometheus'
@@ -46,7 +46,7 @@ dependencies {
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
     // Structured logging (prod profile)
-    implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+    implementation "net.logstash.logback:logstash-logback-encoder:${logstashLogbackEncoderVersion}"
 
     // Shared libs
     implementation project(':libs:java-common')
@@ -71,27 +71,27 @@ dependencies {
     testImplementation 'com.h2database:h2'
 
     // JWT signing helper used by validator unit tests and the integration suite.
-    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
+    testImplementation "com.nimbusds:nimbus-jose-jwt:${nimbusJoseJwtVersion}"
 
     // Shared Testcontainers base utilities (DockerAvailableCondition etc.)
     testImplementation testFixtures(project(':libs:java-test-support'))
 
     // Testcontainers (integration tests, @Tag("integration"))
-    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
-    testImplementation 'org.testcontainers:postgresql:1.21.3'
-    testImplementation 'org.testcontainers:kafka:1.21.3'
-    testImplementation 'com.redis:testcontainers-redis:2.2.2'
-    testImplementation 'org.awaitility:awaitility:4.2.2'
+    testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
+    testImplementation "org.testcontainers:postgresql:${testcontainersVersion}"
+    testImplementation "org.testcontainers:kafka:${testcontainersVersion}"
+    testImplementation "com.redis:testcontainers-redis:${testcontainersRedisVersion}"
+    testImplementation "org.awaitility:awaitility:${awaitilityVersion}"
 
     // MockWebServer for the JWKS stand-in.
-    testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+    testImplementation "com.squareup.okhttp3:okhttp:${okhttpVersion}"
+    testImplementation "com.squareup.okhttp3:mockwebserver:${okhttpVersion}"
 }
 
 dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
-        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
+        mavenBom "org.testcontainers:testcontainers-bom:${testcontainersVersion}"
     }
 }
 

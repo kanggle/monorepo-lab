@@ -44,7 +44,7 @@ dependencies {
     implementation 'com.maxmind.geoip2:geoip2:4.2.0'
 
     // WireMock for testing the internal HTTP client against account-service.
-    testImplementation 'org.wiremock:wiremock-standalone:3.10.0'
+    testImplementation "org.wiremock:wiremock-standalone:${wiremockVersion}"
 
     // Micrometer Prometheus
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
@@ -58,7 +58,7 @@ dependencies {
     testImplementation 'org.testcontainers:mysql'
     testImplementation 'org.testcontainers:kafka'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
-    testImplementation 'com.redis:testcontainers-redis:2.2.2'
+    testImplementation "com.redis:testcontainers-redis:${testcontainersRedisVersion}"
     testImplementation 'com.jayway.jsonpath:json-path'
     testImplementation 'org.awaitility:awaitility'
 }
@@ -71,6 +71,6 @@ dependencyManagement {
         // from dockerd v29+ with `MalformedChunkCodingException: Bad chunk header`.
         // 1.21.3 ships a docker-java that handles modern dockerd correctly. SCM
         // services already do this BOM override — same pattern here.
-        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
+        mavenBom "org.testcontainers:testcontainers-bom:${testcontainersVersion}"
     }
 }

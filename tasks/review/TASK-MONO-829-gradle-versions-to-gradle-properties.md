@@ -8,7 +8,7 @@ TASK-MONO-829
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -54,10 +54,10 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] AC-1: **해석 그래프 불변** — 변경 전후 모든 프로젝트의 `testRuntimeClasspath` · `runtimeClasspath` · `compileClasspath` 해석 결과(좌표:버전 정렬 목록)가 **바이트 동일**. 덤프 방법과 diff 결과(0줄)를 PR 본문에.
-- [ ] AC-2: 13종 좌표의 숫자 버전 문자열이 `*.gradle` 에 0건(가드 rc=0).
-- [ ] AC-3: 가드 bite — 빌드 파일 하나에 `'org.awaitility:awaitility:4.2.2'` 를 되살리면 rc=1 + 파일·줄 이름 출력, 되돌리면 rc=0. `--self-test` 가 같은 것을 CI 에서 증명.
-- [ ] AC-4: `scripts/` 추가로 영향받는 가드 **전부** rc=0(실행한 목록을 PR 본문에).
+- [x] AC-1: **해석 그래프 불변** — 변경 전후 모든 프로젝트의 `testRuntimeClasspath` · `runtimeClasspath` · `compileClasspath` 해석 결과(좌표:버전 정렬 목록)가 **바이트 동일**. 덤프 방법과 diff 결과(0줄)를 PR 본문에.
+- [x] AC-2: 13종 좌표의 숫자 버전 문자열이 `*.gradle` 에 0건(가드 rc=0).
+- [x] AC-3: 가드 bite — 빌드 파일 하나에 `'org.awaitility:awaitility:4.2.2'` 를 되살리면 rc=1 + 파일·줄 이름 출력, 되돌리면 rc=0. `--self-test` 가 같은 것을 CI 에서 증명.
+- [x] AC-4: `scripts/` 추가로 영향받는 가드 **전부** rc=0(실행한 목록을 PR 본문에).
 - [ ] AC-5: PR CI 의 Build & Test 잡들이 실행되어 success.
 
 # Related Specs
@@ -103,3 +103,12 @@ monorepo
 # Definition of Done
 
 - AC 전부 · 머지.
+
+# Implementation Evidence (2026-11-24 UTC)
+
+- **치환** — 스크립트(기대 버전과 다르면 아무것도 쓰지 않고 중단) 로 57개 빌드 파일 366곳 → `"group:artifact:${prop}"`. 예상 밖 버전 0. `gradle.properties` 에 속성 13개.
+- **AC-1** — init script 로 84개 프로젝트의 모든 `*Classpath` 해석 결과를 덤프(해석 실패 0). 기준 = `TASK-MONO-828` 머지 트리(`aa46c4361`)와 같은 빌드 파일에서 뜬 덤프. `diff -r` **0줄**(바이트 동일).
+- **AC-2** — `check-gradle-managed-versions.sh` rc=0: 빌드 파일 82(하한 40) · 속성 참조 366(하한 150) · 13 계열.
+- **AC-3** — 실트리 bite: `projects/ecommerce-microservices-platform/tests/e2e/build.gradle` 에 `'org.awaitility:awaitility:4.2.2'` 를 되살려 스테이지 → rc=1 + `:46` 줄 출력. 백업 파일로 복원 → rc=0. `--self-test` 6칸(깨끗한 트리 통과 · R1 물기 · R1 대조군(속성 형태는 안 문다) · R2 · R3 · 하한) 전부 기대값. 🔴 첫 self-test 에서 하한 칸이 **주입 실패**(`m*/` glob 이 합성 트리가 아니라 현재 디렉터리에서 펼쳐짐)였고, 주입 검증 줄을 넣어 고쳤다 — 그 칸은 그전까지 아무것도 시험하지 않았다.
+- **AC-4** — 스테이지 후 `scripts/check-*` 46개 전부 실행. 실패 둘은 이 변경의 결과였고 고쳤다: `check-ls-files-guard-count`(28/68 → CLAUDE.md · git-workflow-policy.md 산문 갱신 후 rc=0), `check-index-queue-drift`(라이프사이클 이동 뒤 재실행). 남은 둘은 **환경 의존이라 로컬 미측정**이고 `main` 에서도 같은 rc=1: `check-erp-single-tenant-ratchet`(ERP 스택 필요, CI 밖 수동 가드) · `check-prerendered-demo-verdict`(`next build` 산출물 필요, CI 는 빌드 다음 스텝).
+- **AC-5** — PR CI 로 판정.

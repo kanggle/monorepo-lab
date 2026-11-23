@@ -19,8 +19,8 @@ dependencies {
     // Circuit breaker + retry types returned by ResilienceClientFactory — java-common declares them
     // `implementation`, so a consumer that holds the returned objects must declare them too
     // (promotion-service coupon client, TASK-INT-026).
-    implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.2.0'
-    implementation 'io.github.resilience4j:resilience4j-retry:2.2.0'
+    implementation "io.github.resilience4j:resilience4j-circuitbreaker:${resilience4jVersion}"
+    implementation "io.github.resilience4j:resilience4j-retry:${resilience4jVersion}"
 
     // Messaging (Outbox pattern)
     implementation project(':libs:java-messaging')
@@ -46,7 +46,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
     // OpenAPI / Swagger UI
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
+    implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
 
     // Flyway
     implementation 'org.flywaydb:flyway-core'
@@ -75,7 +75,7 @@ dependencies {
     // MockWebServer serves a local JWKS so the resource-server IT can mint a valid
     // client_credentials JWT signed by a per-run RSA key (TASK-BE-412). nimbus-jose-jwt
     // arrives transitively via spring-boot-starter-oauth2-resource-server.
-    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+    testImplementation "com.squareup.okhttp3:mockwebserver:${okhttpVersion}"
 }
 
 test {
@@ -125,6 +125,6 @@ tasks.register('integrationTest', Test) {
 dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
-        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
+        mavenBom "org.testcontainers:testcontainers-bom:${testcontainersVersion}"
     }
 }

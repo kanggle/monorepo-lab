@@ -11,7 +11,7 @@ dependencies {
     implementation 'io.opentelemetry:opentelemetry-api:1.43.0'
 
     // Logback JSON encoder
-    implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+    implementation "net.logstash.logback:logstash-logback-encoder:${logstashLogbackEncoderVersion}"
 
     // Servlet API (for MDC filter)
     compileOnly 'jakarta.servlet:jakarta.servlet-api'

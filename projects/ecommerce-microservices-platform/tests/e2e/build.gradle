@@ -37,20 +37,20 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
 
     // Testcontainers (Postgres, Kafka, plus generic for the two service containers)
-    testImplementation 'org.testcontainers:testcontainers:1.21.3'
-    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
-    testImplementation 'org.testcontainers:postgresql:1.21.3'
-    testImplementation 'org.testcontainers:kafka:1.21.3'
+    testImplementation "org.testcontainers:testcontainers:${testcontainersVersion}"
+    testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
+    testImplementation "org.testcontainers:postgresql:${testcontainersVersion}"
+    testImplementation "org.testcontainers:kafka:${testcontainersVersion}"
 
     // Awaitility for eventual-consistency assertions (outbox → Kafka → consume)
-    testImplementation 'org.awaitility:awaitility:4.2.2'
+    testImplementation "org.awaitility:awaitility:${awaitilityVersion}"
 
     // JSON build/parse for synthetic events + envelope assertions
     testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
     testImplementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.2'
 
     // Kafka client — host-side producer (synthetic events) + consumer (forward-contract assertion)
-    testImplementation 'org.apache.kafka:kafka-clients:3.7.0'
+    testImplementation "org.apache.kafka:kafka-clients:${kafkaClientsVersion}"
 
     // Logging backend for Testcontainers + Awaitility diagnostics
     testImplementation 'org.slf4j:slf4j-api:2.0.16'

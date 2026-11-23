@@ -13,16 +13,16 @@ dependencies {
     testImplementation 'io.rest-assured:rest-assured:5.5.0'
     testImplementation 'io.rest-assured:json-path:5.5.0'
 
-    testImplementation platform("org.testcontainers:testcontainers-bom:1.21.3")
+    testImplementation platform("org.testcontainers:testcontainers-bom:${testcontainersVersion}")
     testImplementation 'org.testcontainers:testcontainers'
     testImplementation 'org.testcontainers:junit-jupiter'
 
-    testImplementation 'org.awaitility:awaitility:4.2.2'
+    testImplementation "org.awaitility:awaitility:${awaitilityVersion}"
 
     testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
     testImplementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.2'
 
-    testImplementation 'org.apache.kafka:kafka-clients:3.7.0'
+    testImplementation "org.apache.kafka:kafka-clients:${kafkaClientsVersion}"
 
     testImplementation 'com.mysql:mysql-connector-j:9.1.0'
 

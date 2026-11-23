@@ -39,7 +39,7 @@ dependencies {
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
     // Structured logging (prod profile)
-    implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+    implementation "net.logstash.logback:logstash-logback-encoder:${logstashLogbackEncoderVersion}"
 
     // Shared libs
     implementation project(':libs:java-common')
@@ -68,21 +68,21 @@ dependencies {
     // the closest sibling edge, so the fleet's test infra stays uniform.
     //
     // JWT signing helper — signs RS256 tokens the gateway's resource-server verifies via JWKS.
-    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
+    testImplementation "com.nimbusds:nimbus-jose-jwt:${nimbusJoseJwtVersion}"
     // MockWebServer stands in for the JWKS endpoint and for the downstream service.
-    testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+    testImplementation "com.squareup.okhttp3:okhttp:${okhttpVersion}"
+    testImplementation "com.squareup.okhttp3:mockwebserver:${okhttpVersion}"
     // Testcontainers (Redis, for the rate-limit backend). Docker-gated → clean-SKIP without Docker.
-    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
-    testImplementation 'com.redis:testcontainers-redis:2.2.2'
-    testImplementation 'org.awaitility:awaitility:4.2.2'
+    testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
+    testImplementation "com.redis:testcontainers-redis:${testcontainersRedisVersion}"
+    testImplementation "org.awaitility:awaitility:${awaitilityVersion}"
 }
 
 dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
         mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
-        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
+        mavenBom "org.testcontainers:testcontainers-bom:${testcontainersVersion}"
     }
 }
 

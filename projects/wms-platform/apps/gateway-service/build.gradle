@@ -52,7 +52,7 @@ dependencies {
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
     // Structured logging (prod profile)
-    implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+    implementation "net.logstash.logback:logstash-logback-encoder:${logstashLogbackEncoderVersion}"
 
     // Shared libs
     implementation project(':libs:java-common')
@@ -73,16 +73,16 @@ dependencies {
     // JWT signing helper used in both unit-level self-tests and the e2e suite.
     // Nimbus ships with Spring Security's oauth2-resource-server on the runtime
     // classpath, but we declare it explicitly here so the test compile sees it.
-    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
+    testImplementation "com.nimbusds:nimbus-jose-jwt:${nimbusJoseJwtVersion}"
 
     // MockWebServer for the JWKS stand-in (used by both phases, so declare
     // here so the compile-time self-test sees it too).
-    testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+    testImplementation "com.squareup.okhttp3:okhttp:${okhttpVersion}"
+    testImplementation "com.squareup.okhttp3:mockwebserver:${okhttpVersion}"
 
     // Kafka client — required so the KafkaTestConsumer helper compiles under
     // the regular `test` source set. Its self-test runs without Docker.
-    testImplementation 'org.apache.kafka:kafka-clients:3.7.0'
+    testImplementation "org.apache.kafka:kafka-clients:${kafkaClientsVersion}"
 
     // Testcontainers for the full-context integration suite (`@Tag("integration")`,
     // TASK-MONO-458). Redis-only: these boot the whole gateway in-process on a random
@@ -90,23 +90,23 @@ dependencies {
     // `@Testcontainers(disabledWithoutDocker = true)` clean-SKIPs where no Docker daemon
     // is present, so `check` stays green on Docker-free hosts (the tag is also excluded
     // from the fast `test` task below).
-    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
-    testImplementation 'com.redis:testcontainers-redis:2.2.2'
+    testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
+    testImplementation "com.redis:testcontainers-redis:${testcontainersRedisVersion}"
 
     // e2e-only: Testcontainers, Awaitility, plain HTTP client for live-pair
     // calls through the gateway container.
-    e2eTestImplementation 'org.testcontainers:junit-jupiter:1.21.3'
-    e2eTestImplementation 'org.testcontainers:postgresql:1.21.3'
-    e2eTestImplementation 'org.testcontainers:kafka:1.21.3'
-    e2eTestImplementation 'org.awaitility:awaitility:4.2.2'
-    e2eTestImplementation 'com.redis:testcontainers-redis:2.2.2'
+    e2eTestImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
+    e2eTestImplementation "org.testcontainers:postgresql:${testcontainersVersion}"
+    e2eTestImplementation "org.testcontainers:kafka:${testcontainersVersion}"
+    e2eTestImplementation "org.awaitility:awaitility:${awaitilityVersion}"
+    e2eTestImplementation "com.redis:testcontainers-redis:${testcontainersRedisVersion}"
 }
 
 dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
         mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
-        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
+        mavenBom "org.testcontainers:testcontainers-bom:${testcontainersVersion}"
     }
 }
 
