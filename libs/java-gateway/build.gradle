@@ -108,8 +108,8 @@ dependencies {
     testImplementation testFixtures(project(':libs:java-gateway'))
 
     // JWKS stand-in for JwksHealthProbeTest (TASK-MONO-357).
-    testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+    testImplementation "com.squareup.okhttp3:okhttp:${okhttpVersion}"
+    testImplementation "com.squareup.okhttp3:mockwebserver:${okhttpVersion}"
 }
 
 dependencyManagement {

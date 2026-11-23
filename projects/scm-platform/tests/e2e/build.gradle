@@ -32,11 +32,11 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
 
     // Testcontainers (Postgres, Kafka, Redis, plus generic for service containers)
-    testImplementation 'org.testcontainers:testcontainers:1.21.3'
-    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
-    testImplementation 'org.testcontainers:postgresql:1.21.3'
-    testImplementation 'org.testcontainers:kafka:1.21.3'
-    testImplementation 'com.redis:testcontainers-redis:2.2.2'
+    testImplementation "org.testcontainers:testcontainers:${testcontainersVersion}"
+    testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
+    testImplementation "org.testcontainers:postgresql:${testcontainersVersion}"
+    testImplementation "org.testcontainers:kafka:${testcontainersVersion}"
+    testImplementation "com.redis:testcontainers-redis:${testcontainersRedisVersion}"
 
     // PostgreSQL JDBC driver — required at runtime because ProcurementDbFixtures
     // opens a direct JDBC connection (DriverManager.getConnection) to seed supplier
@@ -45,20 +45,20 @@ dependencies {
     testRuntimeOnly 'org.postgresql:postgresql:42.7.4'
 
     // Awaitility for outbox -> Kafka eventual-consistency assertions
-    testImplementation 'org.awaitility:awaitility:4.2.2'
+    testImplementation "org.awaitility:awaitility:${awaitilityVersion}"
 
     // JSON parsing + JWT signing (envelope assertions, buyer/cross-tenant tokens)
     testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
     testImplementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.2'
-    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
+    testImplementation "com.nimbusds:nimbus-jose-jwt:${nimbusJoseJwtVersion}"
 
     // MockWebServer for the JWKS stand-in + supplier mock (gateway/procurement/IV all hit the JWKS one)
-    testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+    testImplementation "com.squareup.okhttp3:okhttp:${okhttpVersion}"
+    testImplementation "com.squareup.okhttp3:mockwebserver:${okhttpVersion}"
 
     // Kafka client — used by the test consumer that asserts outbox -> Kafka
     // publishes AND by the test producer that emits cross-project wms events.
-    testImplementation 'org.apache.kafka:kafka-clients:3.7.0'
+    testImplementation "org.apache.kafka:kafka-clients:${kafkaClientsVersion}"
 
     // Logging — Testcontainers + Awaitility benefit from a real backend during debugging
     testImplementation 'org.slf4j:slf4j-api:2.0.16'

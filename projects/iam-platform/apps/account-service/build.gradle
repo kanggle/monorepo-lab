@@ -36,8 +36,8 @@ dependencies {
     implementation 'org.springframework.kafka:spring-kafka'
 
     // Resilience4j — outbound call to auth-service for credential create (TASK-BE-063)
-    implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.2.0'
-    implementation 'io.github.resilience4j:resilience4j-retry:2.2.0'
+    implementation "io.github.resilience4j:resilience4j-circuitbreaker:${resilience4jVersion}"
+    implementation "io.github.resilience4j:resilience4j-retry:${resilience4jVersion}"
 
     // Flyway
     implementation 'org.flywaydb:flyway-core'
@@ -60,7 +60,7 @@ dependencies {
     testImplementation 'org.testcontainers:mysql'
     testImplementation 'org.testcontainers:kafka'
     testImplementation 'com.jayway.jsonpath:json-path'
-    testImplementation 'org.wiremock:wiremock-standalone:3.10.0'
+    testImplementation "org.wiremock:wiremock-standalone:${wiremockVersion}"
     // TASK-BE-103: Awaitility for end-to-end Kafka consumer integration tests.
     testImplementation 'org.awaitility:awaitility'
 }

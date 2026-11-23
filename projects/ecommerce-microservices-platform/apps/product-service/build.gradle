@@ -46,7 +46,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
     // OpenAPI / Swagger UI
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
+    implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
 
     // Flyway
     implementation 'org.flywaydb:flyway-core'
@@ -73,13 +73,13 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     // RS256 signing for the /internal/** chain tests (TASK-MONO-759).
-    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
+    testImplementation "com.nimbusds:nimbus-jose-jwt:${nimbusJoseJwtVersion}"
     testImplementation 'org.springframework.kafka:spring-kafka-test'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:junit-jupiter'
     // WireMock — stubs account-service /internal/** for the seller-provisioning client
     // fail-soft unit test (TASK-BE-402, mirrors admin-service AccountServiceClientUnitTest).
-    testImplementation 'org.wiremock:wiremock-standalone:3.10.0'
+    testImplementation "org.wiremock:wiremock-standalone:${wiremockVersion}"
 }
 
 // Docker / Testcontainers env (DOCKER_HOST, DOCKER_API_VERSION, api.version) is
@@ -122,6 +122,6 @@ tasks.register('integrationTest', Test) {
 dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
-        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
+        mavenBom "org.testcontainers:testcontainers-bom:${testcontainersVersion}"
     }
 }

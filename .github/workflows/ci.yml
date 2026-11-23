@@ -292,6 +292,8 @@ jobs:
       #    필터 스텝 자체는 `no-next-font-google = true` 를 맞게 계산했는데(raw 로그 확인)
       #    `needs.changes.outputs.no-next-font-google` 는 빈 값이라 잡이 통째로 skipped 였다.
       no-next-font-google: ${{ steps.filter.outputs.no-next-font-google }}
+      # TASK-MONO-829 — raw filter (build files are not in `code-changed`'s enumeration).
+      gradle-managed-versions: ${{ steps.filter.outputs.gradle-managed-versions }}
       # TASK-MONO-562: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path of this drift is non-code: a `vercel.json` losing its `ignoreCommand`, a
       # new Vercel project landing without one, or the judge script being weakened.
@@ -989,6 +991,14 @@ jobs:
               - '**/src/*.ts'
               - '**/src/*.tsx'
               - 'scripts/check-no-next-font-google.sh'
+            # TASK-MONO-829: a literal version comes back through a build file, or the
+            # property it should reference disappears from gradle.properties, or the
+            # judge itself is weakened. All three are non-code — raw filter.
+            # Pure-positive (no negation — MONO-074/075 quirk rule).
+            gradle-managed-versions:
+              - '**/*.gradle'
+              - 'gradle.properties'
+              - 'scripts/check-gradle-managed-versions.sh'
             # TASK-MONO-562: a Vercel project that builds on every commit arrives three
             # ways — a new `vercel.json` anywhere in the tree, an existing one losing its
             # `ignoreCommand`, or the shared judge being weakened. All three are non-code,
@@ -1526,6 +1536,34 @@ jobs:
 
       - name: Guard — next/font Google loader is not reintroduced
         run: bash scripts/check-no-next-font-google.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-829. Thirteen third-party version families moved from literals
+  # repeated across build files to one `gradle.properties` property each — the
+  # copies that were missed on past bumps were the drift TASK-MONO-828 cleaned up.
+  # This guard fails when a literal version for one of those families comes back,
+  # or a property goes undefined/unreferenced. Project-agnostic: it names
+  # coordinates, never a module.
+  # ---------------------------------------------------------------------------
+  gradle-managed-versions:
+    name: Gradle managed versions (gradle.properties, not literals)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      needs.changes.outputs.gradle-managed-versions == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-gradle-managed-versions.sh
+
+      - name: Self-test the predicate (bites on a synthetic tree)
+        run: bash scripts/check-gradle-managed-versions.sh --self-test
+
+      - name: Guard — managed coordinates reference their gradle.properties version
+        run: bash scripts/check-gradle-managed-versions.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-619. 셸의 큰따옴표 안에서 백틱은 명령 치환이다. 가드의 실패 메시지가

@@ -32,7 +32,7 @@ dependencies {
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
     // Structured logging (prod profile)
-    implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+    implementation "net.logstash.logback:logstash-logback-encoder:${logstashLogbackEncoderVersion}"
 
     // Shared libs
     implementation project(':libs:java-common')
@@ -50,20 +50,20 @@ dependencies {
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:kafka'
-    testImplementation 'com.redis:testcontainers-redis:2.2.2'
+    testImplementation "com.redis:testcontainers-redis:${testcontainersRedisVersion}"
     testImplementation 'org.assertj:assertj-core'
 
     // Integration-test extras (TASK-BE-007)
-    testImplementation 'org.awaitility:awaitility:4.2.2'
-    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
-    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.48'
+    testImplementation "org.awaitility:awaitility:${awaitilityVersion}"
+    testImplementation "com.squareup.okhttp3:mockwebserver:${okhttpVersion}"
+    testImplementation "com.nimbusds:nimbus-jose-jwt:${nimbusJoseJwtVersion}"
     testImplementation 'com.networknt:json-schema-validator:1.5.2'
 }
 
 dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
-        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
+        mavenBom "org.testcontainers:testcontainers-bom:${testcontainersVersion}"
     }
 }
 

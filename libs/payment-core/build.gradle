@@ -19,7 +19,7 @@ dependencies {
 
     // Resilience4j API (annotations only — the CircuitBreaker/Retry/Bulkhead surface a vendor
     // adapter annotates against; NOT a vendor SDK).
-    implementation 'io.github.resilience4j:resilience4j-annotations:2.2.0'
+    implementation "io.github.resilience4j:resilience4j-annotations:${resilience4jVersion}"
 
     // slf4j
     implementation 'org.slf4j:slf4j-api'

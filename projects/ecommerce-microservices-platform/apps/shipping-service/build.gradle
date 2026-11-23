@@ -14,7 +14,7 @@ dependencies {
     implementation project(':libs:java-web-servlet')
 
     // API Documentation
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
+    implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
 
     // Messaging (Outbox pattern)
     implementation project(':libs:java-messaging')
@@ -39,8 +39,8 @@ dependencies {
     // ShedLock — distributed scheduler lock for the unattended auto-collect tracking
     // sweep (TASK-BE-360); single-instance execution across replicas. Version pinned to
     // match scm-platform's batch services (6.2.0) for monorepo consistency.
-    implementation 'net.javacrumbs.shedlock:shedlock-spring:6.2.0'
-    implementation 'net.javacrumbs.shedlock:shedlock-provider-jdbc-template:6.2.0'
+    implementation "net.javacrumbs.shedlock:shedlock-spring:${shedlockVersion}"
+    implementation "net.javacrumbs.shedlock:shedlock-provider-jdbc-template:${shedlockVersion}"
 
     // PostgreSQL
     runtimeOnly 'org.postgresql:postgresql'
@@ -60,8 +60,8 @@ dependencies {
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:junit-jupiter'
     // MockWebServer for the HTTP carrier-tracking adapter unit test (TASK-BE-293).
-    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
-    testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    testImplementation "com.squareup.okhttp3:mockwebserver:${okhttpVersion}"
+    testImplementation "com.squareup.okhttp3:okhttp:${okhttpVersion}"
 }
 
 test {
@@ -97,6 +97,6 @@ tasks.register('integrationTest', Test) {
 dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
-        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
+        mavenBom "org.testcontainers:testcontainers-bom:${testcontainersVersion}"
     }
 }

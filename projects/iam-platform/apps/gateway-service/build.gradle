@@ -27,15 +27,15 @@ dependencies {
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
     // JJWT (for JWT parsing/verification)
-    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
-    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
-    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+    implementation "io.jsonwebtoken:jjwt-api:${jjwtVersion}"
+    runtimeOnly "io.jsonwebtoken:jjwt-impl:${jjwtVersion}"
+    runtimeOnly "io.jsonwebtoken:jjwt-jackson:${jjwtVersion}"
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation 'com.redis:testcontainers-redis:2.2.2'
-    testImplementation 'org.wiremock:wiremock-standalone:3.10.0'
+    testImplementation "com.redis:testcontainers-redis:${testcontainersRedisVersion}"
+    testImplementation "org.wiremock:wiremock-standalone:${wiremockVersion}"
     testImplementation 'io.projectreactor:reactor-test'
     testImplementation testFixtures(project(':libs:java-test-support'))
 }

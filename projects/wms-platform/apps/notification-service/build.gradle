@@ -30,8 +30,8 @@ dependencies {
     // Resilience4j — Slack adapter circuit breaker + retry (I1, I3 of
     // integration-heavy trait). Decoupled-from-spring-boot starter so we can
     // use the @CircuitBreaker / @Retry annotations on the adapter's methods.
-    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'
-    implementation 'io.github.resilience4j:resilience4j-reactor:2.2.0'
+    implementation "io.github.resilience4j:resilience4j-spring-boot3:${resilience4jVersion}"
+    implementation "io.github.resilience4j:resilience4j-reactor:${resilience4jVersion}"
 
     // Database
     implementation 'org.postgresql:postgresql'
@@ -48,7 +48,7 @@ dependencies {
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
     // Structured logging (prod profile)
-    implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+    implementation "net.logstash.logback:logstash-logback-encoder:${logstashLogbackEncoderVersion}"
 
     // Shared libs — keep narrow. Do NOT pull libs:java-messaging because
     // notification-service uses a service-local outbox table layout
@@ -63,16 +63,16 @@ dependencies {
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:kafka'
     testImplementation 'org.assertj:assertj-core'
-    testImplementation 'org.awaitility:awaitility:4.2.2'
+    testImplementation "org.awaitility:awaitility:${awaitilityVersion}"
 
     // WireMock — Slack adapter contract tests
-    testImplementation 'org.wiremock:wiremock-standalone:3.10.0'
+    testImplementation "org.wiremock:wiremock-standalone:${wiremockVersion}"
 }
 
 dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
-        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
+        mavenBom "org.testcontainers:testcontainers-bom:${testcontainersVersion}"
     }
 }
 

@@ -16,7 +16,7 @@ dependencies {
     implementation project(':libs:java-common')
 
     // API Documentation
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
+    implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
 
     // Observability
     implementation project(':libs:java-observability')
@@ -54,7 +54,7 @@ dependencies {
     testImplementation 'org.testcontainers:junit-jupiter'
     // MockWebServer — OrderServiceClient timeout-verification test (ADR-MONO-058 D7,
     // TASK-BE-570), mirroring shipping-service's HttpCarrierTrackingAdapterTest pattern.
-    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+    testImplementation "com.squareup.okhttp3:mockwebserver:${okhttpVersion}"
 }
 
 test {
@@ -95,6 +95,6 @@ tasks.register('integrationTest', Test) {
 dependencyManagement {
     imports {
         mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
-        mavenBom "org.testcontainers:testcontainers-bom:1.21.3"
+        mavenBom "org.testcontainers:testcontainers-bom:${testcontainersVersion}"
     }
 }
