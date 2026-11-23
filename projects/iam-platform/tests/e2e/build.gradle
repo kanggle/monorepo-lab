@@ -5,7 +5,7 @@ plugins {
 description = 'End-to-end scenario tests driven by docker-compose.e2e.yml (TASK-BE-041c).'
 
 dependencies {
-    testImplementation platform("org.junit:junit-bom:5.10.3")
+    testImplementation platform("org.junit:junit-bom:5.11.4")
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.junit.jupiter:junit-jupiter-api'
     testImplementation 'org.junit.jupiter:junit-jupiter-engine'
@@ -13,21 +13,21 @@ dependencies {
     testImplementation 'io.rest-assured:rest-assured:5.5.0'
     testImplementation 'io.rest-assured:json-path:5.5.0'
 
-    testImplementation platform("org.testcontainers:testcontainers-bom:1.20.4")
+    testImplementation platform("org.testcontainers:testcontainers-bom:1.21.3")
     testImplementation 'org.testcontainers:testcontainers'
     testImplementation 'org.testcontainers:junit-jupiter'
 
     testImplementation 'org.awaitility:awaitility:4.2.2'
 
-    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
-    testImplementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.2'
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
+    testImplementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.2'
 
     testImplementation 'org.apache.kafka:kafka-clients:3.7.0'
 
-    testImplementation 'mysql:mysql-connector-java:8.0.33'
+    testImplementation 'com.mysql:mysql-connector-j:9.1.0'
 
-    testImplementation 'org.assertj:assertj-core:3.26.3'
-    testImplementation 'org.slf4j:slf4j-simple:2.0.13'
+    testImplementation 'org.assertj:assertj-core:3.27.0'
+    testImplementation 'org.slf4j:slf4j-simple:2.0.16'
 }
 
 // -------------------------------------------------------------------------

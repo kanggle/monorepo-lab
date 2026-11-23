@@ -95,7 +95,7 @@ dependencies {
     testImplementation 'org.awaitility:awaitility:4.2.2'
 
     // WireMock — EasyPost vendor stand-in for the integration-heavy dispatch matrix (I10).
-    testImplementation 'org.wiremock:wiremock-standalone:3.9.1'
+    testImplementation 'org.wiremock:wiremock-standalone:3.10.0'
 
     // MockWebServer for the JWKS stand-in.
     testImplementation 'com.squareup.okhttp3:okhttp:4.12.0'

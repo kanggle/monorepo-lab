@@ -8,7 +8,7 @@ Gradle 의존성 버전 드리프트 정렬 — 같은 좌표가 모듈마다 �
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -54,10 +54,10 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] AC-1: 위 표의 좌표마다 `*.gradle` 전체에서 버전이 **하나**다(`git grep -oh` 집계로 확인, 수치를 PR 본문에 인용).
-- [ ] AC-2: 영향 모듈 전부 `compileTestJava` rc=0 (로컬, 각 명시 rc).
+- [x] AC-1: 위 표의 좌표마다 `*.gradle` 전체에서 버전이 **하나**다(`git grep -oh` 집계로 확인, 수치를 PR 본문에 인용).
+- [x] AC-2: 영향 모듈 전부 `compileTestJava` rc=0 (로컬, 각 명시 rc).
 - [ ] AC-3: PR CI 에서 영향 모듈의 Build & Test · integration · iam e2e smoke 잡이 **실제로 실행되어** success(SKIPPED 는 통과로 치지 않는다 — 실행된 잡 이름을 PR 본문에 적는다).
-- [ ] AC-4: iam security-service 의 wiremock 사용 코드가 좌표 변경 뒤에도 같은 패키지(`com.github.tomakehurst.wiremock`)로 컴파일된다 — WireMock 3 는 패키지를 유지한다; 아니면 멈추고 보고.
+- [x] AC-4: iam security-service 의 wiremock 사용 코드가 좌표 변경 뒤에도 같은 패키지(`com.github.tomakehurst.wiremock`)로 컴파일된다 — WireMock 3 는 패키지를 유지한다; 아니면 멈추고 보고.
 
 # Related Specs
 
@@ -99,3 +99,11 @@ monorepo
 # Definition of Done
 
 - AC 전부 · 머지.
+
+# Implementation Evidence (2026-11-24 UTC)
+
+- **AC-1** — 좌표별 버전 수(`git grep -oh` over `*.gradle`): `nimbus-jose-jwt` 9.48 ×28 · `wiremock-standalone` 3.10.0 ×10 · `wiremock-jre8-standalone` 0 · `testcontainers-bom` 1.21.3 ×40 · `junit-bom` 5.11.4 ×1 · `jackson-databind` 2.18.2 ×4 · `jackson-datatype-jsr310` 2.18.2 ×3 · `mysql-connector-j` 9.1.0 ×2(옛 `mysql:mysql-connector-java` 0) · `assertj-core` 3.27.0 ×4 · `slf4j-*` 2.0.16 ×4.
+- **해석 그래프 대조** — init script 로 전 프로젝트(84) 의 `*Classpath` 해석 결과를 전후 덤프(해석 실패 0). 차이 158줄, **바뀐 프로젝트 = 정확히 손댄 15개**, 바뀐 설정 = 시험 클래스패스뿐. 차이 좌표 = nimbus · wiremock · iam e2e 의 junit/testcontainers/jackson/assertj/slf4j/mysql 계열과 그 전이(docker-java · byte-buddy · protobuf). 의도 밖 좌표 0.
+- **AC-2** — 영향 15개 모듈 `compileTestJava` 한 호출, `BUILD SUCCESSFUL` rc=0.
+- **AC-4** — iam security-service 시험 3개가 `com.github.tomakehurst.wiremock` 패키지 그대로 컴파일(AC-2 에 포함).
+- **AC-3** — PR CI 에서 판정(아래 PR 본문).

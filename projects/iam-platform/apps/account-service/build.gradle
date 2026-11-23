@@ -60,7 +60,7 @@ dependencies {
     testImplementation 'org.testcontainers:mysql'
     testImplementation 'org.testcontainers:kafka'
     testImplementation 'com.jayway.jsonpath:json-path'
-    testImplementation 'org.wiremock:wiremock-standalone:3.9.1'
+    testImplementation 'org.wiremock:wiremock-standalone:3.10.0'
     // TASK-BE-103: Awaitility for end-to-end Kafka consumer integration tests.
     testImplementation 'org.awaitility:awaitility'
 }

@@ -44,7 +44,7 @@ dependencies {
     implementation 'com.maxmind.geoip2:geoip2:4.2.0'
 
     // WireMock for testing the internal HTTP client against account-service.
-    testImplementation 'com.github.tomakehurst:wiremock-jre8-standalone:3.0.1'
+    testImplementation 'org.wiremock:wiremock-standalone:3.10.0'
 
     // Micrometer Prometheus
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
