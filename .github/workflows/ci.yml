@@ -294,6 +294,8 @@ jobs:
       no-next-font-google: ${{ steps.filter.outputs.no-next-font-google }}
       # TASK-MONO-829 — raw filter (build files are not in `code-changed`'s enumeration).
       gradle-managed-versions: ${{ steps.filter.outputs.gradle-managed-versions }}
+      # TASK-MONO-832 — raw filter (settings.gradle and a platform/ doc are not code).
+      shared-lib-catalog: ${{ steps.filter.outputs.shared-lib-catalog }}
       # TASK-MONO-562: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path of this drift is non-code: a `vercel.json` losing its `ignoreCommand`, a
       # new Vercel project landing without one, or the judge script being weakened.
@@ -999,6 +1001,12 @@ jobs:
               - '**/*.gradle'
               - 'gradle.properties'
               - 'scripts/check-gradle-managed-versions.sh'
+            # TASK-MONO-832: a repo-root libs module is included or dropped, or a catalog
+            # row is added or deleted, or the judge itself changes. Pure-positive.
+            shared-lib-catalog:
+              - 'settings.gradle'
+              - 'platform/shared-library-policy.md'
+              - 'scripts/check-shared-lib-catalog.sh'
             # TASK-MONO-562: a Vercel project that builds on every commit arrives three
             # ways — a new `vercel.json` anywhere in the tree, an existing one losing its
             # `ignoreCommand`, or the shared judge being weakened. All three are non-code,
@@ -1564,6 +1572,33 @@ jobs:
 
       - name: Guard — managed coordinates reference their gradle.properties version
         run: bash scripts/check-gradle-managed-versions.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-832. platform/shared-library-policy.md § Change Rule says the
+  # catalog is updated before a libs/ change lands; nothing enforced it, and four
+  # repo-root modules went four months without a row. This fails when settings.gradle
+  # and the catalog table disagree in either direction. Project-scoped
+  # `projects:<p>:libs:<m>` modules are excluded by design.
+  # ---------------------------------------------------------------------------
+  shared-lib-catalog:
+    name: Shared-library catalog (settings.gradle libs vs policy catalog rows)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      needs.changes.outputs.shared-lib-catalog == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-shared-lib-catalog.sh
+
+      - name: Self-test the predicate (bites on mutated copies)
+        run: bash scripts/check-shared-lib-catalog.sh --self-test
+
+      - name: Guard — every repo-root libs module has a catalog row, and no stale row
+        run: bash scripts/check-shared-lib-catalog.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-619. 셸의 큰따옴표 안에서 백틱은 명령 치환이다. 가드의 실패 메시지가

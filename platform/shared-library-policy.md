@@ -23,9 +23,13 @@ They must not become a container for service-specific business logic.
 | `libs/java-messaging` | messaging / outbox transport scaffolding (ADR-MONO-004) | event producers + consumers |
 | `libs/java-observability` | tracing / metrics helpers | most services |
 | `libs/java-security` | JWT signing/verification, password hashing, TOTP (RFC 6238) code generation/verification | auth-side services |
+| `libs/java-security-servlet` | **servlet** resource-server security (ADR-MONO-049 D5) — resource-server chain assembly, the canonical tenant-claim enforcer, workload-identity authorities, actor-context resolution (`CurrentActor` argument resolver, JWT → actor converter), caller-token propagation, public-path set, firewall rejections | servlet (non-gateway) services — 24 across ecommerce, erp, fan, finance, iam, scm, wms (measured 2026-11-24, `TASK-MONO-832`) |
 | `libs/java-test-support` | test fixtures + helpers | test source sets |
 | `libs/java-web` | **framework-agnostic** web primitives — safe on both servlet and reactive classpaths | servlet services + gateways |
 | `libs/java-web-servlet` | servlet-only web helpers | servlet services |
+| `libs/payment-core` | payment-gateway ports (ADR-MONO-056 D2) — `PaymentGatewayPort`, refundable / recurring-billing / status-read capabilities, verification request + authorization result, PG failure exceptions. Vendor-neutral: no vendor SDK or HTTP client | the two adapters below + one payment-taking service each in ecommerce and fan |
+| `libs/payment-portone` | PortOne adapter for `payment-core` — payment adapter + webhook signature verifier | fan (one service) |
+| `libs/payment-toss` | Toss Payments adapter for `payment-core` — payment adapter + its properties | ecommerce (one service) |
 
 > **Reactive / servlet separation is load-bearing, not stylistic.** `libs/java-web-servlet` was split out of `libs/java-web` by TASK-MONO-044a *after* a servlet leak triggered `BeanDefinitionOverrideException` in three reactive gateway classpaths. `libs/java-gateway` exists for the mirror-image reason (ADR-MONO-048 § D1): putting Spring Cloud Gateway into `java-web` would drag WebFlux onto every servlet service that consumes it. **Do not add reactive types to `java-web`, or servlet types to `java-gateway`.**
 
