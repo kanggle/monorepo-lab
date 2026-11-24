@@ -8,7 +8,7 @@ auth-service `auth_outbox_lag_seconds` 가 v2 이전 뒤 빈 v1 `outbox` 테이�
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
