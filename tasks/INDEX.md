@@ -220,10 +220,10 @@ _(없음)_
 
 ## review
 
-- `TASK-MONO-833-business-metric-registry-and-guard.md` — **문서에 없는 business metric 20개를 서비스 스펙에 + 리터럴 metric 이름 ↔ 프로젝트 `specs/` 가드** (REVIEW, 2026-11-24 UTC · 소유자 «진행해»). 실측: meter 등록 서비스 32 · 리터럴 이름 112 중 92 문서화 · **20 (8 서비스)** 리포 어디에도 없음(복구 소진 · 자동 잠금 실패 · outbox 발행 실패 포함). `platform/observability.md` § Business Metrics · § Change Rule 의 «먼저 문서화» 에 게이트 없음. 가드 = sound-not-complete(상수 이름 제외, `check-error-code-registry.sh` 선례) · 같은 프로젝트 `specs/` 만 · `tasks/` 언급은 문서 아님. 분석=Opus 5.5 / 구현 권장=Sonnet.
-
 
 ## done
+
+- ✅ `TASK-MONO-833-business-metric-registry-and-guard.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4666 머지, `2c2843f8f`, 실패 0 · SUCCESS 44 · SKIPPED 30) · 기안 #4665. 문서에 없던 business metric 20개(8 서비스)를 각 서비스 스펙에 + 새 가드 `check-metric-name-registry.sh`(리터럴 이름 ↔ 같은 프로젝트 `specs/`, sound-not-complete, self-test 11) + `ci.yml` 잡 + 가드 수 산문 29/70. AC-5 = `Metric name registry …` 잡 **실행되어** SUCCESS(13s). 모집단 113 이름 / 31 서비스. AC-4 비0 둘 = 환경 전제(erp 래칫 · prerendered verdict). 후속 거리(티켓 없음): iam security-service 스펙의 `security_consumer_lag`(코드에 없음) · `SecurityAutoLockFailing` 식 이름 불일치 — 반대 방향이라 이 가드 밖.
 
 - ✅ `TASK-MONO-832-shared-library-catalog-drift-and-guard.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4663 머지, `4daf076d2`, 실패 0 · SUCCESS 43 · SKIPPED 30) · 기안 #4662. 카탈로그에 빠진 4행(`java-security-servlet` · `payment-core/portone/toss`, Consumers 실측 · 프로젝트 이름까지만) + 새 가드 `check-shared-lib-catalog.sh`(양방향 · 프로젝트 전용 libs 제외 · self-test 12) + `ci.yml` 잡 + 가드 수 산문 68→69. AC-5 = `Shared-library catalog …` 잡 **실행되어** SUCCESS. 🔵 scm e2e 첫 실행 실패는 Maven Central **HTTP 429**(로그로 측정, 컴파일 전 의존성 다운로드) → 실패 잡 재실행 SUCCESS. AC-4 비0 둘(erp 래칫 · prerendered verdict)은 830 과 같은 환경 전제.
 
