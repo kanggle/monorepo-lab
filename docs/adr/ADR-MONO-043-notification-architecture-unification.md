@@ -161,6 +161,7 @@ ADR is a spec → no unit/integration tests. Verification = doc review + HARDSTO
 | PROPOSED | TASK-MONO-308 | #1958 | D1–D8 CHOSEN-PROPOSED; doc-only. |
 | ACCEPTED | TASK-MONO-311 | (this PR) | User-explicit *"ADR-043 ACCEPTED"* (D8 gate, not self-ACCEPT). D1–D8 finalised byte-unchanged; flip = Status + History clause + this row + § 3.3 UNPAUSED. D7 P1–P3 now implement-ready (separate user-gated tasks). |
 | Follow-up close-out | TASK-MONO-317 | (this PR) | § 7 follow-ups resolved (2026-06-29, user-decided): wms → delivery-only; ecommerce shape + engine-level integration → **DECLINED** (no operator-console driver / HARDSTOP-06; ADR-038 § 5 M3). Records the decline only — D1–D8 + § 1–§ 5 byte-unchanged; no code/contract/library change. |
+| Amendment (§ 8) | TASK-MONO-830 | (spec PR) | 소유자 결정 2026-11-24 UTC: `libs/java-notification` **폐기**(§ 7 의 미결 칸). 덧붙이기만 — D1–D8 + § 1–§ 7 본문 바이트 불변(§ 7 에 포인터 한 줄). 삭제 자체는 `TASK-MONO-830` 구현 PR. |
 
 ---
 
@@ -178,6 +179,42 @@ ADR is a spec → no unit/integration tests. Verification = doc review + HARDSTO
   **Scope of the correction.** D3 (shared REST contract shape) and D2/D5 (console aggregator, per-domain fan-out with independent degrade) are **built and live** — verified independently in the same pass. Only this D4 library-wiring claim was false. The adjacent *"Engine-level integration — DECLINED"* entry already concedes the per-domain **engines** diverge; what it did not say — and what this entry asserted the opposite of — is that the **channel SPI** was never wired either.
 
   **Left open on purpose.** Whether to wire the library into erp/fan or retire it as an unused artifact is a fresh decision, not a cleanup. Both are defensible: an unconsumed library is not free (it accrues maintenance and implies a standard that does not exist), but the code is written and tested. **This note records the fact; it does not decide.** The honest starting point for whoever does decide is that "one library, zero consumers" was never an outcome this ADR chose — it is where the work stopped.
+
+  → **결정됨 2026-11-24 UTC: 폐기.** [§ 8](#8-개정-2026-11-24-utc-task-mono-830--libsjava-notification-폐기) 참고.
 - **`account.created` identity-sourced-notification pattern — stays an ecommerce-local edge.** No shared pattern extracted.
 
 **Re-open condition (all DECLINED items):** a concrete need to surface a specific domain's notifications in the **operator console bell**. The standard is already in place (P1a contract + P1b library + the `consolebff.notifications.domains` config), so re-opening costs one domain's shape-conformance + one config line (zero console-web change). **No pre-emptive work.**
+
+---
+
+## 8. 개정 (2026-11-24 UTC, `TASK-MONO-830`) — `libs/java-notification` 폐기
+
+> 덧붙이기만 한다. D1~D8 과 § 1~§ 7 본문은 바이트 그대로다(§ 7 에 이 절을 가리키는 한 줄만 더했다).
+
+### 결정
+
+**`libs/java-notification` 을 리포에서 지운다** — 모듈 디렉터리, `settings.gradle` 등록, `ci.yml` 의 `:libs:java-notification:check`, `platform/shared-library-policy.md` 카탈로그 행. 실행은 `TASK-MONO-830`.
+
+**결정자: 소유자, 2026-11-24 UTC.** 남은 결정 넷을 보여 주고 «1순위: `libs/java-notification` 폐기» 를 추천하자 소유자가 *«1번으로 진행»* 이라고 답했다. 🔴 **추천은 에이전트의 것이고, 고른 것은 소유자다** — 선택지(연결 / 폐기)와 근거가 같은 메시지에 있었고 소유자는 그중 하나를 지목했다. 이 절은 ACCEPTED 전환이 아니다(이 ADR 은 이미 ACCEPTED). § 7 이 «새 결정» 으로 남겨 둔 칸을 채우는 개정이고, 선례는 `ADR-MONO-047` 의 2026-10-07 개정(소유자가 추천 표시가 붙은 선택지를 고름)이다.
+
+### 근거 (실측 2026-11-24 UTC)
+
+1. **소비자는 여전히 0이다.** `projects/**` 를 `java-notification` · `com.example.platform.notification` 으로 다시 검색했다 — 걸리는 것은 erp·fan 의 `tasks/done/` 기록과 erp `tasks/INDEX.md` 한 줄뿐이고, `build.gradle` 의존과 import 는 0이다. 라이브러리 바깥에서 그 타입(`NotificationView` · `NotificationChannelAdapter` · `NotificationConsumerSupport` · `DeliveryDispatcher`)을 부르는 코드도 0이다(wms 의 `PostCommitDeliveryDispatcher` 는 이름만 겹치는 별개 클래스). 2026-07-20 측정(§ 7) 뒤 넉 달 동안 아무도 채택하지 않았다.
+2. **연결은 이미 기각된 방향이다.** § 7 의 *«Engine-level integration — DECLINED (risk > benefit)»* 이 도메인 발송 엔진(상태 enum · 재시도 간격 · 중복 제거 · DB 방언)이 실제로 갈라져 있음을 근거로 수렴을 기각했다. 라이브러리를 «연결» 하려면 그 기각을 뒤집거나, 채널 SPI 만 떼어 erp·fan 의 로컬 `NotificationChannelPort` 를 갈아 끼워야 한다 — 후자는 소비자 둘을 위해 동작이 같은 코드를 옮기는 일이고 그 둘에 결함 보고가 없다.
+3. **소비자 없는 공유 라이브러리는 공짜가 아니다.** CI `GRADLE_TASKS_CORE` 에서 매번 `check` 가 돌고, 버전·가드(`check-libs-ci-coverage.sh` · `check-shared-lib-jpa-scan.sh` · `check-error-code-registry.sh` 의 `libs/*/src/main` 모집단)의 대상이 되며, 카탈로그에 «notification producers» 라는 **없는 표준**을 적어 둔다 — § 7 이 지적한 *«implies a standard that does not exist»* 그대로다.
+
+### 무엇이 남는가 (지우지 않는 것)
+
+- **D3 의 공유 계약** `platform/contracts/notification-inbox-contract.md` 와 **D2/D5 의 `console-bff` 집계기** — 라이브되어 있고 이 라이브러리에 의존하지 않는다(§ 7 의 2026-07-20 정정이 독립 확인). 통합의 경계는 처음부터 **모양(계약)** 이었다.
+- **§ 7 의 Re-open condition** 은 그대로 성립한다. 그 문장의 «P1b library» 는 이제 없지만, 재개 비용(한 도메인의 모양 맞추기 + config 한 줄)은 원래부터 그 라이브러리를 거치지 않았다 — erp·fan 이 라이브러리 없이 계약을 맞춰 집계기에 붙어 있다.
+- 에러 코드 `DELIVERY_RETRY_EXHAUSTED` · `DELIVERY_STATE_TRANSITION_INVALID` 는 wms·erp `notification-service` 가 각자 정의하므로 `platform/error-handling.md` 등록은 그대로다.
+- D4 본문(«Lift … into a shared library»)은 바꾸지 않는다 — 그때의 결정 기록이다. 그 결정의 **현재 상태**가 이 절이다.
+
+### 되돌리기
+
+코드는 git 이력에 남는다(`TASK-MONO-830` 구현 PR 의 부모 커밋 아래 `libs/java-notification/`). 다시 들이려면 **새 결정**이 필요하다 — 실제 소비자 하나 이상 + 그 소비자의 엔진 차이를 어떻게 다루는지. «코드가 이미 있으니» 는 근거가 아니다(이 절의 근거 2).
+
+### 기각한 대안
+
+- **(a) 연결 — erp·fan 이 채널 SPI 를 쓰도록 옮긴다.** 근거 2. 동작이 같은 코드를 옮기는 리팩토링인데 이유가 «라이브러리가 있어서» 뿐이다.
+- **(b) 그대로 둔다(미결 유지).** 근거 3. 넉 달 동안 미결이었고, 미결은 비용을 계속 낸다.
