@@ -93,6 +93,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## ready
 
 - `TASK-PC-FE-384-wms-nav-business-role-signals.md` — **`ADR-MONO-083` WMS 콘솔 후속 — WMS 메뉴 «업무 권한 없음» 신호를 WMS 업무 역할로 (`permission-map.ts` `serverRequires` · 계약 § 2.4.3.4) · WMS 개요 · 운영 개요 WMS 카드** (READY, 2026-11-09 UTC · 서버 = `TASK-MONO-827` #4632). ⏳ **머지 게이트 = 827 을 실은 굽기 라이브 확인 뒤**(342–344 와 같음 — 먼저 머지하면 조회 세트 운영자에게 거짓 배지). 🔴 `WMS_OPERATOR` 는 카탈로그 역할이라 `serverRequires` 에 함께 넣는다. 분석=Opus 5.5 / 구현 권장=Sonnet.
+- `TASK-PC-FE-387-operators-screen-hook-split.md` — **`OperatorsScreen.tsx`(893줄) 로직 → `use-operators-screen.ts` 훅 · 두 기능에 복사된 부여 가능 세트 조회 → `shared/api/`** (READY, 2026-11-24 UTC · 소유자 «진행»). 선례 PC-FE-235 · 259. AC-2 = 기존 시험 **무수정** · AC-5 = 이동 전후 본문 diff 0. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 
