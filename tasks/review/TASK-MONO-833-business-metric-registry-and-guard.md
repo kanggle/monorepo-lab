@@ -8,7 +8,7 @@ TASK-MONO-833
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -71,11 +71,11 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] AC-0: 착수 직전 재측정 — 가드의 모집단 정규식으로 다시 센 «문서에 없는 리터럴 metric» 이 위 20개와 같은가. 다르면 그 목록으로 진행하고 차이를 기록.
-- [ ] AC-1: 그 전부가 그 서비스 스펙에 이름 · 유형 · 태그 · 의미와 함께 있다. 각 행의 근거(등록하는 클래스 경로)를 PR 본문에.
-- [ ] AC-2: 가드 rc=0 · `--self-test` 전부 PASS.
-- [ ] AC-3: bite — 사본에서 문서의 한 이름을 지우면 rc=1 + 서비스·이름 출력, 복원 → rc=0.
-- [ ] AC-4: `scripts/` 가드 전부(스테이지 뒤) — 비0 은 사유와 함께 · `check-ls-files-guard-count.sh` rc=0.
+- [x] AC-0: 착수 직전 재측정 — 가드의 모집단 정규식으로 다시 센 «문서에 없는 리터럴 metric» 이 위 20개와 같은가. 다르면 그 목록으로 진행하고 차이를 기록.
+- [x] AC-1: 그 전부가 그 서비스 스펙에 이름 · 유형 · 태그 · 의미와 함께 있다. 각 행의 근거(등록하는 클래스 경로)를 PR 본문에.
+- [x] AC-2: 가드 rc=0 · `--self-test` 전부 PASS.
+- [x] AC-3: bite — 사본에서 문서의 한 이름을 지우면 rc=1 + 서비스·이름 출력, 복원 → rc=0.
+- [x] AC-4: `scripts/` 가드 전부(스테이지 뒤) — 비0 은 사유와 함께 · `check-ls-files-guard-count.sh` rc=0.
 - [ ] AC-5: PR CI 에서 새 잡이 **실행되어** success.
 
 # Related Specs
@@ -103,6 +103,16 @@ monorepo
 # Test Requirements
 
 - 가드 self-test · bite · 가드 전수 · CI.
+
+# Implementation Evidence (2026-11-24 UTC)
+
+- **AC-0** — 가드 자신의 정규식으로 문서 작업 **전** 실행: rc=1, 기안의 20개와 **정확히 같은** 20줄(프로젝트 · 서비스 · 이름). 🔵 기안 때의 대략 집계(112 / 32 서비스)는 정규식이 달랐다 — 가드 기준 모집단은 **113 이름 / 31 서비스**(문서화 뒤 OK 줄).
+- **AC-1** — 20개 전부 문서화(위임: Sonnet 에이전트가 코드를 읽고 작성, 결과는 diff 를 직접 읽어 확인). 파일: ecommerce `order-service/observability.md` 3 · fan `community-service/observability.md` 2 · fan `membership-service/observability.md` 1 · iam `admin-service/observability.md` 2 · iam `security-service/observability.md` 3 · scm `demand-planning-service/architecture.md` 2 · wms `admin-service/architecture.md` 3 · wms `notification-service/architecture.md` 4. 새 `observability.md` 는 0 — 없던 셋은 `architecture.md` 의 기존 Observability 절에 붙였다(티켓의 «이미 적는 파일» 규칙). 등록 클래스: `MicrometerOrderMetrics` · `FeedCacheRepository` · `BillingKeyAutoRenewalScheduler` · `AdminActionDenyWriter` · `SecurityMetricsConfig` · iam `AccountServiceClient` · `EvaluateReorderUseCase` · `SweepReorderUseCase` · wms `AdminOutboxPublisher` · `OutboxPollingScheduler` · `AlertRoutingService`. 직접 대조: `security_auto_lock_failures_total` 의 «재시도 소진 또는 409 외 4xx» 를 `AccountServiceClient.lock()` 에서 확인(118행 · 루프 뒤).
+- **AC-2** — 가드 rc=0(«113 literal metric name(s) across 31 service(s)») · `--self-test` **11/11**(별도 프로세스 · 기준선 · 문서에서 이름 삭제 bite · 새 리터럴 bite · 같은 프로젝트에 문서화 통과 · **다른 프로젝트에만** bite · **tasks/ 에만** bite · `.`→`_` 표기 통과 · `//`·javadoc 무시 · 스테이지 안 된 소스는 모집단 밖 · 빈 모집단 fail-closed). 사본 = 실제 meter 소스 + 모든 `projects/*/specs` 를 `cp --parents` 로 한 번에(파일마다 서브셸 루프는 msys 에서 첫 측정이 300초를 넘겨 중단했다).
+- **AC-3** — bite: self-test case «name removed» 가 사본에서 rc=1. 실제 트리에서는 AC-0 이 문서 작업 전 rc=1 + 서비스·이름 20줄을 출력한 것이 같은 bite 의 실물이다. 문서 작업 뒤 rc=0.
+- **AC-4** — 스테이지 뒤 `check-*.sh` **42개**: 40 rc=0, 비0 둘은 830 · 832 와 같은 환경 전제(erp 래칫 · prerendered verdict). `check-*.mjs` 6/6. `check-ls-files-guard-count.sh` — 새 가드가 `git ls-files` 를 읽으므로 **분자도** 28 → 29, 분모 69 → 70 · «of those 28» → 29 까지 두 집 네 곳 → rc=0.
+- 🔵 에이전트가 짚은 후속 거리(이 티켓 범위 밖, 기록만): iam security-service 스펙의 `security_consumer_lag` 는 코드에 없는 이름이다(코드는 `kafka.consumer.lag`) · 같은 스펙의 `SecurityAutoLockFailing` 알림 식이 실제 metric 이름과 다르다. 둘 다 «문서에 있는데 코드에 없는» 반대 방향이라 이 가드가 보지 않는다.
+- **AC-5** — PR CI 대기.
 
 # Definition of Done
 

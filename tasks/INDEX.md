@@ -207,7 +207,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-833-business-metric-registry-and-guard.md` — **문서에 없는 business metric 20개를 서비스 스펙에 + 리터럴 metric 이름 ↔ 프로젝트 `specs/` 가드** (IN-PROGRESS, 2026-11-24 UTC · 소유자 «진행해»). 실측: meter 등록 서비스 32 · 리터럴 이름 112 중 92 문서화 · **20 (8 서비스)** 리포 어디에도 없음(복구 소진 · 자동 잠금 실패 · outbox 발행 실패 포함). `platform/observability.md` § Business Metrics · § Change Rule 의 «먼저 문서화» 에 게이트 없음. 가드 = sound-not-complete(상수 이름 제외, `check-error-code-registry.sh` 선례) · 같은 프로젝트 `specs/` 만 · `tasks/` 언급은 문서 아님. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 
 
@@ -219,6 +219,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-833-business-metric-registry-and-guard.md` — **문서에 없는 business metric 20개를 서비스 스펙에 + 리터럴 metric 이름 ↔ 프로젝트 `specs/` 가드** (REVIEW, 2026-11-24 UTC · 소유자 «진행해»). 실측: meter 등록 서비스 32 · 리터럴 이름 112 중 92 문서화 · **20 (8 서비스)** 리포 어디에도 없음(복구 소진 · 자동 잠금 실패 · outbox 발행 실패 포함). `platform/observability.md` § Business Metrics · § Change Rule 의 «먼저 문서화» 에 게이트 없음. 가드 = sound-not-complete(상수 이름 제외, `check-error-code-registry.sh` 선례) · 같은 프로젝트 `specs/` 만 · `tasks/` 언급은 문서 아님. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 ## done
