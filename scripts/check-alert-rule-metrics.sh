@@ -110,6 +110,12 @@ rule_metrics() {
                 if (kind == "alert") alert = name; else { alert = "(record " name ")"; print proj "\t#record\t" name }
                 next
             }
+            # TASK-MONO-835: runbook annotations — emitted as "#runbook <alert>|<path>".
+            if (match(line, /^[ \t]*runbook:[ \t]*/)) {
+                rb = substr(line, RSTART + RLENGTH); gsub(/["\x27]/, "", rb); gsub(/^[ \t]+|[ \t]+$/, "", rb)
+                if (rb != "") print proj "\t#runbook\t" alert "|" rb
+                next
+            }
             if (match(line, /^[ \t]*expr:[ \t]*/)) {
                 rest = substr(line, RSTART + RLENGTH)
                 if (rest ~ /^[|>][-+]?[ \t]*$/) {
@@ -149,7 +155,7 @@ run_check() {
         [[ -z "$f" ]] && continue
         rows="${rows}$(rule_metrics "$root" "$f")"$'\n'
     done <<< "$files"
-    if [[ -z "$(printf '%s' "$rows" | awk -F'\t' '$2 != "#record"' | tr -d '[:space:]')" ]]; then
+    if [[ -z "$(printf '%s' "$rows" | awk -F'\t' '$2 != "#record" && $2 != "#runbook"' | tr -d '[:space:]')" ]]; then
         echo "FAIL: parsed ZERO metric references from the alert rules — the parser or the files changed." >&2
         return 1
     fi
@@ -160,7 +166,7 @@ run_check() {
         recs="$(printf '%s' "$rows" | awk -F'\t' -v p="$p" '$1 == p && $2 == "#record" { print $3 }')"
         defined="${defined}${nl}${recs}"
         while IFS=$'\t' read -r proj alert m; do
-            [[ "$proj" != "$p" || "$alert" == "#record" || -z "$m" ]] && continue
+            [[ "$proj" != "$p" || "$alert" == "#record" || "$alert" == "#runbook" || -z "$m" ]] && continue
             n_refs=$((n_refs + 1))
             if is_framework "$m"; then continue; fi
             hit=0
@@ -175,6 +181,30 @@ run_check() {
         done <<< "$rows"
     done
 
+    # TASK-MONO-835: a runbook link that leads nowhere is the next thing an on-call reader
+    # hits after the alert fires. Paths are relative to the project root; the file must be
+    # tracked (index population, like everything else here).
+    local tracked dead="" n_rb=0 rest rb_alert rb_path
+    tracked="$(git -C "$root" ls-files -- ':(glob)projects/*/**' 2>/dev/null || true)"
+    while IFS=$'\t' read -r proj m rest; do
+        [[ "$m" != "#runbook" ]] && continue
+        n_rb=$((n_rb + 1))
+        rb_alert="${rest%%|*}"; rb_path="${rest#*|}"
+        case "${nl}${tracked}${nl}" in
+            *"${nl}projects/${proj}/${rb_path}${nl}"*) ;;
+            *) dead="${dead}  projects/${proj}  ${rb_alert}  ${rb_path}${nl}" ;;
+        esac
+    done <<< "$rows"
+
+    if [[ -n "$dead" ]]; then
+        echo "FAIL: alert runbook link(s) point at a file that does not exist:" >&2
+        printf '%s' "$dead" >&2
+        echo >&2
+        echo "  The path is relative to the project root (projects/<p>/). Write the runbook" >&2
+        echo "  (knowledge/runbooks/, see that project's README there) or fix the link." >&2
+        return 1
+    fi
+
     if [[ -n "$missing" ]]; then
         echo "FAIL: alert rule(s) query a metric nothing exports — they can never fire:" >&2
         printf '%s' "$(printf '%s' "$missing" | sort -u)" >&2; echo >&2
@@ -187,7 +217,7 @@ run_check() {
     if [[ "$quiet" != "quiet" ]]; then
         local nf
         nf="$(printf '%s\n' "$files" | grep -c .)"
-        echo "check-alert-rule-metrics: OK — ${n_refs} metric reference(s) in ${nf} rules file(s), all exported by code, libs, a record rule, or a framework."
+        echo "check-alert-rule-metrics: OK — ${n_refs} metric reference(s) in ${nf} rules file(s), all exported by code, libs, a record rule, or a framework; ${n_rb} runbook link(s), all to tracked files."
     fi
     return 0
 }
@@ -204,6 +234,7 @@ self_test() {
     local base="$tmp/base" f p
     mkdir -p "$base"
     (cd "$ROOT" && git ls-files -z -- ':(glob)projects/*/infra/prometheus/alert-rules.yml' \
+            ':(glob)projects/*/knowledge/runbooks/**' \
         | xargs -0 -r cp --parents -t "$base")
     for p in $(cd "$base" && ls projects); do
         mkdir -p "$base/projects/$p/apps/real/src/main/java"
@@ -292,6 +323,27 @@ self_test() {
     printf '\n  - name: selftest.block\n    rules:\n      - alert: SelfTestBlock\n        expr: |\n          sum(rate(selftest_block_only_total[5m]))\n            > 0\n        for: 5m\n' \
         >> "$d/projects/$P1/infra/prometheus/alert-rules.yml"; restage "$d"
     expect "a name inside an expr: | block bites" 1 "$d"
+
+    # TASK-MONO-835 — runbook links
+    d="$(clone runbook_dead)"
+    printf '\n  - name: selftest.runbook\n    rules:\n      - alert: SelfTestRunbook\n        expr: up == 0\n        annotations:\n          runbook: "knowledge/runbooks/selftest-does-not-exist.md"\n' \
+        >> "$d/projects/$P1/infra/prometheus/alert-rules.yml"; restage "$d"
+    expect "a runbook link to a missing file bites" 1 "$d"
+
+    d="$(clone runbook_ok)"
+    mkdir -p "$d/projects/$P1/knowledge/runbooks"
+    printf '# selftest\n' > "$d/projects/$P1/knowledge/runbooks/selftest-exists.md"
+    printf '\n  - name: selftest.runbook\n    rules:\n      - alert: SelfTestRunbook\n        expr: up == 0\n        annotations:\n          runbook: "knowledge/runbooks/selftest-exists.md"  \n' \
+        >> "$d/projects/$P1/infra/prometheus/alert-rules.yml"; restage "$d"
+    expect "a quoted runbook link to a tracked file passes (quotes/trailing space stripped)" 0 "$d"
+
+    d="$(clone runbook_unstaged)"
+    mkdir -p "$d/projects/$P1/knowledge/runbooks"
+    printf '# selftest\n' > "$d/projects/$P1/knowledge/runbooks/selftest-unstaged.md"
+    printf '\n  - name: selftest.runbook\n    rules:\n      - alert: SelfTestRunbook\n        expr: up == 0\n        annotations:\n          runbook: knowledge/runbooks/selftest-unstaged.md\n' \
+        >> "$d/projects/$P1/infra/prometheus/alert-rules.yml"
+    git -C "$d" add -- "projects/$P1/infra/prometheus/alert-rules.yml" >/dev/null 2>&1
+    expect "a runbook that exists on disk but is not tracked bites" 1 "$d"
 
     d="$tmp/empty"; mkdir -p "$d"; git -C "$d" init -q
     expect "no rules file fails closed" 1 "$d"
