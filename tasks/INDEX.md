@@ -207,7 +207,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-824-portfolio-sync-token-renewal-before-2026-12-10.md` — ⏳ **SCHEDULED — DO NOT START before 2026-12-01 UTC** · **동기화 토큰 `PORTFOLIO_SYNC_TOKEN` 이 2026-12-10 만료 — 갱신 + 드라이런 확인** (IN-PROGRESS 2026-11-24 UTC — 소유자 결정으로 조기 착수 · 기안 2026-11-01 UTC · 소유자 요청). AC-0 게이트 = 날짜(UTC, 만료 뒤 착수면 복구 경로) · 갱신 여부는 시크릿 `updated_at`(기준 2026-09-11T09:35:09Z) · 워크플로 존속. 🔴 Regenerate 는 값을 바꾼다 — AC-2 는 드라이런 success **와** `updated_at` 변경 둘 다. 이미 갱신됐어도 AC-3(다음 만료 9일 전 티켓)은 한다. 분석=Opus 5.5 / 구현 권장=Haiku·Sonnet.
+_(없음)_
 
 
 
@@ -219,6 +219,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-824-portfolio-sync-token-renewal-before-2026-12-10.md` — ⏳ **SCHEDULED — DO NOT START before 2026-12-01 UTC** · **동기화 토큰 `PORTFOLIO_SYNC_TOKEN` 이 2026-12-10 만료 — 갱신 + 드라이런 확인** (REVIEW 2026-11-24 UTC — 소유자 결정으로 조기 착수 · 기안 2026-11-01 UTC · 소유자 요청). AC-0 게이트 = 날짜(UTC, 만료 뒤 착수면 복구 경로) · 갱신 여부는 시크릿 `updated_at`(기준 2026-09-11T09:35:09Z) · 워크플로 존속. 🔴 Regenerate 는 값을 바꾼다 — AC-2 는 드라이런 success **와** `updated_at` 변경 둘 다. 이미 갱신됐어도 AC-3(다음 만료 9일 전 티켓)은 한다. 분석=Opus 5.5 / 구현 권장=Haiku·Sonnet.
 
 
 ## done
