@@ -298,6 +298,8 @@ jobs:
       shared-lib-catalog: ${{ steps.filter.outputs.shared-lib-catalog }}
       # TASK-MONO-833 — raw filter (the specs/ side must trigger it too, and specs are not code).
       metric-name-registry: ${{ steps.filter.outputs.metric-name-registry }}
+      # TASK-MONO-834 — raw filter (alert-rules.yml lives under infra/, not code).
+      alert-rule-metrics: ${{ steps.filter.outputs.alert-rule-metrics }}
       # TASK-MONO-562: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path of this drift is non-code: a `vercel.json` losing its `ignoreCommand`, a
       # new Vercel project landing without one, or the judge script being weakened.
@@ -1015,6 +1017,14 @@ jobs:
               - 'projects/*/apps/*/src/main/**/*.java'
               - 'projects/*/specs/**'
               - 'scripts/check-metric-name-registry.sh'
+            # TASK-MONO-834: a rule starts querying a name, or the code that exported a name a
+            # rule queries stops exporting it (project sources or libs), or the judge changes.
+            # Pure-positive.
+            alert-rule-metrics:
+              - 'projects/*/infra/prometheus/**'
+              - 'projects/*/apps/*/src/main/**/*.java'
+              - 'libs/*/src/main/**/*.java'
+              - 'scripts/check-alert-rule-metrics.sh'
             # TASK-MONO-562: a Vercel project that builds on every commit arrives three
             # ways — a new `vercel.json` anywhere in the tree, an existing one losing its
             # `ignoreCommand`, or the shared judge being weakened. All three are non-code,
@@ -1633,6 +1643,33 @@ jobs:
 
       - name: Guard — every literal metric name is documented in its project's specs
         run: bash scripts/check-metric-name-registry.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-834. An alert whose expr names a metric nothing exports evaluates to
+  # no data and can never fire. Five iam alerts were in that state, and the wms rules
+  # file was a copy of iam's. This fails when a rule queries a name that is neither a
+  # string literal in the project's sources / libs, a record rule, nor a listed
+  # framework metric.
+  # ---------------------------------------------------------------------------
+  alert-rule-metrics:
+    name: Alert rule metrics (every queried metric is exported)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      needs.changes.outputs.alert-rule-metrics == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-alert-rule-metrics.sh
+
+      - name: Self-test the predicate (bites on mutated copies)
+        run: bash scripts/check-alert-rule-metrics.sh --self-test
+
+      - name: Guard — alert rules query only exported metrics
+        run: bash scripts/check-alert-rule-metrics.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-619. 셸의 큰따옴표 안에서 백틱은 명령 치환이다. 가드의 실패 메시지가

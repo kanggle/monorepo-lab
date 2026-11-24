@@ -1,3 +1,17 @@
+# wms-platform Prometheus alert rules — loaded by infra/prometheus/prometheus.yml (`rule_files`).
+#
+# 🔴 TASK-MONO-834 (2026-11-24 UTC): this file used to be a verbatim copy of iam-platform's
+#    rules. Every alert below the availability group named an iam service (Auth*, Account*,
+#    Security*, Admin*, the iam gateway's JWT/rate-limit counters) and queried metrics no wms
+#    service exports, so none of them could ever fire — and no wms service had an alert of its
+#    own. What remains is the platform-wide group (framework metrics + the `service` label that
+#    prometheus.yml attaches to each wms scrape job) and alerts on metrics wms services actually
+#    register. `scripts/check-alert-rule-metrics.sh` now fails CI when a rule here names a metric
+#    nothing exports.
+#
+#    Not carried over from the iam copy, on purpose: GatewayRateLimitExceeded — the wms gateway
+#    uses libs/java-gateway's FailOpenRateLimiter, which does not export
+#    `gateway_ratelimit_rejected_total` (only iam's own gateway registers that name).
 groups:
   - name: platform.availability
     interval: 30s
@@ -39,146 +53,43 @@ groups:
           description: "p99 latency for {{ $labels.service }} exceeded 1 second for 5 minutes."
           runbook: "docs/runbooks/high-latency-p99.md"
 
-  - name: gateway.rules
+  # ──────────────────────────────────────────────
+  # Transactional outbox. Every wms service that publishes events registers a
+  # `<service>.outbox.pending.count` gauge (unpublished rows). Threshold 100 is the one the
+  # wms specs already state — e.g. specs/services/notification-service/external-integrations.md
+  # ("alerts at pending.count > 100"), inbound/outbound external-integrations.md ("grows; alerts
+  # at >100"). Names are spelled out rather than matched by a __name__ regex so the metric guard
+  # can check each one.
+  # ──────────────────────────────────────────────
+  - name: wms.outbox
     interval: 30s
     rules:
-      - alert: GatewayJwtFailureSpike
-        expr: rate(gateway_jwt_validation_total{result="failure"}[5m]) > 5
-        for: 5m
-        labels:
-          severity: warning
-          service: gateway-service
-        annotations:
-          summary: "Gateway JWT validation failure spike"
-          description: "More than 5 JWT validation failures per second over 5 minutes."
-          runbook: "docs/runbooks/gateway-jwt-failure-spike.md"
-
-      - alert: GatewayRateLimitExceeded
-        expr: rate(gateway_ratelimit_rejected_total[5m]) > 10
-        for: 5m
-        labels:
-          severity: warning
-          service: gateway-service
-        annotations:
-          summary: "Gateway rate limit rejections elevated"
-          runbook: "docs/runbooks/gateway-rate-limit-exceeded.md"
-
-  - name: auth.rules
-    interval: 30s
-    rules:
-      - alert: AuthLoginFailureSpike
-        expr: rate(auth_login_total{result="failure"}[5m]) > 20
-        for: 5m
-        labels:
-          severity: warning
-          service: auth-service
-        annotations:
-          summary: "Login failure rate spike"
-          runbook: "docs/runbooks/auth-login-failure-spike.md"
-
-      - alert: AuthRefreshTokenReuseDetected
-        expr: increase(auth_token_reuse_detected_total[5m]) > 0
-        for: 0m
-        labels:
-          severity: critical
-          service: auth-service
-        annotations:
-          summary: "Refresh token reuse detected"
-          description: "Potential token theft. Investigate immediately."
-          runbook: "docs/runbooks/auth-refresh-token-reuse.md"
-
-      - alert: AuthOutboxLagHigh
-        expr: auth_outbox_lag_seconds > 60
-        for: 5m
-        labels:
-          severity: warning
-          service: auth-service
-        annotations:
-          summary: "Auth outbox lag exceeds 60 seconds"
-          runbook: "docs/runbooks/auth-outbox-lag-high.md"
-
-  - name: account.rules
-    interval: 30s
-    rules:
-      - alert: AccountOutboxLagHigh
-        expr: account_outbox_lag_seconds > 60
-        for: 5m
-        labels:
-          severity: warning
-          service: account-service
-        annotations:
-          summary: "Account outbox lag exceeds 60 seconds"
-          runbook: "docs/runbooks/account-outbox-lag-high.md"
-
-      - alert: AccountDbSlowQueries
+      - alert: WmsOutboxBacklogHigh
         expr: |
-          histogram_quantile(0.99,
-            sum(rate(hibernate_query_execution_seconds_bucket[5m])) by (le)
-          ) > 0.5
+          max by (service) (master_outbox_pending_count) > 100
+            or max by (service) (inbound_outbox_pending_count) > 100
+            or max by (service) (inventory_outbox_pending_count) > 100
+            or max by (service) (outbound_outbox_pending_count) > 100
+            or max by (service) (notification_outbox_pending_count) > 100
+            or max by (service) (admin_outbox_pending_count) > 100
         for: 5m
         labels:
           severity: warning
-          service: account-service
         annotations:
-          summary: "Account DB p99 query latency > 500ms"
-          runbook: "docs/runbooks/account-db-slow-queries.md"
+          summary: "{{ $labels.service }} outbox backlog > 100 unpublished rows"
+          description: "Unpublished outbox rows for {{ $labels.service }} stayed above 100 for 5 minutes — the relay is stuck or the broker is unreachable."
 
-  - name: security.rules
-    interval: 30s
-    rules:
-      - alert: SecurityConsumerLagHigh
-        expr: kafka_consumer_fetch_manager_records_lag_max{service="security-service"} > 10000
-        for: 10m
-        labels:
-          severity: critical
-          service: security-service
-        annotations:
-          summary: "Security consumer lag > 10000"
-          runbook: "docs/runbooks/security-consumer-lag-high.md"
-
-      - alert: SecurityDlqDepthHigh
-        expr: security_dlq_depth > 100
-        for: 5m
-        labels:
-          severity: warning
-          service: security-service
-        annotations:
-          summary: "Security DLQ depth exceeds 100"
-          runbook: "docs/runbooks/security-dlq-depth-high.md"
-
-      - alert: SecurityAutoLockSpike
-        expr: rate(security_auto_lock_issued_total[5m]) > 1
-        for: 5m
-        labels:
-          severity: warning
-          service: security-service
-        annotations:
-          summary: "Auto-lock rate elevated"
-          runbook: "docs/runbooks/security-auto-lock-spike.md"
-
-  - name: admin.rules
-    interval: 30s
-    rules:
-      - alert: AdminActionSpike
-        expr: rate(admin_command_total[5m]) > 5
-        for: 10m
-        labels:
-          severity: warning
-          service: admin-service
-        annotations:
-          summary: "Admin action rate unusually high"
-          runbook: "docs/runbooks/admin-action-spike.md"
-
-      - alert: AdminCommandFailureHigh
+      # Only admin-service and notification-service register a publish-failure counter
+      # (AdminOutboxPublisher, OutboxPollingScheduler). Their spec rows (TASK-MONO-833) say
+      # "alert on a sustained non-zero rate": one failure is retried with backoff and is
+      # not news; failures in every minute of a 10-minute window are.
+      - alert: WmsOutboxPublishFailing
         expr: |
-          sum(rate(admin_command_total{outcome="failure"}[10m]))
-            /
-          sum(rate(admin_command_total[10m]))
-            > 0.2
+          sum by (service) (rate(admin_outbox_publish_failure_total[5m])) > 0
+            or sum by (service) (rate(notification_outbox_publish_failure_total[5m])) > 0
         for: 10m
         labels:
-          severity: critical
-          service: admin-service
+          severity: warning
         annotations:
-          summary: "Admin-service command failure ratio > 20%"
-          runbook: "docs/runbooks/admin-command-failure-high.md"
+          summary: "{{ $labels.service }} outbox publishing keeps failing"
+          description: "Outbox publish failures for {{ $labels.service }} have not stopped for 10 minutes."

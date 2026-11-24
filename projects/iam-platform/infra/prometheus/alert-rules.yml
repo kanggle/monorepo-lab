@@ -43,7 +43,10 @@ groups:
     interval: 30s
     rules:
       - alert: GatewayJwtFailureSpike
-        expr: rate(gateway_jwt_validation_total{result="failure"}[5m]) > 5
+        # TASK-MONO-834: the spec's result values are valid / expired / invalid_signature /
+        # missing (gateway-service/observability.md) — there is no "failure". Count every
+        # non-valid outcome, which is what "validation failure" meant.
+        expr: sum(rate(gateway_jwt_validation_total{result!="valid"}[5m])) > 5
         for: 5m
         labels:
           severity: warning
@@ -110,18 +113,10 @@ groups:
           summary: "Account outbox lag exceeds 60 seconds"
           runbook: "docs/runbooks/account-outbox-lag-high.md"
 
-      - alert: AccountDbSlowQueries
-        expr: |
-          histogram_quantile(0.99,
-            sum(rate(hibernate_query_execution_seconds_bucket[5m])) by (le)
-          ) > 0.5
-        for: 5m
-        labels:
-          severity: warning
-          service: account-service
-        annotations:
-          summary: "Account DB p99 query latency > 500ms"
-          runbook: "docs/runbooks/account-db-slow-queries.md"
+      # TASK-MONO-834: AccountDbSlowQueries was removed. It queried
+      # hibernate_query_execution_seconds_bucket, which nothing exports — Hibernate statistics
+      # are not enabled in any iam service and no spec asks for them — so it could never fire.
+      # Turning statistics on is a performance/design decision, not an alert-file edit.
 
   - name: security.rules
     interval: 30s
