@@ -207,7 +207,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-835-alert-runbooks-exist.md` — **알림 `runbook:` 링크 17개 전부 404 → iam 14 · wms 5 runbook 작성 + 링크 존재 가드** (IN-PROGRESS, 2026-11-24 UTC · 소유자 «진행», 권장안 = 전부 작성). ecommerce `knowledge/runbooks/` 관례(README 색인 · 「그대로 복사해 실행 가능」 규칙)를 따른다. 링크 → `knowledge/runbooks/`. 가드 = `check-alert-rule-metrics.sh` 확장(스크립트 수 불변). 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 
 
@@ -219,6 +219,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-835-alert-runbooks-exist.md` — **알림 `runbook:` 링크 17개 전부 404 → iam 14 · wms 5 runbook 작성 + 링크 존재 가드** (REVIEW, 2026-11-24 UTC · 소유자 «진행», 권장안 = 전부 작성). ecommerce `knowledge/runbooks/` 관례(README 색인 · 「그대로 복사해 실행 가능」 규칙)를 따른다. 링크 → `knowledge/runbooks/`. 가드 = `check-alert-rule-metrics.sh` 확장(스크립트 수 불변). 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 ## done
