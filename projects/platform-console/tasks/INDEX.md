@@ -92,7 +92,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-PC-FE-384-wms-nav-business-role-signals.md` — **`ADR-MONO-083` WMS 콘솔 후속 — WMS 메뉴 «업무 권한 없음» 신호를 WMS 업무 역할로 (`permission-map.ts` `serverRequires` · 계약 § 2.4.3.4) · WMS 개요 · 운영 개요 WMS 카드** (READY, 2026-11-09 UTC · 서버 = `TASK-MONO-827` #4632). ⏳ **머지 게이트 = 827 을 실은 굽기 라이브 확인 뒤**(342–344 와 같음 — 먼저 머지하면 조회 세트 운영자에게 거짓 배지). 🔴 `WMS_OPERATOR` 는 카탈로그 역할이라 `serverRequires` 에 함께 넣는다. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 
 
@@ -125,6 +125,7 @@ _(없음)_
 
 ## review
 
+- `TASK-PC-FE-384-wms-nav-business-role-signals.md` — **`ADR-MONO-083` WMS 콘솔 후속 — WMS 메뉴 «업무 권한 없음» 신호를 WMS 업무 역할로 (`permission-map.ts` `serverRequires` · 계약 § 2.4.3.4)** (REVIEW, 2026-11-24 UTC · 서버 = `TASK-MONO-827` #4632, 38차 창 라이브 확인). AC-0~3 ✅, AC-4(Vercel 배포 뒤 라이브 창) 미완. `WMS_OPERATOR` 는 admin-service 행 전부에 포함, `/wms/outbound` 는 변경 없음(WMS_OPERATOR 거부). 분석=Opus 5.5 / 구현=Sonnet.
 
 
 ## done

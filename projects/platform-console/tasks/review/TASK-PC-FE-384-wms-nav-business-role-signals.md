@@ -8,7 +8,7 @@ TASK-PC-FE-384
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -65,10 +65,10 @@ frontend
 
 # Acceptance Criteria
 
-- [ ] **AC-0** — 🔴 머지 게이트 실측: `TASK-MONO-827` 을 담은 AMI 가 라이브인가(굽기 기록 · 창에서 세트 0 운영자의 `/api/v1/admin/dashboard/orders` 가 403 인가 — 827 AC-4). 아니면 **이 티켓은 시작하지 않는다**. 위 대조표의 «AC-0» 칸을 콘솔 코드(`features/wms-ops/**` · `shared/composition/console-composition.ts` WMS 갈래)로 확정한다.
-- [ ] **AC-1** — 계약 § 2.4.3.4(와 필요하면 § 2.4.9.1) 개정이 코드보다 먼저.
-- [ ] **AC-2** — 🔴 대조군: `wms-inventory-read` → `/wms/inventory` 배지 없음 · `/wms/inbound` · `/wms/master` · `/wms/outbound` 배지 / `wms-outbound-operate` → `/wms/outbound` 배지 없음 · `/wms/inventory` 배지 / `wms-master-read` → `/wms/master` 배지 없음 / `wms-ops-actions` · `legacy-compat` → WMS 메뉴 배지 0 / WMS 세트 0(다른 도메인 세트만) → WMS 메뉴 전부 배지.
-- [ ] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음(지금 규칙 그대로).
+- [x] **AC-0** — 🔴 머지 게이트 실측: `TASK-MONO-827` 을 담은 AMI 가 라이브인가(굽기 기록 · 창에서 세트 0 운영자의 `/api/v1/admin/dashboard/orders` 가 403 인가 — 827 AC-4). 아니면 **이 티켓은 시작하지 않는다**. 위 대조표의 «AC-0» 칸을 콘솔 코드(`features/wms-ops/**` · `shared/composition/console-composition.ts` WMS 갈래)로 확정한다.
+- [x] **AC-1** — 계약 § 2.4.3.4(와 필요하면 § 2.4.9.1) 개정이 코드보다 먼저.
+- [x] **AC-2** — 🔴 대조군: `wms-inventory-read` → `/wms/inventory` 배지 없음 · `/wms/inbound` · `/wms/master` · `/wms/outbound` 배지 / `wms-outbound-operate` → `/wms/outbound` 배지 없음 · `/wms/inventory` 배지 / `wms-master-read` → `/wms/master` 배지 없음 / `wms-ops-actions` · `legacy-compat` → WMS 메뉴 배지 0 / WMS 세트 0(다른 도메인 세트만) → WMS 메뉴 전부 배지.
+- [x] **AC-3** — 실패 경로: `/me/domain-access` 실패 · 시간 초과 → 배지 없음(지금 규칙 그대로).
 - [ ] **AC-4** — 배포 상태(Vercel · 라이브 화면)를 따로 적는다. 라이브 = 창에서 단일 세트 운영자로 위 대조군 중 둘 이상(배지 있음 · 없음 양쪽).
 
 # Related Specs
@@ -93,3 +93,10 @@ frontend
 1. 굽기 전에 머지 — 위 머지 게이트의 거짓 배지.
 2. `serverRequires` 에 `WMS_OPERATOR` 를 빠뜨린다 — `wms-ops-actions` 운영자의 WMS 메뉴 전부 거짓 배지(Edge Case 1).
 3. `/wms` 개요 칸을 갈래 하나로 잡는다 — 344 `/finance` 처럼 «한 갈래 403 = 화면 전체 forbidden» 이면 배지가 화면보다 좁아진다(덜 알림). AC-0 의 화면 동작 측정이 이것을 막는다.
+
+## CORRECTION (구현 착수 중, 2026-11-24 UTC)
+
+1. **AC-0 완료** — 38차 창(2026-11-24 UTC), AMI `ami-0f3dc38ba84b6d232`(`3277f0473`): 세트 0 운영자(토큰 `entitled_domains ∋ wms`) 의 `/api/v1/admin/dashboard/orders` · `/inventory` = 403 · 403. `wms-outbound-operate` → orders 200 / inventory 403. `wms-inventory-read` → orders 403 / inventory 200. `scm-read` → 403 / 403. `legacy-compat` → 200 / 200. 기록: `tasks/done/TASK-MONO-827-*.md` § CORRECTION — AC-4.
+2. **운영 개요 WMS 카드의 출처는 `/dashboard/inventory` 가 아니라 `/dashboard/orders?status=RECEIVED`** (계약 § 2.4.9.1 행 2). 메뉴 신호 대상이 아니고 403 은 이미 카드별 `forbidden` 으로 매핑된다 — 코드 변경 없음. 계약 § 2.4.9.1 에 «구독만으로 열린다» 류 문장은 없어 문구 수정도 없다.
+3. **AC-2 의 «`wms-ops-actions` → WMS 메뉴 배지 0» 은 `/wms/outbound` 에서 틀리다** — outbound-service GET = `OUTBOUND_READ ∨ OUTBOUND_WRITE ∨ OUTBOUND_ADMIN`, `WMS_OPERATOR` 는 통과하지 못한다. 시험은 `/wms/outbound` 에 배지가 있음을 단언한다(나머지 WMS 잎 배지 0). `/wms/outbound` 행은 변경 없음.
+4. **`/wms/operations` 결정** — `/wms` 와 같은 합집합(8역할). 설정 GET = «업무 역할 아무거나»; projection-status(`WMS_ADMIN`) 는 독립 셀(`operations-state.ts`)이고 페이지 수준 forbidden 분기가 없으며 콘솔 운영자 토큰에 ADMIN 이 없으므로 배지를 움직이지 않는다. `/wms` 개요도 같은 합집합 — 유일한 화면 전체 forbidden 은 `getWmsSectionState` → `listAlerts`(알림 목록 = 영역 역할 아무거나), 나머지 카드는 `cell()` 403 → `forbidden` 으로 독립.

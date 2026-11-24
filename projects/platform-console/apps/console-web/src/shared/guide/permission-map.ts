@@ -290,6 +290,29 @@ const WMS_ROLES = [
   'MASTER_READ',
 ];
 /**
+ * TASK-PC-FE-384 (ADR-MONO-083 · server = TASK-MONO-827, live 38th window) — WMS admin-service
+ * reads (`admin-service-api.md` § Read gates). 827 removed the subscription-synthesised
+ * `WMS_VIEWER`; dashboards/settings are judged by area role. `WMS_OPERATOR` is in every admin-service
+ * row (role hierarchy OPERATOR > VIEWER; `wms-ops-actions` grants only it). `WMS_VIEWER` is never an
+ * input (in no set). `/wms/outbound` is NOT here: outbound-service refuses `WMS_OPERATOR`.
+ */
+const WMS_GET = {
+  inbound: ['INBOUND_READ', 'INBOUND_WRITE', 'WMS_OPERATOR'],
+  inventory: ['INVENTORY_READ', 'INVENTORY_WRITE', 'WMS_OPERATOR'],
+  master: ['MASTER_READ', 'WMS_OPERATOR'],
+  /** alert list / settings `GET` = any of the area roles (the overview's only whole-screen forbidden gate). */
+  anyArea: [
+    'INBOUND_READ',
+    'INBOUND_WRITE',
+    'INVENTORY_READ',
+    'INVENTORY_WRITE',
+    'OUTBOUND_READ',
+    'OUTBOUND_WRITE',
+    'MASTER_READ',
+    'WMS_OPERATOR',
+  ],
+} as const;
+/**
  * TASK-PC-FE-344 (ADR-MONO-083 P7 · server = TASK-MONO-794, live 28th window) — the Finance catalog
  * (`DomainRoleCatalog.java` finance entries). `FINANCE_OPERATOR` is NOT here: an entry role auth
  * derives, deleted from every set by V0058, never in row 12. 794 also removed `ROLE_FINANCE_VIEWER`
@@ -719,10 +742,17 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/wms',
     area: 'wms',
-    // TASK-PC-FE-338 c-2 — no `serverRequires`: wms admin-service dashboards synthesise
-    // `WMS_VIEWER` from `entitled_domains ∋ wms` (subscription alone). Alert acknowledge needs
-    // `WMS_OPERATOR` (`AlertDashboardController` `hasRole('WMS_OPERATOR')`).
-    gate: { kind: 'domain', domain: 'wms', roles: WMS_ROLES, writeRequires: ['WMS_OPERATOR'] },
+    // TASK-PC-FE-384 / TASK-MONO-827 — the subscription-synthesised `WMS_VIEWER` is gone (live
+    // 38th window). The only whole-screen forbidden gate is the alert list (any area role); every
+    // card is its own cell (`overview-state.ts` `cell()` 403 → forbidden), so any one area role
+    // opens the screen. Alert acknowledge needs `WMS_OPERATOR` (`AlertDashboardController`).
+    gate: {
+      kind: 'domain',
+      domain: 'wms',
+      roles: WMS_ROLES,
+      serverRequires: WMS_GET.anyArea,
+      writeRequires: ['WMS_OPERATOR'],
+    },
     description: '재고·처리량·주문·알림 요약(읽기 모델 대시보드).',
     crud: crud('RU'),
     crudNote: '수정 = 운영 알림 확인(acknowledge).',
@@ -738,7 +768,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/wms/inbound',
     area: 'wms',
-    gate: { kind: 'domain', domain: 'wms', roles: WMS_ROLES },
+    gate: { kind: 'domain', domain: 'wms', roles: WMS_ROLES, serverRequires: WMS_GET.inbound },
     description: 'ASN(입고예정) 목록 + 검수 결과 조회.',
     crud: R,
     purpose: '들어올 물건과 검수 결과를 확인한다.',
@@ -748,7 +778,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/wms/inventory',
     area: 'wms',
-    gate: { kind: 'domain', domain: 'wms', roles: WMS_ROLES },
+    gate: { kind: 'domain', domain: 'wms', roles: WMS_ROLES, serverRequires: WMS_GET.inventory },
     description: '위치·SKU·로트별 재고 수량 버킷(가용/예약/손상) 조회.',
     crud: R,
     purpose: '지금 창고에 무엇이 얼마나 있는지 본다.',
@@ -792,7 +822,7 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/wms/master',
     area: 'wms',
-    gate: { kind: 'domain', domain: 'wms', roles: WMS_ROLES },
+    gate: { kind: 'domain', domain: 'wms', roles: WMS_ROLES, serverRequires: WMS_GET.master },
     description: '창고/구역/로케이션/SKU/Lot/거래처 참조 데이터 조회.',
     crud: R,
     crudNote: '마스터 쓰기(MASTER_WRITE)는 파생 롤에 의도적으로 없다.',
@@ -803,7 +833,9 @@ export const PERMISSION_MAP: readonly PermissionMapRow[] = [
   {
     href: '/wms/operations',
     area: 'wms',
-    gate: { kind: 'domain', domain: 'wms', roles: WMS_ROLES },
+    // settings `GET` = any area role; projection-status (WMS_ADMIN) is an independent cell and no
+    // console operator token carries ADMIN, so it must not drive the badge (TASK-PC-FE-384).
+    gate: { kind: 'domain', domain: 'wms', roles: WMS_ROLES, serverRequires: WMS_GET.anyArea },
     description: '운영 설정(예약 TTL·저재고 임계치 등) + 읽기 모델 프로젝션 상태 조회.',
     crud: R,
     crudNote: '설정 변경은 이 화면에서 할 수 없다.',
