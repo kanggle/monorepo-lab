@@ -220,10 +220,10 @@ _(없음)_
 
 ## review
 
-- `TASK-MONO-834-alert-rule-metrics-must-exist-guard.md` — **배포 알림 규칙이 조회하는 metric 은 실제로 있어야 한다 — 가드 + wms 의 iam 복사본 알림 교체** (REVIEW, 2026-11-24 UTC). 🔴 선행 `TASK-BE-662`(iam 4 metric 구현). wms `alert-rules.yml` 은 iam 것과 알림 목록이 동일(wms 서비스 알림 0개). ecommerce 의 «없음» 1건은 `libs/` 를 안 본 측정의 오탐 → 가드 모집단에 `libs/`. 분석=Opus 5.5 / 구현 권장=Sonnet.
-
 
 ## done
+
+- ✅ `TASK-MONO-834-alert-rule-metrics-must-exist-guard.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4670 머지, `4a81ac35e`, 실패 0 · SUCCESS 42 · SKIPPED 33) · 기안 #4668 · 선행 `TASK-BE-662` #4669. 새 가드 `check-alert-rule-metrics.sh`(알림 expr 의 metric ↔ 소스·libs 리터럴 / record / 프레임워크 접두, self-test 13) + wms `alert-rules.yml` 을 iam 복사본에서 wms 것으로(공통 3 + outbox 적체 >100 · 발행 실패) + iam `GatewayJwtFailureSpike` 식 정정 · `AccountDbSlowQueries` 제거(가드가 찾음, 내보내는 것 없음). promtool(도커) wms 5 · iam 14 SUCCESS. AC-5 = `Alert rule metrics …` 잡 **실행되어** SUCCESS · ecommerce promtool 단위 테스트는 CI 에 없음(해당 없음). 가드 수 30/71. 남은 것(티켓 없음): auth outbox lag 값 결함 · security 스펙 미구현 8 · runbook 디렉터리 부재.
 
 - ✅ `TASK-MONO-833-business-metric-registry-and-guard.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4666 머지, `2c2843f8f`, 실패 0 · SUCCESS 44 · SKIPPED 30) · 기안 #4665. 문서에 없던 business metric 20개(8 서비스)를 각 서비스 스펙에 + 새 가드 `check-metric-name-registry.sh`(리터럴 이름 ↔ 같은 프로젝트 `specs/`, sound-not-complete, self-test 11) + `ci.yml` 잡 + 가드 수 산문 29/70. AC-5 = `Metric name registry …` 잡 **실행되어** SUCCESS(13s). 모집단 113 이름 / 31 서비스. AC-4 비0 둘 = 환경 전제(erp 래칫 · prerendered verdict). 후속 거리(티켓 없음): iam security-service 스펙의 `security_consumer_lag`(코드에 없음) · `SecurityAutoLockFailing` 식 이름 불일치 — 반대 방향이라 이 가드 밖.
 

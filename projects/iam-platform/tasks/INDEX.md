@@ -121,9 +121,11 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-- `TASK-BE-662-implement-spec-required-metrics-alerts-query.md` — **스펙이 «필수» 로 정했고 배포 알림이 조회하는데 코드에 없는 metric 4개 구현** (REVIEW, 2026-11-24 UTC · 소유자 «코드에 구현»). `gateway_jwt_validation_total{result}` · `admin_command_total{action_code,outcome}` · `account_outbox_lag_seconds` · `security_auto_lock_issued_total{result}` — 알림 5개가 영원히 no-data. 후속 = `TASK-MONO-834`(알림 ↔ metric 가드, 이 티켓이 먼저). 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
 
 ## done
+
+- ✅ `TASK-BE-662-implement-spec-required-metrics-alerts-query.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4669 머지, `08bb2e01f`, 실패 0 · SUCCESS 18 · SKIPPED 54). 스펙 필수 metric 4개 구현 — `gateway_jwt_validation_total{result}` · `admin_command_total{action_code,outcome}` · `account_outbox_lag_seconds`(v2 `account_outbox`, `UTC_TIMESTAMP(6)`) · `security_auto_lock_issued_total{result}` — 영원히 no-data 이던 알림 5개가 동작. AC-4 = Build & Test · Integration iam A/B · E2E smoke **실행되어** SUCCESS. 티켓 정정 둘(`recordDenied` 는 fail-closed · auth `OutboxLagMetric` 은 v1 빈 테이블을 읽는 결함 — 복사 안 함). 후속(티켓 없음): auth 형제의 같은 결함.
 - ✅ `TASK-BE-641-end-session-endpoint-answers-401.md` — **DONE 2026-10-25 UTC (4-dim verified)** — impl PR #4440(`c118382d8`, 실패 0) · AC-1 35차 창 ✅ — 정상 `/connect/logout` 302 → `/login` · 재로그인 시 비밀번호 요구(IdP 세션 종료) · AC-3 = 34차. 기록 = 티켓 끝 `## CORRECTION — 35차 창` · `TASK-MONO-672` § 35th.
 - ✅ `TASK-BE-660-audit-query-unknown-source-answers-empty-200.md` — **DONE 2026-10-25 UTC (4-dim verified)** — #4554(`890e53bc7`, 실패 0 · `Integration (iam A/B)` SUCCESS). 감사 조회가 모르는 `source` 를 경계에서 400 `VALIDATION_ERROR`(대소문자 구분, 빈 값=생략). 수정 전 빨강 3. AC 전부 닫힘.
 - ✅ `TASK-BE-658-audit-slice-test-sends-a-source-the-api-ignores.md` — **DONE 2026-10-25 UTC (4-dim verified)** — #4549(`5c894e5d2`, 실패 0 · `Integration (iam A/B)` SUCCESS). 감사 슬라이스 시험이 계약 값 `source=admin` 을 보내고 받은 명령을 단언(변이 빨강). 🔵 모르는 `source` → 빈 200 은 소유자 결정 거리로 남김. AC 전부 닫힘.
