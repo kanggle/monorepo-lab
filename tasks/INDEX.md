@@ -207,7 +207,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-830-retire-unconsumed-java-notification-library.md` — **소비자 0 인 `libs/java-notification` 삭제 + 루트 `.gitignore` 에 `runs/`** (IN-PROGRESS, 2026-11-24 UTC · 소유자 결정 «1번으로 진행 4번을 함께»). 결정 기록 = `ADR-MONO-043` § 8(이 기안 PR). 범위 = 모듈 23파일 · `settings.gradle` 한 줄 · `ci.yml` `GRADLE_TASKS_CORE` 한 줄 · 정책 카탈로그 행. AC-0 = 소비자 0 재측정(0 아니면 STOP) · AC-3 = 가드 **전수**(스테이지 뒤) · AC-5 = Build & Test 가 **실행되어** success. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 
 
@@ -219,6 +219,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-830-retire-unconsumed-java-notification-library.md` — **소비자 0 인 `libs/java-notification` 삭제 + 루트 `.gitignore` 에 `runs/`** (REVIEW, 2026-11-24 UTC · 소유자 결정 «1번으로 진행 4번을 함께»). 결정 기록 = `ADR-MONO-043` § 8(이 기안 PR). 범위 = 모듈 23파일 · `settings.gradle` 한 줄 · `ci.yml` `GRADLE_TASKS_CORE` 한 줄 · 정책 카탈로그 행. AC-0 = 소비자 0 재측정(0 아니면 STOP) · AC-3 = 가드 **전수**(스테이지 뒤) · AC-5 = Build & Test 가 **실행되어** success. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 ## done
