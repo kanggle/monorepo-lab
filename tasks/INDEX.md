@@ -220,9 +220,10 @@ _(없음)_
 
 ## review
 
-- `TASK-MONO-648-capture-every-page-for-the-application-portfolio.md` — **세 앱 전 페이지 포트폴리오 촬영** (REVIEW, 2026-11-24 UTC · 소유자 «648 닫고»). 38차 창: 108 페이지 · demo-corp 88 · ecommerce 콘솔 54 · 동적 13/17(남은 4 = 권한, 10-26 결정의 ⚪) · 사전 점검 오탐 둘 #4652. AC 처분 표 = 티켓 끝 § AC 처분.
 
 ## done
+
+- ✅ `TASK-MONO-648-capture-every-page-for-the-application-portfolio.md` — **DONE 2026-11-24 UTC (4-dim verified)** — 세 앱 전 페이지 포트폴리오 촬영(09-08 기안 · 여러 창). 마지막 impl PR #4652(`dfc9a37af`, 실패 0 — 사전 점검 오탐 둘: 카드 요소 수 · 인라인 스크립트 문구). 38차 창: 108 페이지 · demo-corp 88 · ecommerce 콘솔 54 · 동적 13/17(남은 4 = 권한, 10-26 결정 ⚪) · AC-2 «652 뒤 재촬영» = `/erp/masters` UUID 0. AC 처분 표 = 티켓 끝 § AC 처분. 촬영본은 `portfolio-captures/`(gitignored).
 
 - ✅ `TASK-MONO-827-wms-dashboard-entitlement-viewer-synthesis.md` — **DONE 2026-11-24 UTC (4-dim verified)** — impl PR #4632(`aaaad2dfa`, 실패 0/68). WMS admin-service 대시보드 · 설정 조회를 업무 역할로(구독 합성 `ROLE_WMS_VIEWER` 제거). AC-4 = 38차 창(`ami-0f3dc38ba84b6d232` · `3277f0473`) 세트별 표: 세트 없음(`entitled_domains ∋ wms`) → orders · inventory **403**(37차 200) · `wms-outbound-operate` → orders 200 / inventory 403 · `wms-inventory-read` → 반대 · `scm-read` 403 · `legacy-compat` 200 — `## CORRECTION — AC-4`. `TASK-PC-FE-384` AC-0 충족.
 
