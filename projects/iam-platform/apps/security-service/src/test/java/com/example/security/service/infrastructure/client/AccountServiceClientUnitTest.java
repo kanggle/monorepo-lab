@@ -56,7 +56,129 @@ class AccountServiceClientUnitTest {
         IamClientCredentialsTokenProvider tokenProvider = mock(IamClientCredentialsTokenProvider.class);
         when(tokenProvider.currentBearer()).thenReturn("test-jwt");
 
-        return new AccountServiceClient(props, new ObjectMapper(), new SimpleMeterRegistry(), tokenProvider);
+        meterRegistry = new SimpleMeterRegistry();
+        return new AccountServiceClient(props, new ObjectMapper(), meterRegistry, tokenProvider);
+    }
+
+    /** Registry of the most recently built client. */
+    private SimpleMeterRegistry meterRegistry;
+
+    private double issued(String result) {
+        return meterRegistry.get(AccountServiceClient.ISSUED_METRIC_NAME).tag("result", result).counter().count();
+    }
+
+    private void stubLock200(String previousStatus) {
+        wireMock.stubFor(post(urlPathMatching("/internal/accounts/.*/lock"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-1\",\"previousStatus\":\"" + previousStatus + "\"," +
+                                "\"currentStatus\":\"LOCKED\",\"lockedAt\":\"2026-01-01T00:00:00Z\"}")));
+    }
+
+    // ── TASK-BE-662: security_auto_lock_issued_total{result} — once per final outcome ──
+
+    @Test
+    @DisplayName("TASK-BE-662: 두 result 시리즈가 호출 전부터 0 으로 등록된다")
+    void metric_bothSeriesRegisteredAtZero() {
+        assertThat(issued("success")).isZero();
+        assertThat(issued("failure")).isZero();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-662: SUCCESS → result=success 한 번")
+    void metric_success_countedAsSuccess() {
+        stubLock200("ACTIVE");
+
+        assertThat(client.lock(buildEvent("acc-1")).status()).isEqualTo(Status.SUCCESS);
+
+        assertThat(issued("success")).isEqualTo(1.0);
+        assertThat(issued("failure")).isZero();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-662: ALREADY_LOCKED → result=success 한 번")
+    void metric_alreadyLocked_countedAsSuccess() {
+        stubLock200("LOCKED");
+
+        assertThat(client.lock(buildEvent("acc-1")).status()).isEqualTo(Status.ALREADY_LOCKED);
+
+        assertThat(issued("success")).isEqualTo(1.0);
+        assertThat(issued("failure")).isZero();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-662: 409 INVALID_TRANSITION → result=failure 한 번")
+    void metric_409_countedAsFailure() {
+        wireMock.stubFor(post(urlPathMatching("/internal/accounts/.*/lock"))
+                .willReturn(aResponse().withStatus(409)));
+
+        assertThat(client.lock(buildEvent("acc-1")).status()).isEqualTo(Status.INVALID_TRANSITION);
+
+        assertThat(issued("failure")).isEqualTo(1.0);
+        assertThat(issued("success")).isZero();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-662: 409 외 4xx FAILURE → result=failure 한 번")
+    void metric_non409_4xx_countedAsFailure() {
+        wireMock.stubFor(post(urlPathMatching("/internal/accounts/.*/lock"))
+                .willReturn(aResponse().withStatus(400)));
+
+        assertThat(client.lock(buildEvent("acc-1")).status()).isEqualTo(Status.FAILURE);
+
+        assertThat(issued("failure")).isEqualTo(1.0);
+        assertThat(issued("success")).isZero();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-662: 5xx 로 재시도 3회 소진 → result=failure 는 한 번만 (재시도는 retries_total)")
+    void metric_retriesExhausted_countedOnceNotPerAttempt() {
+        wireMock.stubFor(post(urlPathMatching("/internal/accounts/.*/lock"))
+                .willReturn(aResponse().withStatus(503)));
+        AccountServiceClient threeAttempts = newClient(3);
+
+        assertThat(threeAttempts.lock(buildEvent("acc-1")).status()).isEqualTo(Status.FAILURE);
+
+        wireMock.verify(3, postRequestedFor(urlPathMatching("/internal/accounts/.*/lock")));
+        assertThat(issued("failure")).isEqualTo(1.0);
+        assertThat(issued("success")).isZero();
+        assertThat(meterRegistry.get("security_auto_lock_retries_total").counter().count()).isEqualTo(2.0);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-662: 5xx 후 재시도에서 성공 → result=success 한 번, failure 0")
+    void metric_successAfterRetry_countedOnceAsSuccess() {
+        wireMock.stubFor(post(urlPathMatching("/internal/accounts/.*/lock"))
+                .inScenario("retry").whenScenarioStateIs(com.github.tomakehurst.wiremock.stubbing.Scenario.STARTED)
+                .willReturn(aResponse().withStatus(503))
+                .willSetStateTo("recovered"));
+        wireMock.stubFor(post(urlPathMatching("/internal/accounts/.*/lock"))
+                .inScenario("retry").whenScenarioStateIs("recovered")
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"accountId\":\"acc-1\",\"previousStatus\":\"ACTIVE\"," +
+                                "\"currentStatus\":\"LOCKED\",\"lockedAt\":\"2026-01-01T00:00:00Z\"}")));
+        AccountServiceClient threeAttempts = newClient(3);
+
+        assertThat(threeAttempts.lock(buildEvent("acc-1")).status()).isEqualTo(Status.SUCCESS);
+
+        wireMock.verify(2, postRequestedFor(urlPathMatching("/internal/accounts/.*/lock")));
+        assertThat(issued("success")).isEqualTo(1.0);
+        assertThat(issued("failure")).isZero();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-662: 네트워크 오류 FAILURE → result=failure 한 번")
+    void metric_networkFault_countedAsFailure() {
+        wireMock.stubFor(post(urlPathMatching("/internal/accounts/.*/lock"))
+                .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
+
+        assertThat(client.lock(buildEvent("acc-1")).status()).isEqualTo(Status.FAILURE);
+
+        assertThat(issued("failure")).isEqualTo(1.0);
+        assertThat(issued("success")).isZero();
     }
 
     @AfterEach

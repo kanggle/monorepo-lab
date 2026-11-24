@@ -7,6 +7,7 @@ import com.example.web.dto.ErrorResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.security.jwt.JwtVerificationException;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
@@ -63,6 +64,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     private static final Pattern INTERNAL_PATH_DISGUISE_PATTERN =
             Pattern.compile("(?i)(/\\.{1,2}(/|$)|%2e|%2f|%5c|;|\\\\)");
     private static final String FALLBACK_METRIC_NAME = "gateway_tenant_fallback_total";
+    /** observability.md § 필수 메트릭 — counter, tag {@code result}. Public routes are not counted. */
+    static final String JWT_VALIDATION_METRIC_NAME = "gateway_jwt_validation_total";
+    static final String JWT_RESULT_VALID = "valid";
+    static final String JWT_RESULT_EXPIRED = "expired";
+    static final String JWT_RESULT_MISSING = "missing";
+    static final String JWT_RESULT_INVALID_SIGNATURE = "invalid_signature";
     /** TASK-MONO-737 — the subtree whose caller-chosen {@code X-Tenant-Id} is passed through. */
     private static final String ADMIN_SUBTREE_PREFIX = "/api/admin/";
 
@@ -105,6 +112,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         // 3. Extract Authorization header
         String authHeader = stripped.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            // A header that is present but not a Bearer credential is a format failure,
+            // not an absent token (observability.md: invalid_signature = every non-expiry failure).
+            recordJwtValidation(authHeader == null || authHeader.isBlank()
+                    ? JWT_RESULT_MISSING : JWT_RESULT_INVALID_SIGNATURE);
             return writeUnauthorized(exchange,
                     "Access token is missing, expired, or has an invalid signature");
         }
@@ -118,7 +129,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         //    GatewayErrorConfig (→ 5xx) instead of being swallowed here as a fail-open
         //    200 — the auth filter must not wrap the downstream call in its own
         //    onErrorResume (TASK-BE-460).
+        //    gateway_jwt_validation_total is recorded on the validate() Mono itself, BEFORE
+        //    flatMap: the outer onErrorResume below also catches errors thrown by
+        //    authorizeRequest, and counting there would count a validated token twice.
         Mono<ServerHttpRequest> authorized = tokenValidator.validate(token)
+                .doOnNext(claims -> recordJwtValidation(JWT_RESULT_VALID))
+                .doOnError(e -> recordJwtValidation(classifyVerificationFailure(e)))
                 .flatMap(claims -> authorizeRequest(exchange, stripped, path, claims))
                 .onErrorResume(JwtVerificationException.class, e -> {
                     log.debug("JWT verification failed: {}", e.getMessage());
@@ -344,6 +360,29 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             return n.longValue() * 1000L;
         }
         return 0L;
+    }
+
+    /**
+     * {@code exp} expiry is the only failure with its own value; the shared
+     * {@code Rs256JwtVerifier} keeps JJWT's {@link ExpiredJwtException} as the cause.
+     * Everything else — format, missing/unknown kid, signature, issuer, an unexpected
+     * error — is {@code invalid_signature} (observability.md § 필수 메트릭).
+     */
+    static String classifyVerificationFailure(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof ExpiredJwtException) {
+                return JWT_RESULT_EXPIRED;
+            }
+        }
+        return JWT_RESULT_INVALID_SIGNATURE;
+    }
+
+    private void recordJwtValidation(String result) {
+        Counter.builder(JWT_VALIDATION_METRIC_NAME)
+                .description("JWT validation result per request whose token was checked")
+                .tag("result", result)
+                .register(meterRegistry)
+                .increment();
     }
 
     private void recordFallbackCounter() {
