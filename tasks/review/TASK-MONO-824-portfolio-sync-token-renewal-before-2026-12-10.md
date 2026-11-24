@@ -8,7 +8,7 @@ TASK-MONO-824
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -39,6 +39,12 @@ monorepo
 3. 동기화 워크플로가 **아직 존재하는가**(`.github/workflows/portfolio-sync.yml`). 폐기됐으면 STOP — 이 티켓은 근거를 잃었다.
 
 🔵 왜 날짜 2026-12-01 인가: 만료 9일 전 — 소유자 작업(1분)과 드라이런 확인(수 분)에 충분하고, 사본 동기화를 미뤄 둔 상태여도 만료 전에 한 번 돌릴 여유가 남는다.
+
+
+# 착수 기록 (2026-11-24 UTC) — 날짜 게이트보다 앞당김
+
+- 🔵 **소유자 결정으로 조기 착수.** AC-0 ① 은 «2026-12-01 이상인가 — 아니면 STOP» 이고 착수 시점은 2026-11-24 UTC 다. 소유자가 «TASK-MONO-824 지금하진 못해?» 라고 물었고, 에이전트가 «날짜는 알림 시점이지 기술 제약이 아니다(본문 «왜 날짜 2026-12-01 인가»)» 라고 답한 뒤 소유자가 토큰을 갱신했다 → AC-0 ② 의 **조기 갱신 경로**.
+- AC-0 ③ 워크플로 존속: `.github/workflows/portfolio-sync.yml` 있음.
 
 ---
 
@@ -81,6 +87,14 @@ monorepo
   - (b) (a) 이후에 시작한 드라이런: Preflight success — push 7/7 · Workflows 탐침 7/7(409). run id 기록.
   - 🔴 (b) 만으로는 닫히지 않는다. 옛 값이 아직 살아 있으면 교체하지 않아도 success 가 나온다.
 - **AC-3** 새 만료일이 정해지면, 그 9일 전 날짜로 같은 모양의 다음 갱신 티켓을 `tasks/ready/` 에 남긴다(아니면 같은 일이 다시 사람 눈에만 걸린다). 🔴 AC-0 ② 의 조기 갱신 경로로 닫힐 때도 적용된다.
+
+# Implementation Evidence (2026-11-24 UTC)
+
+- **AC-1** ✅ — 소유자 확인 문장: *«Expires on Tue, Feb 23 2027»* — 2026-12-10 이후.
+- **AC-2 (a)** ✅ — `gh api repos/kanggle/monorepo-lab/actions/secrets/PORTFOLIO_SYNC_TOKEN` → `created_at` `2026-09-11T09:35:09Z` · **`updated_at` `2026-11-24T15:02:11Z`**(기준값 `2026-09-11T09:35:09Z` 와 다름, 갱신 날짜 UTC 2026-11-24). 시크릿 목록에 이름 오타 사본 없음(`PORTFOLIO_SYNC_TOKEN` 하나).
+- **AC-2 (b)** ✅ — run **`45420888950`**(`gh workflow run portfolio-sync.yml --ref main -f dry_run=true`), `createdAt` `2026-11-24T15:02:40Z` = (a) **이후**. `conclusion=success` · Preflight success: push 7/7(`push=true` ×7) · Workflows 탐침 7/7 «workflows 쓰기 가능 (409, 무쓰기)» · Sync (dry-run) success.
+- **AC-3** ✅ — 다음 갱신 티켓 `TASK-MONO-831`(⏳ 2027-02-14 UTC = 새 만료 2027-02-23 의 9일 전) 기안, spec PR #4659 (PR 분리 규칙 — 기안은 별도 spec PR).
+- 🔵 미해결로 남겼던 질문 «옛 값이 Regenerate 즉시 무효가 되는가» 는 이번에도 **재지 않았다** — 시크릿 교체(15:02:11Z)가 드라이런(15:02:40Z)보다 먼저라 옛 값이 쓰일 기회가 없었다. AC-2 가 어느 쪽이어도 맞게 설계돼 있어 닫는 데 필요 없다.
 
 # Related Specs
 
