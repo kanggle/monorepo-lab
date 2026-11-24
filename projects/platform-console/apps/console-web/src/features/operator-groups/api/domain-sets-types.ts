@@ -41,17 +41,8 @@ export type GrantGroupDomainSetResult = z.infer<
 
 // --- grant-picker view-model (own copy — see file header) ------------------
 
-export const GrantableSetOptionSchema = z
-  .object({
-    setId: z.string(),
-    name: z.string(),
-    systemKey: z.string().nullable(),
-    readOnly: z.boolean(),
-    domains: z.array(z.string()),
-  })
-  .passthrough();
-export type GrantableSetOption = z.infer<typeof GrantableSetOptionSchema>;
-
-export const GrantableSetOptionListSchema = z.object({
-  items: z.array(GrantableSetOptionSchema),
-});
+export {
+  GrantableSetOptionSchema,
+  GrantableSetOptionListSchema,
+  type GrantableSetOption,
+} from '@/shared/api/grantable-domain-sets';

@@ -8,7 +8,7 @@ console-web `OperatorsScreen.tsx`(893줄) 상태 · 변이 · 핸들러를 `use-
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -50,11 +50,11 @@ platform-console
 
 # Acceptance Criteria
 
-- [ ] AC-1: `OperatorsScreen.tsx` 에 `useState` · `useMemo` · 변이 훅 호출이 0개(전부 훅으로).
-- [ ] AC-2: 기존 시험 **수정 없이** 통과 — 특히 `tests/unit/OperatorsScreen.test.tsx` · `OperatorsScreen-domain-access.test.tsx` · `OperatorsScreen-platform-scope.test.tsx` 와 operators · operator-groups 의 domain-sets / domain-access 시험. 시험을 고쳐야 통과하면 동작이 바뀐 것 → 멈추고 보고.
-- [ ] AC-3: 두 기능에서 `queryGrantableSets` 정의 0개 · `GrantableSetOptionSchema` 정의 0개(re-export 만). `shared/api/grantable-domain-sets.ts` 단위 시험이 `legacy-compat` 제외를 단언 + bite(제외 줄 제거 → 빨강 → 복원 → 초록).
-- [ ] AC-4: `tsc --noEmit` · `lint` · vitest 전체 · `next build` rc=0(각각 독립 실행 + 명시 rc).
-- [ ] AC-5: 이동이 «그대로» 였다는 증거 — 훅 파일 본문과 원본 135–630행의 diff 가 들여쓰기 · 반환 객체 · import 말고는 0(PR 본문에 방법과 결과).
+- [x] AC-1: `OperatorsScreen.tsx` 에 `useState` · `useMemo` · 변이 훅 호출이 0개(전부 훅으로).
+- [x] AC-2: 기존 시험 **수정 없이** 통과 — 특히 `tests/unit/OperatorsScreen.test.tsx` · `OperatorsScreen-domain-access.test.tsx` · `OperatorsScreen-platform-scope.test.tsx` 와 operators · operator-groups 의 domain-sets / domain-access 시험. 시험을 고쳐야 통과하면 동작이 바뀐 것 → 멈추고 보고.
+- [x] AC-3: 두 기능에서 `queryGrantableSets` 정의 0개 · `GrantableSetOptionSchema` 정의 0개(re-export 만). `shared/api/grantable-domain-sets.ts` 단위 시험이 `legacy-compat` 제외를 단언 + bite(제외 줄 제거 → 빨강 → 복원 → 초록).
+- [x] AC-4: `tsc --noEmit` · `lint` · vitest 전체 · `next build` rc=0(각각 독립 실행 + 명시 rc).
+- [x] AC-5: 이동이 «그대로» 였다는 증거 — 훅 파일 본문과 원본 135–630행의 diff 가 들여쓰기 · 반환 객체 · import 말고는 0(PR 본문에 방법과 결과).
 
 # Related Specs
 

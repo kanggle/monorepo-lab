@@ -8,9 +8,8 @@ import {
   type DomainAccessResponse,
   GrantDomainSetResultSchema,
   type GrantDomainSetResult,
-  GrantableSetOptionListSchema,
-  type GrantableSetOption,
 } from '../api/domain-access-types';
+import { queryGrantableSets } from '@/shared/api/grantable-domain-sets';
 
 /**
  * Client-side ADR-MONO-083 「업무 권한」 hooks for ONE operator's per-tenant
@@ -61,12 +60,6 @@ export function useOperatorDomainAccess(operatorId: string | null) {
 //    Dependencies; see domain-access-types.ts file header.) `legacy-compat`
 //    is excluded client-side — the producer rejects it with
 //    `400 VALIDATION_ERROR` (MIGRATION-source-only backfill marker).
-
-async function queryGrantableSets(): Promise<GrantableSetOption[]> {
-  const raw = await apiClient.get<unknown>('/api/domain-permission-sets');
-  const parsed = GrantableSetOptionListSchema.parse(raw);
-  return parsed.items.filter((s) => s.systemKey !== 'legacy-compat');
-}
 
 export function useGrantableDomainSets(enabled: boolean) {
   return useQuery({

@@ -7,9 +7,8 @@ import {
   GroupDomainSetListSchema,
   GrantGroupDomainSetResultSchema,
   type GrantGroupDomainSetResult,
-  GrantableSetOptionListSchema,
-  type GrantableSetOption,
 } from '../api/domain-sets-types';
+import { queryGrantableSets } from '@/shared/api/grantable-domain-sets';
 
 /**
  * Client-side ADR-MONO-083 group 「업무 권한 세트」 hooks (TASK-PC-FE-338 slice b
@@ -47,12 +46,6 @@ export function useGroupDomainSets(groupId: string | null) {
 // --- read: grant-picker options — the EXISTING slice-a list route ---------
 //    (HTTP call, not a cross-feature TS import — see domain-sets-types.ts
 //    file header.) `legacy-compat` excluded — MIGRATION-source-only.
-
-async function queryGrantableSets(): Promise<GrantableSetOption[]> {
-  const raw = await apiClient.get<unknown>('/api/domain-permission-sets');
-  const parsed = GrantableSetOptionListSchema.parse(raw);
-  return parsed.items.filter((s) => s.systemKey !== 'legacy-compat');
-}
 
 export function useGrantableDomainSetsForGroup(enabled: boolean) {
   return useQuery({
