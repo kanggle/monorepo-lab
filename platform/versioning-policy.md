@@ -54,6 +54,7 @@ The headline, so nobody has to guess before clicking: a breaking event change bu
 - `MINOR`: backward-compatible new functionality.
 - `PATCH`: backward-compatible bug fix.
 - All library versions are declared in `gradle.properties`.
+- Third-party versions shared by many modules are declared there too, one property per coordinate family (`testcontainersVersion`, `nimbusJoseJwtVersion`, …), and build files reference the property. `scripts/check-gradle-managed-versions.sh` fails on a literal version for a managed family, an undefined property, or an unreferenced one (`TASK-MONO-829`). Adding a family means editing that guard's table and `gradle.properties` together.
 
 ---
 

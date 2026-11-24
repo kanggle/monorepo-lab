@@ -41,12 +41,18 @@ bash infra/demo/aws/packer/bake.sh
 #       거절당한다(TASK-MONO-628). bake.sh 가 굽을 커밋을 origin 에서 해석해 넘기고,
 #       굽기 뒤 AMI 태그에서 되읽어 deployed-ami.env 를 갱신한다.
 #    굽지 않고 전제만 확인: bash infra/demo/aws/packer/bake.sh --dry-run
+#    🔴 CHECKPOINT_DISABLE=1 을 켜고 돌린다 — 없으면 `packer version` 이 온라인 업데이트 확인에서
+#       10분 넘게 멈춘다(38차 굽기, 2026-11-24 실측).
 #    🔴 굽기가 중간에 죽었다면 아래 § "굽기가 AMI 등록 뒤에 죽었을 때" 를 먼저 읽을 것.
 
 # 2) 인프라 (EC2 + Lambda + API Gateway)
 cd ../terraform
 cp terraform.tfvars.example terraform.tfvars   # ami_id + admin_ssh_cidr 채우기
 terraform init && terraform apply
+#    🔴🔴 재굽기 뒤에는 **`deployed-ami.env` 핀 PR 을 먼저 머지하고 메인 체크아웃을 ff 한 다음** plan 한다.
+#       terraform 이 plan 시점 메인 체크아웃의 핀에서 REPO_COMMIT 을 읽어 Lambda `AMI_REPO_COMMIT` 에
+#       싣는다(`data.external.ami_bundle_capability`). 핀보다 plan 이 먼저면 Lambda 에 옛 커밋이 남는다 —
+#       38차(2026-11-24)가 그래서 Lambda 만 고치는 apply 를 한 번 더 했다.
 #    🔴 TASK-MONO-802 — 이 호스트(Windows)에서 plan/apply 를 돌릴 때:
 #      · PowerShell 이면 먼저 Git 의 `bin` 과 `usr\bin` 을 PATH 맨 앞에 둔다
 #        ($env:PATH = "C:\Program Files\Git\bin;C:\Program Files\Git\usr\bin;$env:PATH").
