@@ -125,11 +125,12 @@ _(없음)_
 
 ## review
 
-- `TASK-PC-FE-387-operators-screen-hook-split.md` — **`OperatorsScreen.tsx`(893줄) 로직 → `use-operators-screen.ts` 훅 · 두 기능에 복사된 부여 가능 세트 조회 → `shared/api/`** (REVIEW, 2026-11-24 UTC · 소유자 «진행»). 선례 PC-FE-235 · 259. AC-2 = 기존 시험 **무수정** · AC-5 = 이동 전후 본문 diff 0. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 ## done
 - ✅ `TASK-PC-FE-364-operator-overview-business-kpis.md` — **DONE 2026-11-09 UTC (4-dim verified)** — impl PR #4469(`db35564fc`, 실패 0) · AC-3 ✅: 35차 로그인·익명 화면 + 37차 창 권한별 표 — 창 안에서 만든 단일 세트 운영자로 8세트 + 세트 없음 + `scm-read` 대조군 전부 «이후» 열과 일치, 소유자 화면(SCM 값 · 나머지 «권한 없음») · ⚪ SUPER_ADMIN `'*'` ERP 행은 소유자 선택 안 함.
+- ✅ `TASK-PC-FE-387-operators-screen-hook-split.md` — **DONE 2026-11-24 UTC (4-dim verified)** — impl PR #4644(`aa998a07a`, 실패 0). `OperatorsScreen.tsx` 893 → 432줄(로직 → `use-operators-screen.ts`, 본문 이동 diff = 빈 줄 1 · JSX 바이트 동일) · 부여 가능 세트 조회 → `shared/api/grantable-domain-sets.ts`(두 기능 re-export, query key 그대로). 기존 시험 무수정 · vitest 5666 칸 · `next build` · bite.
+
 - ✅ `TASK-PC-FE-386-domain-unavailable-error-base-class.md` — **DONE 2026-11-24 UTC (4-dim verified)** — impl PR #4641(`342efc2b8`, 실패 0). 본문 동일 `*UnavailableError` 20개 → `DomainUnavailableError`(errors.ts 1262 → 1116줄, JSDoc 33 유지). own-property 순서는 원본 실측 `reason, code, name` 고정 — 기안의 `declare` 권고가 반대 방향이었다(`## CORRECTION`). 기존 시험 무수정 · vitest 5663 칸 · `next build` · bite 2종.
 
 - ✅ `TASK-PC-FE-385-iam-proxy-error-mapper-extraction.md` — **DONE 2026-11-23 UTC (4-dim verified)** — impl PR #4637(`5ef196ee0`, 실패 0). IAM 계열 `_proxy.ts` 7개 `mapError` → `makeIamProxyErrorMapper`(응답 불변 — 로그 접두사 · 메시지 원본 7/7 대조) · `badRequest()` 13벌 → 한 곳. 기존 시험 무수정 · vitest 5641 칸 · bite 확인.
