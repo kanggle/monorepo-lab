@@ -6,8 +6,10 @@
  * 🔴 Fixtures follow the server measurement recorded in the ticket's c-2 AC-0 table, not intuition:
  *   - `/wms/outbound` → outbound-service `GET /api/**` needs OUTBOUND_READ ∨ WRITE ∨ ADMIN
  *     (live, 27th window: inventory set → 403);
- *   - `/wms`, `/wms/inventory`, `/wms/inbound`, `/wms/master` → wms admin-service dashboards open on
- *     subscription alone (`WMS_VIEWER` synthesised from `entitled_domains`) → 200 for any set;
+ *   - WMS admin-service leaves (TASK-PC-FE-384, server = TASK-MONO-827, live 38th window): the
+ *     subscription-synthesised `WMS_VIEWER` is gone; dashboards/settings are judged by area role
+ *     (inbound / inventory / master), `WMS_OPERATOR` passes every admin-service row (hierarchy) but
+ *     NOT outbound-service; 개요 · 운영설정 open on any one area role;
  *   - E-commerce (TASK-PC-FE-345, server = TASK-MONO-795, live 28th window): each area's service
  *     re-checks GET = <AREA>_READ ∨ _WRITE (members: MEMBER_READ only; sellers = product area);
  *     `ECOMMERCE_OPERATOR` is an auth-derived entry role, deleted from every set by V0059, so row 12
@@ -40,7 +42,13 @@ import { PERMISSION_MAP } from '@/shared/guide/permission-map';
 const subs = (...d: DomainKey[]) => new Set<DomainKey>(d);
 const roles = (...r: string[]) => new Set<string>(r);
 
-const WMS_SUBSCRIPTION_ONLY = ['/wms', '/wms/inventory', '/wms/inbound', '/wms/master'];
+/** The admin-service WMS leaves (TASK-PC-FE-384) — every WMS leaf except `/wms/outbound`. */
+const WMS_ADMIN_LEAVES = ['/wms', '/wms/inventory', '/wms/inbound', '/wms/master', '/wms/operations'];
+const WMS_LEAVES = [...WMS_ADMIN_LEAVES, '/wms/outbound'];
+const WMS_CATALOG = [
+  'INVENTORY_READ', 'INVENTORY_WRITE', 'INBOUND_READ', 'INBOUND_WRITE', 'OUTBOUND_READ',
+  'OUTBOUND_WRITE', 'MASTER_READ', 'WMS_OPERATOR',
+];
 const ECOMMERCE_LEAVES = PERMISSION_MAP.filter(
   (r) => r.gate.kind === 'domain' && r.gate.domain === 'ecommerce',
 ).map((r) => r.href);
@@ -113,8 +121,15 @@ describe('AC-1 — inventory-set operator on a WMS-only tenant', () => {
     expect(badges.has('/wms/outbound')).toBe(true);
   });
 
-  it('재고 · 입고 · 마스터 · 개요 do not (server: admin-service dashboards 200)', () => {
-    for (const href of WMS_SUBSCRIPTION_ONLY) expect(badges.has(href)).toBe(false);
+  it('재고 · 개요 · 운영설정 do not (server: inventory dashboard 200 · alerts/settings any area role)', () => {
+    for (const href of ['/wms', '/wms/inventory', '/wms/operations']) {
+      expect(badges.has(href), href).toBe(false);
+    }
+  });
+
+  it('입고 · 마스터 are badged (TASK-PC-FE-384 — no subscription-synthesised read any more)', () => {
+    expect(badges.has('/wms/inbound')).toBe(true);
+    expect(badges.has('/wms/master')).toBe(true);
   });
 
   it('the WMS parent itself is not badged — not every child is refused', () => {
@@ -132,6 +147,80 @@ describe('AC-1 — control: the outbound set', () => {
   it('OUTBOUND_READ alone opens 출고 (no badge)', () => {
     const badges = businessPermissionBadgeKeys(GROUPS, subs('wms'), roles('OUTBOUND_READ'));
     expect(badges.has('/wms/outbound')).toBe(false);
+  });
+});
+
+/**
+ * TASK-PC-FE-384 — WMS admin-service leaves (server: TASK-MONO-827; live 38th window, AMI
+ * ami-0f3dc38ba84b6d232: zero-set → orders/inventory 403/403; wms-outbound-operate → 200/403;
+ * wms-inventory-read → 403/200; scm-read → 403/403; legacy-compat → 200/200).
+ */
+describe('TASK-PC-FE-384 — WMS menus follow the WMS business roles', () => {
+  const badgesFor = (...r: string[]) => businessPermissionBadgeKeys(GROUPS, subs('wms'), roles(...r));
+
+  it('wms-inventory-read → only 재고 · 개요 · 운영설정 open; 입고 · 마스터 · 출고 badged', () => {
+    const b = badgesFor('INVENTORY_READ');
+    expect(b.has('/wms/inventory')).toBe(false);
+    expect(b.has('/wms')).toBe(false);
+    expect(b.has('/wms/operations')).toBe(false);
+    for (const href of ['/wms/inbound', '/wms/master', '/wms/outbound']) {
+      expect(b.has(href), href).toBe(true);
+    }
+    expect(b.has('wms')).toBe(false);
+  });
+
+  it('wms-outbound-operate → 출고 open (+ 개요 · 운영설정); 재고 · 입고 · 마스터 badged', () => {
+    const b = badgesFor(...WMS_OUTBOUND_SET);
+    expect(b.has('/wms/outbound')).toBe(false);
+    expect(b.has('/wms/inventory')).toBe(true);
+    expect(b.has('/wms/inbound')).toBe(true);
+    expect(b.has('/wms/master')).toBe(true);
+    expect(b.has('/wms')).toBe(false);
+    expect(b.has('/wms/operations')).toBe(false);
+  });
+
+  it('wms-master-read → 마스터 open; 재고 · 입고 · 출고 badged', () => {
+    const b = badgesFor('MASTER_READ');
+    expect(b.has('/wms/master')).toBe(false);
+    for (const href of ['/wms/inventory', '/wms/inbound', '/wms/outbound']) {
+      expect(b.has(href), href).toBe(true);
+    }
+  });
+
+  it('wms-ops-actions (WMS_OPERATOR only) → every admin-service leaf open; 🔴 출고 badged (outbound-service refuses WMS_OPERATOR)', () => {
+    const b = badgesFor('WMS_OPERATOR');
+    for (const href of WMS_ADMIN_LEAVES) expect(b.has(href), href).toBe(false);
+    expect(b.has('/wms/outbound')).toBe(true);
+    expect(b.has('wms')).toBe(false);
+  });
+
+  it('legacy-compat (full catalog incl. WMS_OPERATOR) → zero WMS badges', () => {
+    const b = badgesFor(...WMS_CATALOG);
+    for (const href of WMS_LEAVES) expect(b.has(href), href).toBe(false);
+    expect(b.has('wms')).toBe(false);
+  });
+
+  it('no WMS role (another domain\'s set only) → every WMS leaf AND the parent badged; guide never', () => {
+    const b = businessPermissionBadgeKeys(GROUPS, subs('wms', 'scm'), roles(...SCM_READ_SET));
+    for (const href of WMS_LEAVES) expect(b.has(href), href).toBe(true);
+    expect(b.has('wms')).toBe(true);
+    expect(b.has('/wms/guide')).toBe(false);
+  });
+
+  it('`WMS_VIEWER` is never an input — it opens nothing', () => {
+    const b = badgesFor('WMS_VIEWER');
+    for (const href of WMS_LEAVES) expect(b.has(href), href).toBe(true);
+  });
+
+  it('AC-3 fail-open: row 12 failed / timed out (undefined) → no WMS badge', () => {
+    const b = businessPermissionBadgeKeys(GROUPS, subs('wms'), undefined);
+    for (const href of WMS_LEAVES) expect(b.has(href), href).toBe(false);
+    expect(b.has('wms')).toBe(false);
+  });
+
+  it('wms not subscribed → no «업무 권한 없음» (the subscription signal wins)', () => {
+    const b = businessPermissionBadgeKeys(GROUPS, subs('scm'), roles());
+    for (const href of WMS_LEAVES) expect(b.has(href), href).toBe(false);
   });
 });
 
@@ -521,19 +610,36 @@ describe('ledger — the declarations match the measurement', () => {
     expect([...(g.writeRequires ?? [])]).toEqual(['OUTBOUND_WRITE']);
   });
 
-  it('/wms declares writeRequires WMS_OPERATOR and no serverRequires', () => {
+  it('/wms keeps writeRequires WMS_OPERATOR (alert acknowledge)', () => {
     const g = gateOf('/wms');
     if (g?.kind !== 'domain') throw new Error('not a domain gate');
-    expect(g.serverRequires).toBeUndefined();
     expect([...(g.writeRequires ?? [])]).toEqual(['WMS_OPERATOR']);
   });
 
-  it('subscription-only WMS leaves declare no serverRequires', () => {
-    for (const href of WMS_SUBSCRIPTION_ONLY) {
+  it('TASK-PC-FE-384 — WMS admin-service rows declare exactly what admin-service § Read gates enforce', () => {
+    const ANY = [
+      'INBOUND_READ', 'INBOUND_WRITE', 'INVENTORY_READ', 'INVENTORY_WRITE', 'OUTBOUND_READ',
+      'OUTBOUND_WRITE', 'MASTER_READ', 'WMS_OPERATOR',
+    ];
+    const expected: Record<string, string[]> = {
+      '/wms': ANY,
+      '/wms/operations': ANY,
+      '/wms/inbound': ['INBOUND_READ', 'INBOUND_WRITE', 'WMS_OPERATOR'],
+      '/wms/inventory': ['INVENTORY_READ', 'INVENTORY_WRITE', 'WMS_OPERATOR'],
+      '/wms/master': ['MASTER_READ', 'WMS_OPERATOR'],
+    };
+    for (const [href, want] of Object.entries(expected)) {
       const g = gateOf(href);
       if (g?.kind !== 'domain') throw new Error(`${href} not a domain gate`);
-      expect(g.serverRequires).toBeUndefined();
+      expect([...(g.serverRequires ?? [])].sort(), href).toEqual([...want].sort());
+      expect(g.serverRequires?.includes('WMS_VIEWER' as never), href).toBe(false);
     }
+  });
+
+  it('TASK-PC-FE-384 — 🔴 /wms/outbound never declares WMS_OPERATOR (outbound-service refuses it)', () => {
+    const g = gateOf('/wms/outbound');
+    if (g?.kind !== 'domain') throw new Error('not a domain gate');
+    expect(g.serverRequires ?? []).not.toContain('WMS_OPERATOR');
   });
 
   it('every declared role is a catalog role (a typo would badge forever)', () => {
