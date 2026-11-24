@@ -136,6 +136,32 @@ defined_names() {
         | tr -d '"' | tr '.' '_' | sort -u; } || true
 }
 
+# Normalised names that are actually HANDED TO A METER REGISTRATION — either as a literal
+# (`Counter.builder("x")`, `registry.counter("x"…)`) or as a constant whose `= "x"` value is
+# then looked up. TASK-MONO-835: a suffix-stripped match (`foo_total` → `foo`) is only
+# trusted against THIS set. Against every string literal it was wrong: the Kafka topic
+# "auth.token.reuse.detected" normalised to the base of `auth_token_reuse_detected_total`, so
+# two alerts on metrics nothing exported passed as "exported".
+registered_names() {
+    local root="$1" project="$2" files reg='((Counter|Timer|Gauge|DistributionSummary|LongTaskTimer|FunctionCounter|FunctionTimer)[.]builder|[.](counter|timer|gauge|summary))[(][[:space:]]*'
+    files="$(git -C "$root" ls-files -- \
+          ":(glob)projects/$project/apps/*/src/main/**/*.java" \
+          ':(glob)libs/*/src/main/**/*.java' 2>/dev/null || true)"
+    [[ -z "$files" ]] && return 0
+    local idents
+    idents="$( { printf '%s\n' "$files" | (cd "$root" && tr '\n' '\0' | xargs -0 -r grep -ohE "${reg}[A-Z][A-Z0-9_]*[[:space:]]*[,)]") \
+                 | sed -E "s/.*[(][[:space:]]*//; s/[[:space:]]*[,)]\$//" | sort -u; } || true)"
+    {
+        printf '%s\n' "$files" | (cd "$root" && tr '\n' '\0' | xargs -0 -r grep -ohE "${reg}\"[A-Za-z][A-Za-z0-9_.]*\"") \
+            | grep -oE '"[^"]+"' || true
+        if [[ -n "$idents" ]]; then
+            printf '%s\n' "$files" | (cd "$root" && tr '\n' '\0' | xargs -0 -r grep -ohE \
+                "\\b($(printf '%s' "$idents" | paste -sd'|' -))[[:space:]]*=[[:space:]]*\"[A-Za-z][A-Za-z0-9_.]*\"") \
+                | grep -oE '"[^"]+"' || true
+        fi
+    } | tr -d '"' | tr '.' '_' | sort -u
+}
+
 is_framework() {
     local m="$1" p
     for p in "${FRAMEWORK_EXACT[@]}"; do [[ "$m" == "$p" ]] && return 0; done
@@ -160,9 +186,10 @@ run_check() {
         return 1
     fi
 
-    local missing="" nl=$'\n' p defined recs proj alert m base hit n_refs=0
+    local missing="" nl=$'\n' p defined registered recs proj alert m base hit n_refs=0
     for p in $(printf '%s' "$rows" | cut -f1 | sort -u); do
         defined="$(defined_names "$root" "$p")"
+        registered="$(registered_names "$root" "$p")"
         recs="$(printf '%s' "$rows" | awk -F'\t' -v p="$p" '$1 == p && $2 == "#record" { print $3 }')"
         defined="${defined}${nl}${recs}"
         while IFS=$'\t' read -r proj alert m; do
@@ -170,11 +197,15 @@ run_check() {
             n_refs=$((n_refs + 1))
             if is_framework "$m"; then continue; fi
             hit=0
-            for base in "$m" \
-                        "$(printf '%s' "$m" | sed -E 's/_(total|count|sum|bucket|max)$//')" \
-                        "$(printf '%s' "$m" | sed -E 's/_(total|count|sum|bucket|max)$//; s/_seconds$//')"; do
-                case "${nl}${defined}${nl}" in *"${nl}${base}${nl}"*) hit=1; break ;; esac
-            done
+            # exact name: any string literal (a constant's value is a literal)
+            case "${nl}${defined}${nl}" in *"${nl}${m}${nl}"*) hit=1 ;; esac
+            # suffix-stripped name: only a name handed to a meter registration (TASK-MONO-835)
+            if [[ "$hit" == 0 ]]; then
+                for base in "$(printf '%s' "$m" | sed -E 's/_(total|count|sum|bucket|max)$//')" \
+                            "$(printf '%s' "$m" | sed -E 's/_(total|count|sum|bucket|max)$//; s/_seconds$//')"; do
+                    case "${nl}${registered}${nl}" in *"${nl}${base}${nl}"*) hit=1; break ;; esac
+                done
+            fi
             if [[ "$hit" == 0 ]]; then
                 missing="${missing}  projects/${proj}  ${alert}  ${m}${nl}"
             fi
@@ -323,6 +354,20 @@ self_test() {
     printf '\n  - name: selftest.block\n    rules:\n      - alert: SelfTestBlock\n        expr: |\n          sum(rate(selftest_block_only_total[5m]))\n            > 0\n        for: 5m\n' \
         >> "$d/projects/$P1/infra/prometheus/alert-rules.yml"; restage "$d"
     expect "a name inside an expr: | block bites" 1 "$d"
+
+    # TASK-MONO-835 — a plain string (a Kafka topic) must not satisfy a suffix-stripped match;
+    # the same base handed to Counter.builder must.
+    d="$(clone topic_not_metric)"
+    mkdir -p "$d/projects/$P1/apps/x/src/main/java"
+    printf 'class T { static final String TOPIC = "selftest.thing.detected"; }\n' > "$d/projects/$P1/apps/x/src/main/java/T.java"
+    add_rule "$d" "$P1" 'increase(selftest_thing_detected_total[5m]) > 0'; restage "$d"
+    expect "a topic-name literal does not count as the metric selftest_thing_detected_total" 1 "$d"
+
+    d="$(clone counter_constant)"
+    mkdir -p "$d/projects/$P1/apps/x/src/main/java"
+    printf 'class C { static final String NAME = "selftest.thing.counted"; Object c = io.micrometer.core.instrument.Counter.builder(NAME); }\n' > "$d/projects/$P1/apps/x/src/main/java/C.java"
+    add_rule "$d" "$P1" 'increase(selftest_thing_counted_total[5m]) > 0'; restage "$d"
+    expect "a Counter registered via a constant matches its _total spelling" 0 "$d"
 
     # TASK-MONO-835 — runbook links
     d="$(clone runbook_dead)"
