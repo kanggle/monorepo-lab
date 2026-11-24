@@ -8,7 +8,7 @@ auth · account 의 `/actuator/prometheus` 가 열려 있지 않아 두 서비�
 
 # Status
 
-review
+done
 
 # Owner
 

@@ -220,10 +220,10 @@ _(없음)_
 
 ## review
 
-- `TASK-MONO-835-alert-runbooks-exist.md` — **알림 `runbook:` 링크 17개 전부 404 → iam 14 · wms 5 runbook 작성 + 링크 존재 가드** (REVIEW, 2026-11-24 UTC · 소유자 «진행», 권장안 = 전부 작성). ecommerce `knowledge/runbooks/` 관례(README 색인 · 「그대로 복사해 실행 가능」 규칙)를 따른다. 링크 → `knowledge/runbooks/`. 가드 = `check-alert-rule-metrics.sh` 확장(스크립트 수 불변). 분석=Opus 5.5 / 구현 권장=Sonnet.
-
 
 ## done
+
+- ✅ `TASK-MONO-835-alert-runbooks-exist.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4679 머지, `48abefb31`, 실패 0 · SUCCESS 19 · SKIPPED 54) · 기안 #4676. 알림 runbook 링크 17개 전부 404 → iam 14 · wms 5 runbook + README 2(`knowledge/runbooks/`) · 링크 19개 갱신 · `check-alert-rule-metrics.sh` 에 runbook 존재 검사 + 접미사 매치를 meter 등록 이름으로 좁힘(토픽 이름 오탐 제거, self-test 18). 작성 중 드러난 iam 결함은 `TASK-BE-664`. promtool wms 5 · iam 14 SUCCESS. AC-5 = `Alert rule metrics …` **실행되어** SUCCESS.
 
 - ✅ `TASK-MONO-834-alert-rule-metrics-must-exist-guard.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4670 머지, `4a81ac35e`, 실패 0 · SUCCESS 42 · SKIPPED 33) · 기안 #4668 · 선행 `TASK-BE-662` #4669. 새 가드 `check-alert-rule-metrics.sh`(알림 expr 의 metric ↔ 소스·libs 리터럴 / record / 프레임워크 접두, self-test 13) + wms `alert-rules.yml` 을 iam 복사본에서 wms 것으로(공통 3 + outbox 적체 >100 · 발행 실패) + iam `GatewayJwtFailureSpike` 식 정정 · `AccountDbSlowQueries` 제거(가드가 찾음, 내보내는 것 없음). promtool(도커) wms 5 · iam 14 SUCCESS. AC-5 = `Alert rule metrics …` 잡 **실행되어** SUCCESS · ecommerce promtool 단위 테스트는 CI 에 없음(해당 없음). 가드 수 30/71. 남은 것(티켓 없음): auth outbox lag 값 결함 · security 스펙 미구현 8 · runbook 디렉터리 부재.
 
