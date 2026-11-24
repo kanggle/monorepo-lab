@@ -8,7 +8,7 @@ auth-service `auth_outbox_lag_seconds` 가 v2 이전 뒤 빈 v1 `outbox` 테이�
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -49,8 +49,8 @@ backend
 
 # Acceptance Criteria
 
-- [ ] AC-1: 쿼리가 `auth_outbox` 의 `published_at IS NULL` 행을 `UTC_TIMESTAMP(6)` 기준으로 잰다.
-- [ ] AC-2: 단위 테스트 5건 초록 · `:projects:iam-platform:apps:auth-service:test` rc=0.
+- [x] AC-1: 쿼리가 `auth_outbox` 의 `published_at IS NULL` 행을 `UTC_TIMESTAMP(6)` 기준으로 잰다.
+- [x] AC-2: 단위 테스트 5건 초록 · `:projects:iam-platform:apps:auth-service:test` rc=0.
 - [ ] AC-3: PR CI 의 iam Build & Test · Integration (iam A/B) 가 **실행되어** success.
 
 # Related Specs
@@ -72,6 +72,13 @@ backend
 # Test Requirements
 
 - 단위 테스트 · auth-service `test` · CI.
+
+# Implementation Evidence (2026-11-24 UTC)
+
+- **AC-1** — `OutboxLagMetric.LAG_SQL` = `SELECT COALESCE(TIMESTAMPDIFF(SECOND, MIN(created_at), UTC_TIMESTAMP(6)), 0) FROM auth_outbox WHERE published_at IS NULL`(컬럼은 `V0027` 의 `created_at DATETIME(6) NOT NULL` · `published_at DATETIME(6)` 그대로). 이름 `auth_outbox_lag_seconds` · 실패 시 -1 · `@Profile("!standalone")` 불변. 왜 v1 을 읽으면 안 되는지 javadoc(«Do not point this back at outbox»).
+- **AC-2** — 새 `OutboxLagMetricTest` 5건(0 · 나이 · null · -1 · SQL 이 `auth_outbox` · `published_at IS NULL` · `UTC_TIMESTAMP(6)` 를 쓰고 `status` · `NOW()` · `FROM outbox ` 를 안 쓰는지) — 테스트 결과 XML `tests="5" failures="0" errors="0"`. `./gradlew :projects:iam-platform:apps:auth-service:test` **rc=0**(5m33s). 다른 코드가 이 클래스나 옛 쿼리를 참조하는 곳 0.
+- 가드: `check-alert-rule-metrics.sh` rc=0(이름은 상수 리터럴로 남아 그대로 «내보냄») · `check-metric-name-registry.sh` rc=0.
+- **AC-3** — PR CI 대기.
 
 # Definition of Done
 
