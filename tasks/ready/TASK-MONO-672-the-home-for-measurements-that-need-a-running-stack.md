@@ -2407,4 +2407,6 @@ The first row is the change: the 37th window's «no set → WMS 200» (Findings 
 
 **Left behind on the demo volume:** operator `01a20cff-96ad-7aaf-9a7c-d8e696576741` `SUSPENDED`, 0 sets; its pool account (email verified).
 
-**Still open → next window:** `TASK-PC-FE-384` AC-4 (live console badges with a single-set operator, after its Vercel deploy) · `TASK-MONO-648` capture window.
+**Second pass (same day, 10:39Z–10:47Z · budget 51 → 56):** `TASK-PC-FE-384` AC-4 measured after its Vercel production deploy (#4649 `627ed8a25`) — operator `badge-11241038@example.com`, live `https://console.hubwang.com` sidebar via local Playwright (system Chrome): `wms-inventory-read` → `/wms` · `/wms/inventory` · `/wms/operations` open, `/wms/inbound` · `/wms/outbound` · `/wms/master` badged, parent not badged; zero sets → all six + parent badged and `/wms` renders `wms-forbidden`. Record: `TASK-PC-FE-384` § CORRECTION — AC-4 (→ `done/`). Left behind: operator `01a20d26-473f-71e9-817d-a4308972d32a` `SUSPENDED`, 0 sets. 🔵 Local Playwright had no matching bundled browser — `launch({ channel: 'chrome' })` used the installed Chrome.
+
+**Still open → next window:** `TASK-MONO-648` capture window.
