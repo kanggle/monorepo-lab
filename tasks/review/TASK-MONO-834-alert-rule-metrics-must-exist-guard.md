@@ -8,7 +8,7 @@ TASK-MONO-834
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -62,11 +62,11 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] AC-0: 착수 직전 — `TASK-BE-662` 가 머지됐는가. 아니면 STOP. 그리고 가드 정규식으로 다시 센 «없는 metric» 이 iam 0 · wms 교체 대상 · ecommerce 0 인가.
-- [ ] AC-1: wms 규칙 파일이 wms 서비스의 metric 만 조회하고, 각 새 규칙의 임계값에 스펙 근거가 주석으로 붙는다. `promtool check rules` 통과(로컬에 없으면 CI 에서 — 없으면 YAML 파싱만이라고 적는다).
-- [ ] AC-2: 가드 rc=0 · `--self-test` 전부 PASS.
-- [ ] AC-3: bite — 사본에서 규칙에 없는 이름을 넣으면 rc=1 + 프로젝트 · 알림 · 이름 출력, 복원 → rc=0.
-- [ ] AC-4: 가드 전부(스테이지 뒤) · `check-ls-files-guard-count.sh` rc=0.
+- [x] AC-0: 착수 직전 — `TASK-BE-662` 가 머지됐는가. 아니면 STOP. 그리고 가드 정규식으로 다시 센 «없는 metric» 이 iam 0 · wms 교체 대상 · ecommerce 0 인가.
+- [x] AC-1: wms 규칙 파일이 wms 서비스의 metric 만 조회하고, 각 새 규칙의 임계값에 스펙 근거가 주석으로 붙는다. `promtool check rules` 통과(로컬에 없으면 CI 에서 — 없으면 YAML 파싱만이라고 적는다).
+- [x] AC-2: 가드 rc=0 · `--self-test` 전부 PASS.
+- [x] AC-3: bite — 사본에서 규칙에 없는 이름을 넣으면 rc=1 + 프로젝트 · 알림 · 이름 출력, 복원 → rc=0.
+- [x] AC-4: 가드 전부(스테이지 뒤) · `check-ls-files-guard-count.sh` rc=0.
 - [ ] AC-5: PR CI 에서 새 잡이 **실행되어** success. ecommerce `alert-rules.test.yml`(promtool 테스트)이 CI 에 있으면 그것도 초록.
 
 # Related Specs
@@ -91,6 +91,16 @@ monorepo
 # Test Requirements
 
 - 가드 self-test · bite · 가드 전수 · CI(+ promtool 테스트가 있으면).
+
+# Implementation Evidence (2026-11-24 UTC)
+
+- **AC-0** — `TASK-BE-662` 머지(#4669, `08bb2e01f`) 확인 뒤 `origin/main` 위로 재적용. 가드를 처음(662 · 규칙 수정 **전**) 돌린 결과 rc=1, **17줄**: iam 6(662 의 4 이름 × 5 알림 + 🆕 `AccountDbSlowQueries` → `hibernate_query_execution_seconds_bucket`) · wms 11(iam 복사본 전부 + 같은 `hibernate_*`). ecommerce 0(`event_publish_failure_total` 은 `libs/java-observability` — 모집단에 `libs/` 를 넣은 근거 그대로). 🔴 티켓이 몰랐던 하나: **`AccountDbSlowQueries`** — Hibernate statistics 를 켠 iam 서비스가 없고 스펙에도 없다 → 내보내는 것 없음.
+- **AC-1** — wms `alert-rules.yml` 교체: 플랫폼 공통 3(`ServiceDown` · `HighErrorRate5xx` · `HighLatencyP99`) + `WmsOutboxBacklogHigh`(6 서비스 `*_outbox_pending_count > 100`, 근거 주석 = `notification-service/external-integrations.md` 등 «alerts at pending.count > 100») + `WmsOutboxPublishFailing`(admin · notification 발행 실패의 지속 — `TASK-MONO-833` 이 적은 «sustained non-zero rate»). `GatewayRateLimitExceeded` 는 옮기지 않음(wms 게이트웨이는 그 counter 가 없다, 주석). iam: `GatewayJwtFailureSpike` `{result="failure"}` → `sum(…{result!="valid"})` · `AccountDbSlowQueries` 제거(이유 주석). **`promtool check rules`(prom/prometheus 도커 이미지)**: wms 5 rules · iam 14 rules SUCCESS — 쓰고 나서 이미지 삭제.
+- **AC-2** — 662 위에서 가드 rc=0(«54 metric reference(s) in 3 rules file(s)») · `--self-test` **13/13**(별도 프로세스 · 기준선 · 모르는 이름 bite · `{…}`·`by (…)` 안 라벨 무시 · 프레임워크 접두·`up` · 오타 프레임워크 이름 bite · `.`→`_` · 타이머 `_seconds_bucket` · `libs/` 이름 · 다른 프로젝트에만 있는 이름 bite · `record:` 이름 · `expr: |` 블록 안 bite · 규칙 파일 없음 fail-closed). 사본의 코드 쪽은 실제 소스 · libs 의 문자열 리터럴을 **뽑아** 프로젝트당 한 파일로(수천 파일 복사 대신).
+- **AC-3** — bite: AC-0 의 실제 17줄(프로젝트 · 알림 · 이름) 이 실물이고, self-test 의 «unknown metric bites» 가 사본에서 같은 것을 증명.
+- **AC-4** — 스테이지 뒤 `check-*.sh` **43개**: 41 rc=0, 비0 둘은 환경 전제(erp 래칫 · prerendered verdict — 830·832·833 과 같음). `.mjs` 6/6. `check-ls-files-guard-count.sh` — 새 가드가 `git ls-files` 를 읽어 30/71 → 두 집 네 곳 갱신 → rc=0.
+- **AC-5** — PR CI 대기. ecommerce `alert-rules.test.yml`(promtool 단위 테스트)은 ci.yml 에서 도는 곳이 없다(검색 0) → 해당 없음으로 기록.
+- 🔵 **남은 것(티켓 없음)**: ① auth `OutboxLagMetric` 이 v1 빈 `outbox` 를 읽어 `AuthOutboxLagHigh` 가 사실상 울리지 않는다(+ `NOW()` 시간대) — 이름은 있으므로 이 가드 밖, **값** 의 결함(`TASK-BE-662` 증거). ② iam security-service 스펙의 «필수 메트릭» 표 원래 11개 중 지금도 코드에 없는 **8개**(`security_events_consumed_total` 등 — 11 에서 원래 있던 `security_dlq_depth` · 662 가 구현한 `security_auto_lock_issued_total` · 이름만 다른 `security_consumer_lag`(코드는 `kafka.consumer.lag`)를 뺀 수). 알림은 이 8개를 조회하지 않는다. ③ 알림 annotations 의 `docs/runbooks/*.md` 는 iam · wms 에 디렉터리가 없다.
 
 # Definition of Done
 
