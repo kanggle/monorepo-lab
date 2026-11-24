@@ -8,7 +8,7 @@ TASK-PC-FE-384
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -100,3 +100,24 @@ frontend
 2. **운영 개요 WMS 카드의 출처는 `/dashboard/inventory` 가 아니라 `/dashboard/orders?status=RECEIVED`** (계약 § 2.4.9.1 행 2). 메뉴 신호 대상이 아니고 403 은 이미 카드별 `forbidden` 으로 매핑된다 — 코드 변경 없음. 계약 § 2.4.9.1 에 «구독만으로 열린다» 류 문장은 없어 문구 수정도 없다.
 3. **AC-2 의 «`wms-ops-actions` → WMS 메뉴 배지 0» 은 `/wms/outbound` 에서 틀리다** — outbound-service GET = `OUTBOUND_READ ∨ OUTBOUND_WRITE ∨ OUTBOUND_ADMIN`, `WMS_OPERATOR` 는 통과하지 못한다. 시험은 `/wms/outbound` 에 배지가 있음을 단언한다(나머지 WMS 잎 배지 0). `/wms/outbound` 행은 변경 없음.
 4. **`/wms/operations` 결정** — `/wms` 와 같은 합집합(8역할). 설정 GET = «업무 역할 아무거나»; projection-status(`WMS_ADMIN`) 는 독립 셀(`operations-state.ts`)이고 페이지 수준 forbidden 분기가 없으며 콘솔 운영자 토큰에 ADMIN 이 없으므로 배지를 움직이지 않는다. `/wms` 개요도 같은 합집합 — 유일한 화면 전체 forbidden 은 `getWmsSectionState` → `listAlerts`(알림 목록 = 영역 역할 아무거나), 나머지 카드는 `cell()` 403 → `forbidden` 으로 독립.
+
+## CORRECTION — AC-4 라이브 화면 (2026-11-24 UTC · 분석=Opus 5.5)
+
+**AC-4 ✅**(체크박스는 review 동결이라 그대로, 이 절이 닫힘 기록). 배포: #4649 squash `627ed8a25` → Vercel `Production – kanggle-console` success(10:37:53Z, GitHub deployment `8025324475`). 백엔드: 38차 AMI `ami-0f3dc38ba84b6d232`(`3277f0473`). 창: `console` + `console-wms`(10:39:15Z → 10:41:56Z ready → 10:47:51Z stop, 예산 51 → 56 / 2400).
+
+창에서 `badge-11241038@example.com` 을 `TASK-MONO-672` 항목 22 절차로 만들고(수락 직후 세트 0), 로컬 Playwright(system Chrome)로 `https://console.hubwang.com` 에 실제 로그인 → `/wms` 에서 사이드바 각 WMS 링크 안의 «업무 권한 없음» 유무를 읽었다(본문 덤프 없음). 단일 테넌트 운영자라 셀렉트 대신 `tenant-single` «테넌트: demo-corp».
+
+| 메뉴 | `wms-inventory-read` | 세트 0 |
+|---|---|---|
+| `/wms` 개요 | 배지 없음 | **배지** |
+| `/wms/inventory` | 배지 없음 | **배지** |
+| `/wms/inbound` | **배지** | **배지** |
+| `/wms/outbound` | **배지** | **배지** |
+| `/wms/master` | **배지** | **배지** |
+| `/wms/operations` | 배지 없음 | **배지** |
+| WMS 상위 메뉴 | 배지 없음 | **배지** |
+| `/wms` 화면 `wms-forbidden` | 0 | 1 (서버 403 과 일치) |
+
+- 대조군 둘(배지 있음 · 없음 양쪽 + 세트 0)이 계약 § 2.4.3.4 새 행 그대로 — 상위 메뉴는 «하위 전부 배지일 때만» 규칙대로.
+- 정리: 세트 회수 → 운영자 `01a20d26-473f-71e9-817d-a4308972d32a` `SUSPENDED` · 호스트 · 로컬 임시 파일(비밀번호) 삭제.
+- ⇒ done(4차원: #4649 MERGED · `627ed8a25` ⊂ main · 머지 시점 실패 0 · AC 절 — AC-0~3 체크 · AC-4 = 이 절).
