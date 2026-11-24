@@ -8,7 +8,7 @@ TASK-BE-662
 
 # Status
 
-ready
+in-progress
 
 # Owner
 

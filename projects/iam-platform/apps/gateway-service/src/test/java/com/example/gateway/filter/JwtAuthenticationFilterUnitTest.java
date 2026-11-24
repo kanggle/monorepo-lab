@@ -573,6 +573,167 @@ class JwtAuthenticationFilterUnitTest {
                 .isEqualTo("wms");
     }
 
+    // -----------------------------------------------------------------------
+    // TASK-BE-662: gateway_jwt_validation_total{result} — exactly once per request
+    // whose JWT is checked; public routes are not counted.
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("TASK-BE-662: 공개 경로는 토큰이 붙어 와도 gateway_jwt_validation_total 을 세지 않는다")
+    void metric_publicRoute_notCounted() {
+        MockServerHttpRequest request = MockServerHttpRequest.post("/api/auth/login")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer some-token")
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        given(routeConfig.isPublicRoute(HttpMethod.POST, "/api/auth/login")).willReturn(true);
+        given(chain.filter(any())).willReturn(Mono.empty());
+
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
+
+        assertThat(meterRegistry.find(JwtAuthenticationFilter.JWT_VALIDATION_METRIC_NAME).counters()).isEmpty();
+        verify(tokenValidator, never()).validate(anyString());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-662: 보호 경로에 Authorization 헤더 없음 → result=missing 한 번")
+    void metric_missingHeader_countedAsMissing() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/accounts/me").build());
+        given(routeConfig.isPublicRoute(HttpMethod.GET, "/api/accounts/me")).willReturn(false);
+
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
+
+        assertOnlyJwtResult(JwtAuthenticationFilter.JWT_RESULT_MISSING);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-662: Bearer 접두가 아닌 Authorization → result=invalid_signature (형식 실패)")
+    void metric_nonBearerHeader_countedAsInvalidSignature() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/accounts/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Basic dXNlcjpwYXNz")
+                        .build());
+        given(routeConfig.isPublicRoute(HttpMethod.GET, "/api/accounts/me")).willReturn(false);
+
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
+
+        assertOnlyJwtResult(JwtAuthenticationFilter.JWT_RESULT_INVALID_SIGNATURE);
+        verify(tokenValidator, never()).validate(anyString());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-662: 검증 통과 → result=valid 한 번")
+    void metric_validToken_countedAsValid() {
+        MockServerWebExchange exchange = exchangeFor(HttpMethod.GET, "/api/accounts/me");
+        given(routeConfig.isPublicRoute(HttpMethod.GET, "/api/accounts/me")).willReturn(false);
+        given(tokenValidator.validate("valid-token"))
+                .willReturn(Mono.just(Map.of("sub", "account-123", "tenant_id", "fan-platform")));
+        given(chain.filter(any())).willReturn(Mono.empty());
+
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
+
+        assertOnlyJwtResult(JwtAuthenticationFilter.JWT_RESULT_VALID);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-662: exp 만료(원인 ExpiredJwtException) → result=expired 한 번")
+    void metric_expiredToken_countedAsExpired() {
+        MockServerWebExchange exchange = exchangeFor(HttpMethod.GET, "/api/accounts/me");
+        given(routeConfig.isPublicRoute(HttpMethod.GET, "/api/accounts/me")).willReturn(false);
+        given(tokenValidator.validate("valid-token")).willReturn(Mono.error(new JwtVerificationException(
+                "Token has expired", new io.jsonwebtoken.ExpiredJwtException(null, null, "expired"))));
+
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertOnlyJwtResult(JwtAuthenticationFilter.JWT_RESULT_EXPIRED);
+    }
+
+    @ParameterizedTest(name = "{0} → invalid_signature")
+    @CsvSource({
+            "Signature verification failed",
+            "No matching key found for kid: k9",
+            "JWT missing kid header",
+            "Invalid JWT format",
+            "iss 'evil' is not in the allowed list",
+    })
+    @DisplayName("TASK-BE-662: 만료가 아닌 검증 실패는 전부 result=invalid_signature 한 번")
+    void metric_nonExpiryVerificationFailure_countedAsInvalidSignature(String message) {
+        MockServerWebExchange exchange = exchangeFor(HttpMethod.GET, "/api/accounts/me");
+        given(routeConfig.isPublicRoute(HttpMethod.GET, "/api/accounts/me")).willReturn(false);
+        given(tokenValidator.validate("valid-token"))
+                .willReturn(Mono.error(new JwtVerificationException(message)));
+
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
+
+        assertOnlyJwtResult(JwtAuthenticationFilter.JWT_RESULT_INVALID_SIGNATURE);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-662: 검증기의 예상 밖 예외도 result=invalid_signature 한 번")
+    void metric_unexpectedValidatorError_countedAsInvalidSignature() {
+        MockServerWebExchange exchange = exchangeFor(HttpMethod.GET, "/api/accounts/me");
+        given(routeConfig.isPublicRoute(HttpMethod.GET, "/api/accounts/me")).willReturn(false);
+        given(tokenValidator.validate("valid-token"))
+                .willReturn(Mono.error(new IllegalStateException("jwks down")));
+
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
+
+        assertOnlyJwtResult(JwtAuthenticationFilter.JWT_RESULT_INVALID_SIGNATURE);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-662: 검증은 통과했고 인가 단계가 거부(403) → valid 한 번만, 실패로 두 번 세지 않음")
+    void metric_validTokenThenAuthorizationDenied_countedOnceAsValid() {
+        MockServerWebExchange exchange = exchangeFor(HttpMethod.POST, "/internal/tenants/wms/accounts");
+        given(routeConfig.isPublicRoute(HttpMethod.POST, "/internal/tenants/wms/accounts")).willReturn(false);
+        given(tokenValidator.validate("valid-token"))
+                .willReturn(Mono.just(Map.of("sub", "account-123", "tenant_id", "fan-platform")));
+        lenient().when(chain.filter(any())).thenReturn(Mono.empty());
+
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertOnlyJwtResult(JwtAuthenticationFilter.JWT_RESULT_VALID);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-662: 검증 통과 후 인가 파이프라인 안의 예외 → valid 한 번만 (바깥 onErrorResume 에서 다시 세지 않음)")
+    void metric_errorAfterValidation_notCountedAgain() {
+        MockServerWebExchange exchange = exchangeFor(HttpMethod.GET, "/api/accounts/me");
+        given(routeConfig.isPublicRoute(HttpMethod.GET, "/api/accounts/me")).willReturn(false);
+        given(tokenValidator.validate("valid-token"))
+                .willReturn(Mono.just(Map.of("sub", "account-123", "tenant_id", "fan-platform")));
+        // redisTemplate.opsForValue() blowing up synchronously surfaces in the outer onErrorResume.
+        given(redisTemplate.opsForValue()).willThrow(new IllegalStateException("boom"));
+
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertOnlyJwtResult(JwtAuthenticationFilter.JWT_RESULT_VALID);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-662: 원인 사슬 깊은 곳의 ExpiredJwtException 도 expired, 원인 없는 실패는 invalid_signature")
+    void classifyVerificationFailure_walksCauseChain() {
+        Throwable nested = new IllegalStateException("wrap",
+                new JwtVerificationException("x", new io.jsonwebtoken.ExpiredJwtException(null, null, "e")));
+        assertThat(JwtAuthenticationFilter.classifyVerificationFailure(nested))
+                .isEqualTo(JwtAuthenticationFilter.JWT_RESULT_EXPIRED);
+        assertThat(JwtAuthenticationFilter.classifyVerificationFailure(
+                new JwtVerificationException("Token verification failed: bad signature")))
+                .isEqualTo(JwtAuthenticationFilter.JWT_RESULT_INVALID_SIGNATURE);
+    }
+
+    /** Exactly one increment in total, carrying {@code result}. */
+    private void assertOnlyJwtResult(String result) {
+        var counters = meterRegistry.find(JwtAuthenticationFilter.JWT_VALIDATION_METRIC_NAME).counters();
+        assertThat(counters).hasSize(1);
+        var only = counters.iterator().next();
+        assertThat(only.getId().getTag("result")).isEqualTo(result);
+        assertThat(only.count()).isEqualTo(1.0);
+    }
+
     /** Raw URI on purpose — the String overloads would re-encode {@code %2e} into {@code %252e}. */
     private static MockServerWebExchange exchangeFor(HttpMethod method, String rawPath) {
         MockServerHttpRequest request = MockServerHttpRequest

@@ -41,6 +41,10 @@ public class AccountServiceClient implements AccountLockClient {
     private final IamClientCredentialsTokenProvider tokenProvider;
     private final Counter retryCounter;
     private final Counter failureCounter;
+    /** security-service observability.md § 필수 메트릭 — counter, tag {@code result} (success/failure). */
+    static final String ISSUED_METRIC_NAME = "security_auto_lock_issued_total";
+    private final Counter issuedSuccessCounter;
+    private final Counter issuedFailureCounter;
 
     public AccountServiceClient(DetectionProperties properties,
                                 ObjectMapper objectMapper,
@@ -58,10 +62,35 @@ public class AccountServiceClient implements AccountLockClient {
         this.failureCounter = Counter.builder("security_auto_lock_failures_total")
                 .description("Exhausted retries for account-service /lock — requires operator intervention")
                 .register(meterRegistry);
+        this.issuedSuccessCounter = issuedCounter(meterRegistry, "success");
+        this.issuedFailureCounter = issuedCounter(meterRegistry, "failure");
     }
 
+    private static Counter issuedCounter(MeterRegistry meterRegistry, String result) {
+        return Counter.builder(ISSUED_METRIC_NAME)
+                .description("Auto-lock commands issued to account-service, one per final outcome")
+                .tag("result", result)
+                .register(meterRegistry);
+    }
+
+    /**
+     * TASK-BE-662 — counts {@code security_auto_lock_issued_total{result}} once per FINAL
+     * outcome of {@link #attemptLock}, never per retry attempt (retries are
+     * {@code security_auto_lock_retries_total}). {@code SUCCESS} / {@code ALREADY_LOCKED}
+     * → {@code success}; {@code FAILURE} (retries exhausted, non-409 4xx) and
+     * {@code INVALID_TRANSITION} (409) → {@code failure}.
+     */
     @Override
     public LockResult lock(SuspiciousEvent event) {
+        LockResult result = attemptLock(event);
+        switch (result.status()) {
+            case SUCCESS, ALREADY_LOCKED -> issuedSuccessCounter.increment();
+            case FAILURE, INVALID_TRANSITION -> issuedFailureCounter.increment();
+        }
+        return result;
+    }
+
+    private LockResult attemptLock(SuspiciousEvent event) {
         String url = cfg.getAccountServiceBaseUrl() + "/internal/accounts/" + event.getAccountId() + "/lock";
         String body;
         try {

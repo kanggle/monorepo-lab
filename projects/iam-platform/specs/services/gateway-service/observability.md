@@ -12,7 +12,7 @@
 |---|---|---|---|
 | `gateway_requests_total` | counter | `method`, `route`, `status` | 전체 요청 수 |
 | `gateway_request_duration_seconds` | histogram | `method`, `route` | 요청 처리 시간 (p50/p95/p99) |
-| `gateway_jwt_validation_total` | counter | `result` (valid/expired/invalid_signature/missing) | JWT 검증 결과 |
+| `gateway_jwt_validation_total` | counter | `result` (valid/expired/invalid_signature/missing) | JWT 검증 결과 (JWT 를 검사한 요청마다 한 번, 공개 경로는 세지 않음). `invalid_signature` = `exp` 만료가 아닌 **모든** 검증 실패(`Bearer` 형식 · kid 없음/모름 · 서명 · issuer 등) |
 | `gateway_ratelimit_total` | counter | `scope`, `result` (allowed/rejected) | Rate limit 판정 |
 | `gateway_ratelimit_rejected_total` | counter | `scope` | 429 응답 수 |
 | `gateway_jwks_fetch_total` | counter | `result` (success/failure/cache_hit) | JWKS 페치 결과 |

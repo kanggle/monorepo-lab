@@ -1,5 +1,7 @@
 package com.example.admin.application;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -71,8 +73,18 @@ public class AdminActionAuditor {
     public static final String PERMISSION_SELF_INVITATION_ACCEPT = "<self_invitation_accept>";
     public static final String REASON_SELF_INVITATION_ACCEPT = "<self_invitation_accept>";
 
+    /**
+     * TASK-BE-662 — observability.md § 필수 메트릭: counter, tags {@code action_code}
+     * ({@link ActionCode} name, {@code UNKNOWN} when null — the same rule as the
+     * {@code admin.audit.*} counters) and {@code outcome} (success/failure/denied).
+     * Counted here, once per finished command record; {@link #recordStart} (IN_PROGRESS)
+     * and {@link #recordLogin} are not command completions and are not counted.
+     */
+    static final String COMMAND_METRIC_NAME = "admin_command_total";
+
     private final AdminActionAuditWriter writer;
     private final AdminActionDenyWriter denyWriter;
+    private final MeterRegistry meterRegistry;
 
     /** @return a fresh UUID v4 audit id for callers that begin a multi-step audit flow. */
     public String newAuditId() {
@@ -109,11 +121,15 @@ public class AdminActionAuditor {
     /** Finalizes the audit row to SUCCESS/FAILURE and emits the canonical outbox event. */
     public void recordCompletion(CompletionRecord record) {
         writer.recordCompletion(record);
+        // Counted only after the (fail-closed) write returned: a write that throws fails
+        // the request, so counting first would report a command that left no record.
+        countCommand(record.actionCode(), record.outcome());
     }
 
     /** Single-shot audit write for read paths (meta-audit, etc.); see {@link AdminActionAuditWriter#recordWithPermission}. */
     public void record(AuditRecord record) {
         writer.recordWithPermission(record, null);
+        countCommand(record.actionCode(), record.outcome());
     }
 
     /**
@@ -130,31 +146,53 @@ public class AdminActionAuditor {
      */
     public void recordWithPermission(AuditRecord record, String permissionOverride) {
         writer.recordWithPermission(record, permissionOverride);
+        countCommand(record.actionCode(), record.outcome());
     }
 
-    /** DENIED row + canonical outbox event in a REQUIRES_NEW transaction. */
+    /**
+     * DENIED row + canonical outbox event in a REQUIRES_NEW transaction.
+     *
+     * <p>Unlike the {@code record*Denied} siblings below, this writer is FAIL-CLOSED: when
+     * the row cannot be written it throws {@code AuditFailureException} and the caller
+     * never sends its 403. So it is counted only after the write returned.
+     */
     public void recordDenied(ActionCode actionCode,
                              String permissionUsed,
                              String endpoint,
                              String method,
                              String targetId) {
         denyWriter.recordDenied(actionCode, permissionUsed, endpoint, method, targetId);
+        countCommand(actionCode, Outcome.DENIED);
     }
 
-    /** Best-effort cross-tenant deny row; see {@link AdminActionDenyWriter#recordCrossTenantDenied}. */
+    /**
+     * Best-effort cross-tenant deny row; see {@link AdminActionDenyWriter#recordCrossTenantDenied}.
+     *
+     * <p>Best-effort deny variants count {@code denied} in a {@code finally}: the denial
+     * stands whether or not its audit row landed (a failed write only bumps
+     * {@code admin.audit.*_deny_failure}), so the refusal is counted either way.
+     */
     public void recordCrossTenantDenied(OperatorContext operator,
                                         String operatorTenantId,
                                         ActionCode actionCode,
                                         String permissionUsed,
                                         String attemptedTenantId) {
-        denyWriter.recordCrossTenantDenied(operator, operatorTenantId, actionCode, permissionUsed, attemptedTenantId);
+        try {
+            denyWriter.recordCrossTenantDenied(operator, operatorTenantId, actionCode, permissionUsed, attemptedTenantId);
+        } finally {
+            countCommand(actionCode, Outcome.DENIED);
+        }
     }
 
     /** Best-effort org-node reach deny row (ADR-047 D5); see {@link AdminActionDenyWriter#recordOrgNodeScopeDenied}. */
     public void recordOrgNodeScopeDenied(OperatorContext operator,
                                          ActionCode actionCode,
                                          String orgNodeId) {
-        denyWriter.recordOrgNodeScopeDenied(operator, actionCode, orgNodeId);
+        try {
+            denyWriter.recordOrgNodeScopeDenied(operator, actionCode, orgNodeId);
+        } finally {
+            countCommand(actionCode, Outcome.DENIED);
+        }
     }
 
     /** Best-effort tenant-placement deny row (TASK-BE-625); see {@link AdminActionDenyWriter#recordTenantPlacementDenied}. */
@@ -164,19 +202,57 @@ public class AdminActionAuditor {
                                             String side,
                                             String fromOrgNodeId,
                                             String toOrgNodeId) {
-        denyWriter.recordTenantPlacementDenied(operator, actionCode, tenantId, side, fromOrgNodeId, toOrgNodeId);
+        try {
+            denyWriter.recordTenantPlacementDenied(operator, actionCode, tenantId, side, fromOrgNodeId, toOrgNodeId);
+        } finally {
+            countCommand(actionCode, Outcome.DENIED);
+        }
     }
 
     /** Best-effort role-grant-forbidden deny row (ADR-024 D3); see {@link AdminActionDenyWriter#recordRoleGrantForbidden}. */
     public void recordRoleGrantForbidden(OperatorContext operator,
                                          ActionCode actionCode,
                                          String attemptedRole) {
-        denyWriter.recordRoleGrantForbidden(operator, actionCode, attemptedRole);
+        try {
+            denyWriter.recordRoleGrantForbidden(operator, actionCode, attemptedRole);
+        } finally {
+            countCommand(actionCode, Outcome.DENIED);
+        }
     }
 
-    /** Login-path single-shot write (TASK-BE-029-3); stamps {@code twofa_used}. */
+    /** Login-path single-shot write (TASK-BE-029-3); stamps {@code twofa_used}. Not an admin command — not counted. */
     public void recordLogin(LoginAuditRecord record) {
         writer.recordLogin(record);
+    }
+
+    /**
+     * Increments {@code admin_command_total}. {@code IN_PROGRESS} (and a null outcome) is
+     * not a finished command and is skipped. The tag value is always an {@link ActionCode}
+     * name or {@code UNKNOWN} — never a free string — so cardinality is bounded by the enum.
+     */
+    private void countCommand(ActionCode actionCode, Outcome outcome) {
+        String outcomeTag = outcomeTag(outcome);
+        if (outcomeTag == null) {
+            return;
+        }
+        Counter.builder(COMMAND_METRIC_NAME)
+                .description("Admin commands by action code and outcome")
+                .tag("action_code", actionCode != null ? actionCode.name() : "UNKNOWN")
+                .tag("outcome", outcomeTag)
+                .register(meterRegistry)
+                .increment();
+    }
+
+    private static String outcomeTag(Outcome outcome) {
+        if (outcome == null) {
+            return null;
+        }
+        return switch (outcome) {
+            case SUCCESS -> "success";
+            case FAILURE -> "failure";
+            case DENIED -> "denied";
+            case IN_PROGRESS -> null;
+        };
     }
 
     // ── Audit record types ────────────────────────────────────────────────────
