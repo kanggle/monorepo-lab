@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-662-implement-spec-required-metrics-alerts-query.md` — **스펙이 «필수» 로 정했고 배포 알림이 조회하는데 코드에 없는 metric 4개 구현** (READY, 2026-11-24 UTC · 소유자 «코드에 구현»). `gateway_jwt_validation_total{result}` · `admin_command_total{action_code,outcome}` · `account_outbox_lag_seconds` · `security_auto_lock_issued_total{result}` — 알림 5개가 영원히 no-data. 후속 = `TASK-MONO-834`(알림 ↔ metric 가드, 이 티켓이 먼저). 분석=Opus 5.5 / 구현 권장=Opus.
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
