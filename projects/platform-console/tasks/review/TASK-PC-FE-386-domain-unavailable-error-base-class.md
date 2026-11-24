@@ -8,7 +8,7 @@ console-web `shared/api/errors.ts` — 본문이 같은 `*UnavailableError` 20�
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -43,7 +43,7 @@ platform-console
 
 ## In Scope
 
-- `errors.ts` 에 `export type UnavailableReason = 'timeout' | 'circuit_open' | 'downstream'` 과 `export abstract class DomainUnavailableError extends Error` 추가 — 생성자 `(name, reason, code, message)` 가 `super(message)` 뒤 `this.name` → `this.reason` → `this.code` 순서로 대입(**지금과 같은 own-property 순서**).
+- `errors.ts` 에 `export type UnavailableReason = 'timeout' | 'circuit_open' | 'downstream'` 과 `export abstract class DomainUnavailableError extends Error` 추가 — 생성자 `(name, reason, code, message)` — **지금과 같은 own-property 순서**(`reason, code, name` — 아래 Edge Cases 정정 참고).
 - 20개 클래스를 `extends DomainUnavailableError` + 같은 공개 시그니처 `(reason, code, message)` 생성자 하나로. `this.name` 은 **문자열 리터럴**(클래스명 추론 금지 — 프로덕션 빌드 압축이 클래스명을 바꿀 수 있다).
 - 각 클래스의 JSDoc 블록은 그대로.
 - 기반 클래스 단위 시험.
@@ -55,11 +55,11 @@ platform-console
 
 # Acceptance Criteria
 
-- [ ] AC-1: 20개 클래스 각각의 인스턴스가 지금과 같다 — `instanceof` 자기 클래스 · `instanceof Error` · `name` · `reason` · `code` · `message` · **`Object.keys()` 순서**(`name, reason, code`). 20개 전부 파라미터화 시험.
-- [ ] AC-2: 기존 시험 **수정 없이** 통과(console-web vitest 전체). 시험을 고쳐야 통과하면 동작이 바뀐 것 → 멈추고 보고.
-- [ ] AC-3: bite — 기반 클래스의 대입 순서를 바꾸거나(`code` 먼저) 한 서브클래스의 `name` 리터럴을 바꾸면 AC-1 시험이 빨강, 되돌리면 초록.
-- [ ] AC-4: `tsc --noEmit` · `lint` · `next build` rc=0(각각 독립 실행 + 명시 rc). `next build` 는 압축된 번들에서도 `name` 이 리터럴임을 확인하는 판정이다.
-- [ ] AC-5: `errors.ts` 의 JSDoc 블록 수가 전후 같다(`/**` 개수 대조).
+- [x] AC-1: 20개 클래스 각각의 인스턴스가 지금과 같다 — `instanceof` 자기 클래스 · `instanceof Error` · `name` · `reason` · `code` · `message` · **`Object.keys()` 순서**(`reason, code, name` — 구현 착수 시 원본에서 실측). 20개 전부 파라미터화 시험.
+- [x] AC-2: 기존 시험 **수정 없이** 통과(console-web vitest 전체). 시험을 고쳐야 통과하면 동작이 바뀐 것 → 멈추고 보고.
+- [x] AC-3: bite — 기반 클래스의 대입 순서를 바꾸거나(`code` 먼저) 한 서브클래스의 `name` 리터럴을 바꾸면 AC-1 시험이 빨강, 되돌리면 초록.
+- [x] AC-4: `tsc --noEmit` · `lint` · `next build` rc=0(각각 독립 실행 + 명시 rc). `next build` 는 압축된 번들에서도 `name` 이 리터럴임을 확인하는 판정이다.
+- [x] AC-5: `errors.ts` 의 JSDoc 블록 수가 전후 같다(`/**` 개수 대조).
 
 # Related Specs
 
@@ -96,3 +96,16 @@ platform-console
 # Definition of Done
 
 - AC 전부 · PR CI 초록 · 머지.
+
+## CORRECTION (구현 착수 중, 2026-11-24 UTC) — Edge Cases 의 방향이 반대였다
+
+기안의 Edge Cases 는 «초기화 없는 필드 선언을 두면 순서가 바뀐다 → `declare` 를 써라» 라고 적었다. **원본을 재 보니 반대다**: 원래의 20개 클래스 자신이 `readonly reason: …; readonly code: string;` 를 선언하므로 ES2022 define 의미론에서 `reason` · `code` 가 `super()` 직후 먼저 정의되고 `name` 이 그 뒤에 붙는다 — 원본의 `Object.keys()` 는 **`['reason', 'code', 'name']`**(`origin/main` 의 `errors.ts` 로 일시 교체해 vitest 로 실측). `declare` 를 쓰면 오히려 `name, reason, code` 로 바뀐다. 그래서 기반 클래스는 **보통 필드 선언**을 두고, AC-1 시험은 실측 순서를 고정한다.
+
+# Implementation Evidence (2026-11-24 UTC)
+
+- `errors.ts` 1262 → 1116줄. 20개 클래스 본문 → `extends DomainUnavailableError` + 3줄 생성자(`name` 리터럴). 기반 클래스는 첫 서브클래스 **앞**에(클래스 선언은 호이스팅되지 않는다).
+- **AC-1** — 새 시험 `tests/unit/shared/api/domain-unavailable-error.test.ts` 22칸: 20개 각각 instanceof(자기 · `Error` · 기반) · `name` · 필드 · `Object.keys()` = `['reason','code','name']`(원본 실측값) + 도메인 간 instanceof 분리 + «기반을 상속하는 클래스 = 정확히 이 20개» 전수.
+- **AC-2** — vitest 전체 455 파일 / 5663 칸 rc=0(기존 5641 + 신규 22), 기존 시험 수정 0.
+- **AC-3** — bite ① 기반 필드를 `declare` 로 → 20칸 빨강 ② `LedgerUnavailableError` 의 `name` 리터럴 변경 → 1칸 빨강. 백업으로 복원(바이트 동일 `cmp`) → rc=0.
+- **AC-4** — `tsc --noEmit` rc=0 · `lint` rc=0 · `next build` rc=0(각각 독립 실행).
+- **AC-5** — 기존 JSDoc 33개 그대로 + 기반 클래스 문서 2개(33 → 35).

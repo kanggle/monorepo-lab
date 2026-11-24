@@ -93,7 +93,6 @@ continuing there is the lifecycle working as designed, not an exception to it.
 ## ready
 
 - `TASK-PC-FE-384-wms-nav-business-role-signals.md` — **`ADR-MONO-083` WMS 콘솔 후속 — WMS 메뉴 «업무 권한 없음» 신호를 WMS 업무 역할로 (`permission-map.ts` `serverRequires` · 계약 § 2.4.3.4) · WMS 개요 · 운영 개요 WMS 카드** (READY, 2026-11-09 UTC · 서버 = `TASK-MONO-827` #4632). ⏳ **머지 게이트 = 827 을 실은 굽기 라이브 확인 뒤**(342–344 와 같음 — 먼저 머지하면 조회 세트 운영자에게 거짓 배지). 🔴 `WMS_OPERATOR` 는 카탈로그 역할이라 `serverRequires` 에 함께 넣는다. 분석=Opus 5.5 / 구현 권장=Sonnet.
-- `TASK-PC-FE-386-domain-unavailable-error-base-class.md` — **`errors.ts` 의 본문 동일 `*UnavailableError` 20개 → 공통 기반 클래스** (READY, 2026-11-24 UTC · 소유자 «추천 순서대로 진행»). JSDoc 유지(줄어드는 건 본문 ~200줄) · `name` 리터럴 고정(압축 빌드) · own-property 순서 불변. AC-2 = 기존 시험 **무수정**. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 
@@ -126,6 +125,7 @@ _(없음)_
 
 ## review
 
+- `TASK-PC-FE-386-domain-unavailable-error-base-class.md` — **`errors.ts` 의 본문 동일 `*UnavailableError` 20개 → 공통 기반 클래스** (REVIEW, 2026-11-24 UTC · own-property 순서 원본 실측 `reason, code, name` 고정 · bite 2종 · 소유자 «추천 순서대로 진행»). JSDoc 유지(줄어드는 건 본문 ~200줄) · `name` 리터럴 고정(압축 빌드) · own-property 순서 불변. AC-2 = 기존 시험 **무수정**. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 ## done
 - ✅ `TASK-PC-FE-364-operator-overview-business-kpis.md` — **DONE 2026-11-09 UTC (4-dim verified)** — impl PR #4469(`db35564fc`, 실패 0) · AC-3 ✅: 35차 로그인·익명 화면 + 37차 창 권한별 표 — 창 안에서 만든 단일 세트 운영자로 8세트 + 세트 없음 + `scm-read` 대조군 전부 «이후» 열과 일치, 소유자 화면(SCM 값 · 나머지 «권한 없음») · ⚪ SUPER_ADMIN `'*'` ERP 행은 소유자 선택 안 함.
