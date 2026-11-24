@@ -21,6 +21,9 @@
 | `security_account_service_duration_seconds` | histogram | — | auto-lock HTTP 호출 시간 |
 | `security_login_history_write_total` | counter | `outcome` | append-only 기록 결과 |
 | `security_outbox_lag_seconds` | gauge | — | 미발행 outbox 이벤트 최대 나이 |
+| `kafka.consumer.lag` | gauge | `topic`, `group`, `partition` | 파티션별 consumer lag(레코드 수). `SecurityMetricsConfig` 가 10초마다 Kafka 클라이언트 `records-lag` 를 읽어 갱신하고, 리밸런스로 사라진 파티션의 게이지는 제거. (위 `security_consumer_lag` 와 별개로 코드에 등록된 이름) |
+| `security_auto_lock_retries_total` | counter | — | account-service `/lock` 호출 재시도 횟수 (5xx/예외 후 다음 시도 전에 증가) |
+| `security_auto_lock_failures_total` | counter | — | account-service `/lock` 호출 최종 실패 횟수 (재시도 소진 또는 409 외 4xx). 계정이 잠기지 않았으므로 운영자 개입 필요 — alert 대상 (`SecurityAutoLockFailing`) |
 
 ### 비즈니스 메트릭
 

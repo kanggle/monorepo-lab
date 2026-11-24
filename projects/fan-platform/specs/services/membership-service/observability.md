@@ -10,6 +10,7 @@
 | `membership_payment_declined_total` | Counter | (none) | PG mock declines (funnel + fraud-signal placeholder) |
 | `membership_access_check_total` | Counter | `result` (`allow`/`deny`) | internal access-check volume + grant/deny ratio |
 | `membership_access_check_fail_closed_total` | Counter | (none) | access-checks that denied due to infra error (fail-closed path) — alert when > 0 |
+| `membership_auto_renewed_total` | Counter | (none) | memberships auto-renewed by charging a stored billing key; incremented by the number renewed in each `BillingKeyAutoRenewalScheduler` tick (daily by default, batch-capped by `max-batch`). A tick that throws is logged and not counted |
 | `http.server.requests` | Timer (Spring Boot default) | `method`, `uri`, `status` | per-endpoint latency + traffic |
 | `jvm.*`, `process.*`, `system.*` | gauges | (default) | runtime telemetry |
 

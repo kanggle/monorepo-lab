@@ -6,6 +6,8 @@
 |---|---|---|---|
 | `community_outbox_publish_failures_total` | Counter | (none) | outbox → Kafka send failures (drives alerting on broker outages) |
 | `community_feed_cache_unavailable_total` | Counter | (none) | Redis cache R/W errors (drives alerting on cache outages) |
+| `community_feed_cache_hits_total` | Counter | (none) | feed cache read hits (page query skipped; live counts are still read). Registered in `FeedCacheRepository` |
+| `community_feed_cache_misses_total` | Counter | (none) | feed cache read misses (empty entry, or malformed entry treated as a miss) that fall through to the DB; hit ratio = hits / (hits + misses) |
 | `http.server.requests` | Timer (Spring Boot default) | `method`, `uri`, `status` | per-endpoint latency + traffic |
 | `jvm.*`, `process.*`, `system.*` | gauges | (default) | runtime telemetry |
 

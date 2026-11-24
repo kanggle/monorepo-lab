@@ -368,6 +368,17 @@ Standard event-consumer + outbox-relay metrics, plus channel-specific:
   latency
 - `notification.channel.circuit.state{channel}` — Resilience4j circuit
   breaker open/half-open/closed gauge
+- `notification.routing.dedupe{outcome}` — Counter. `AlertRoutingService`
+  increments `outcome=DUPLICATE` when an `eventId` was already processed (fast-exit
+  check or lost insert race); replay is a safe no-op
+- `notification.outbox.publish.success.total` — Counter (no tags). Outbox rows
+  forwarded to Kafka (only `notification.delivered` is forwarded in v1)
+- `notification.outbox.publish.failure.total` — Counter (no tags). Failed outbox
+  polls or Kafka publishes; each also triggers publisher backoff, alert on a
+  sustained non-zero rate
+- `notification.outbox.skipped.total` — Counter (no tags). Outbox rows drained
+  (marked published) without Kafka forwarding because the event type is out of
+  scope in v1 (e.g. `notification.delivery.scheduled`)
 
 Logs include `eventId`, `deliveryId`, `channelId`, `attempt`, `traceId` so
 ops can pivot from Slack message → delivery row → source event.
