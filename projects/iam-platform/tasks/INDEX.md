@@ -115,13 +115,13 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-- `TASK-BE-662-implement-spec-required-metrics-alerts-query.md` — **스펙이 «필수» 로 정했고 배포 알림이 조회하는데 코드에 없는 metric 4개 구현** (IN-PROGRESS, 2026-11-24 UTC · 소유자 «코드에 구현»). `gateway_jwt_validation_total{result}` · `admin_command_total{action_code,outcome}` · `account_outbox_lag_seconds` · `security_auto_lock_issued_total{result}` — 알림 5개가 영원히 no-data. 후속 = `TASK-MONO-834`(알림 ↔ metric 가드, 이 티켓이 먼저). 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 
 ## review
 
-(empty)
+- `TASK-BE-662-implement-spec-required-metrics-alerts-query.md` — **스펙이 «필수» 로 정했고 배포 알림이 조회하는데 코드에 없는 metric 4개 구현** (REVIEW, 2026-11-24 UTC · 소유자 «코드에 구현»). `gateway_jwt_validation_total{result}` · `admin_command_total{action_code,outcome}` · `account_outbox_lag_seconds` · `security_auto_lock_issued_total{result}` — 알림 5개가 영원히 no-data. 후속 = `TASK-MONO-834`(알림 ↔ metric 가드, 이 티켓이 먼저). 분석=Opus 5.5 / 구현 권장=Opus.
 
 ## done
 - ✅ `TASK-BE-641-end-session-endpoint-answers-401.md` — **DONE 2026-10-25 UTC (4-dim verified)** — impl PR #4440(`c118382d8`, 실패 0) · AC-1 35차 창 ✅ — 정상 `/connect/logout` 302 → `/login` · 재로그인 시 비밀번호 요구(IdP 세션 종료) · AC-3 = 34차. 기록 = 티켓 끝 `## CORRECTION — 35차 창` · `TASK-MONO-672` § 35th.

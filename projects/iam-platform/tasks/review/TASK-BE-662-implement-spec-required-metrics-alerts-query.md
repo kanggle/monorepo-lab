@@ -8,7 +8,7 @@ TASK-BE-662
 
 # Status
 
-in-progress
+review
 
 # Owner
 
@@ -62,10 +62,10 @@ backend
 
 # Acceptance Criteria
 
-- [ ] AC-0: 착수 직전 — 네 이름이 여전히 iam 코드 · `libs/` 에 없는가(있으면 그 metric 은 범위에서 빼고 기록).
-- [ ] AC-1: 네 metric 이 스펙의 이름 · 유형 · 태그(값 포함)로 등록된다. `gateway-service/observability.md` 에 `invalid_signature` 정의 한 줄.
-- [ ] AC-2: 분기별 단위 테스트 — gateway 4값 · admin 3값 · account lag(행 없음 0 / 있음 > 0) · security 2값(+ 409 → failure, 재시도는 한 번만 셈). 해당 서비스 `test` 태스크 초록.
-- [ ] AC-3: 해당 4 서비스의 기존 테스트(unit · slice)가 초록. Testcontainers 통합은 CI 에서.
+- [x] AC-0: 착수 직전 — 네 이름이 여전히 iam 코드 · `libs/` 에 없는가(있으면 그 metric 은 범위에서 빼고 기록).
+- [x] AC-1: 네 metric 이 스펙의 이름 · 유형 · 태그(값 포함)로 등록된다. `gateway-service/observability.md` 에 `invalid_signature` 정의 한 줄.
+- [x] AC-2: 분기별 단위 테스트 — gateway 4값 · admin 3값 · account lag(행 없음 0 / 있음 > 0) · security 2값(+ 409 → failure, 재시도는 한 번만 셈). 해당 서비스 `test` 태스크 초록.
+- [x] AC-3: 해당 4 서비스의 기존 테스트(unit · slice)가 초록. Testcontainers 통합은 CI 에서.
 - [ ] AC-4: PR CI 의 iam Build & Test · Integration (iam A/B) 가 **실행되어** success.
 
 # Related Specs
@@ -91,6 +91,21 @@ backend
 # Test Requirements
 
 - 단위 테스트(`SimpleMeterRegistry`) · 서비스별 `test` · CI.
+
+# Implementation Evidence (2026-11-24 UTC)
+
+구현은 Opus 백엔드 에이전트에 위임했고, 본 코드 diff 는 직접 읽어 확인했다.
+
+- **AC-0** — 착수 전 네 이름을 iam 코드 · `libs/` `*.java` 에서 검색: 0건.
+- **AC-1** — 네 metric 을 스펙의 이름 · 유형 · 태그로 등록.
+  - `gateway_jwt_validation_total{result}` — `JwtAuthenticationFilter`. 헤더 분기(없음/공백 → `missing`, `Bearer ` 아님 → `invalid_signature`) + `tokenValidator.validate()` 의 `doOnNext`(→ `valid`) / `doOnError`(원인 사슬에 `ExpiredJwtException` → `expired`, 그 밖 → `invalid_signature`). 바깥 `onErrorResume` 에서는 세지 않는다(인가 오류까지 잡혀 두 번 세짐). 스펙 `gateway-service/observability.md` 에 `invalid_signature` 정의 한 줄.
+  - `admin_command_total{action_code,outcome}` — `AdminActionAuditor` private `countCommand`. 🔴 **티켓 정정**: 티켓은 `recordDenied` 를 best-effort 로 적었지만 실제로는 **fail-closed**(`AdminActionDenyWriter.recordDenied` 가 `AuditFailureException` 을 던지면 403 이 안 나간다) → 쓰기 성공 뒤에만 센다. best-effort 넷(`recordCrossTenantDenied` · `recordOrgNodeScopeDenied` · `recordTenantPlacementDenied` · `recordRoleGrantForbidden`)은 `finally` 에서 `denied`.
+  - `account_outbox_lag_seconds` — 새 `infrastructure/outbox/OutboxLagMetric`. 🔴 **티켓 정정**: 티켓은 auth 의 `OutboxLagMetric` 를 «그대로 본뜨라» 했지만 그 형제는 v2 이전 뒤 빈 v1 `outbox`(`status='PENDING'`)를 읽어 **늘 0** 이다(`TASK-BE-450` 이 «Left as-is» 로 기록). 그대로 본뜨면 `AccountOutboxLagHigh` 는 계속 울리지 않는다 → 스펙 정의(«미발행 outbox 최대 나이»)대로 `account_outbox` 의 `published_at IS NULL` 행, `UTC_TIMESTAMP(6)`(저장값이 UTC — `NOW()` 는 세션 TZ 를 따른다). 실패 시 -1(형제와 같은 표식, 주석으로 «fresh 아님»).
+  - `security_auto_lock_issued_total{result}` — `AccountServiceClient.lock()` 이 최종 `LockResult` 마다 한 번(본문은 `attemptLock` 으로). SUCCESS/ALREADY_LOCKED → success, FAILURE/INVALID_TRANSITION → failure. 두 시리즈 0 으로 미리 등록.
+- **AC-2** — 단위 테스트: gateway `JwtAuthenticationFilterUnitTest` 10건 추가(4값 · 공개 경로 · 인가 거부 뒤 한 번만 · 검증 뒤 오류 재계수 없음) · admin `AdminActionAuditorTest` 18건 · security `AccountServiceClientUnitTest` 8건(재시도 소진 → failure 1 · retries 2 등) · account `OutboxLagMetricTest` 5건(0 / 나이 / null / -1 / v2 테이블을 읽는지 SQL 단언).
+- **AC-3** — `./gradlew :projects:iam-platform:apps:<svc>:test` 네 서비스 전부 rc=0(gateway · admin 14분 40초 · security · account 5분 41초).
+- **AC-4** — PR CI 대기.
+- 🔵 후속 거리(티켓 없음): auth-service `OutboxLagMetric` 이 v1 테이블을 읽어 `AuthOutboxLagHigh` 도 사실상 울리지 않는다 + `NOW()` 시간대 문제. 이름은 내보내지므로 `TASK-MONO-834` 의 이름 가드는 이것을 못 본다 — 이름이 아니라 **값** 의 결함.
 
 # Definition of Done
 
