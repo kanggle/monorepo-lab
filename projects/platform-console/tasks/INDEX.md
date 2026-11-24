@@ -125,10 +125,11 @@ _(없음)_
 
 ## review
 
-- `TASK-PC-FE-386-domain-unavailable-error-base-class.md` — **`errors.ts` 의 본문 동일 `*UnavailableError` 20개 → 공통 기반 클래스** (REVIEW, 2026-11-24 UTC · own-property 순서 원본 실측 `reason, code, name` 고정 · bite 2종 · 소유자 «추천 순서대로 진행»). JSDoc 유지(줄어드는 건 본문 ~200줄) · `name` 리터럴 고정(압축 빌드) · own-property 순서 불변. AC-2 = 기존 시험 **무수정**. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 ## done
 - ✅ `TASK-PC-FE-364-operator-overview-business-kpis.md` — **DONE 2026-11-09 UTC (4-dim verified)** — impl PR #4469(`db35564fc`, 실패 0) · AC-3 ✅: 35차 로그인·익명 화면 + 37차 창 권한별 표 — 창 안에서 만든 단일 세트 운영자로 8세트 + 세트 없음 + `scm-read` 대조군 전부 «이후» 열과 일치, 소유자 화면(SCM 값 · 나머지 «권한 없음») · ⚪ SUPER_ADMIN `'*'` ERP 행은 소유자 선택 안 함.
+- ✅ `TASK-PC-FE-386-domain-unavailable-error-base-class.md` — **DONE 2026-11-24 UTC (4-dim verified)** — impl PR #4641(`342efc2b8`, 실패 0). 본문 동일 `*UnavailableError` 20개 → `DomainUnavailableError`(errors.ts 1262 → 1116줄, JSDoc 33 유지). own-property 순서는 원본 실측 `reason, code, name` 고정 — 기안의 `declare` 권고가 반대 방향이었다(`## CORRECTION`). 기존 시험 무수정 · vitest 5663 칸 · `next build` · bite 2종.
+
 - ✅ `TASK-PC-FE-385-iam-proxy-error-mapper-extraction.md` — **DONE 2026-11-23 UTC (4-dim verified)** — impl PR #4637(`5ef196ee0`, 실패 0). IAM 계열 `_proxy.ts` 7개 `mapError` → `makeIamProxyErrorMapper`(응답 불변 — 로그 접두사 · 메시지 원본 7/7 대조) · `badRequest()` 13벌 → 한 곳. 기존 시험 무수정 · vitest 5641 칸 · bite 확인.
 
 - ✅ `TASK-PC-FE-383-sample-operator-group-domain-sets-dialogs.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4610(`49fb0abfc`, 실패 0) · 샘플 운영자 «도메인 접근» · 그룹 «세트» 픽스처(출처 DIRECT · MIGRATION · GROUP, 382 세트 id 만 참조) · AC-5 운영 실측(«준비 중» 0, 대조군 `/fan` 1).
