@@ -296,6 +296,8 @@ jobs:
       gradle-managed-versions: ${{ steps.filter.outputs.gradle-managed-versions }}
       # TASK-MONO-832 — raw filter (settings.gradle and a platform/ doc are not code).
       shared-lib-catalog: ${{ steps.filter.outputs.shared-lib-catalog }}
+      # TASK-MONO-833 — raw filter (the specs/ side must trigger it too, and specs are not code).
+      metric-name-registry: ${{ steps.filter.outputs.metric-name-registry }}
       # TASK-MONO-562: raw filter, NOT AND-combined with `code-changed`. Every arrival
       # path of this drift is non-code: a `vercel.json` losing its `ignoreCommand`, a
       # new Vercel project landing without one, or the judge script being weakened.
@@ -1007,6 +1009,12 @@ jobs:
               - 'settings.gradle'
               - 'platform/shared-library-policy.md'
               - 'scripts/check-shared-lib-catalog.sh'
+            # TASK-MONO-833: a literal metric is registered, or the spec line that documents
+            # one is edited away, or the judge changes. Pure-positive.
+            metric-name-registry:
+              - 'projects/*/apps/*/src/main/**/*.java'
+              - 'projects/*/specs/**'
+              - 'scripts/check-metric-name-registry.sh'
             # TASK-MONO-562: a Vercel project that builds on every commit arrives three
             # ways — a new `vercel.json` anywhere in the tree, an existing one losing its
             # `ignoreCommand`, or the shared judge being weakened. All three are non-code,
@@ -1599,6 +1607,32 @@ jobs:
 
       - name: Guard — every repo-root libs module has a catalog row, and no stale row
         run: bash scripts/check-shared-lib-catalog.sh
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-833. platform/observability.md says a service's business metrics are
+  # documented in its specs before they ship; nothing enforced it, and 20 literal
+  # metric names (8 services) were documented nowhere. Sound, not complete: only
+  # names passed as string literals to a meter registration are checked.
+  # ---------------------------------------------------------------------------
+  metric-name-registry:
+    name: Metric name registry (literal meter names vs the project's specs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      needs.changes.outputs.metric-name-registry == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: bash -n scripts/check-metric-name-registry.sh
+
+      - name: Self-test the predicate (bites on a mutated copy)
+        run: bash scripts/check-metric-name-registry.sh --self-test
+
+      - name: Guard — every literal metric name is documented in its project's specs
+        run: bash scripts/check-metric-name-registry.sh
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-619. 셸의 큰따옴표 안에서 백틱은 명령 치환이다. 가드의 실패 메시지가

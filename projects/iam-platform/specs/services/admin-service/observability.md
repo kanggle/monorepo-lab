@@ -18,6 +18,8 @@
 | `admin_audit_query_total` | counter | `query_type` | 감사 조회 횟수 (meta-audit 보조) |
 | `admin_outbox_lag_seconds` | gauge | — | 미발행 outbox 이벤트 최대 나이 |
 | `admin_auth_failure_total` | counter | `reason` (expired/invalid/insufficient_role) | 운영자 인증 실패 |
+| `admin.audit.org_node_scope_deny_failure` | counter | `action` (ActionCode 이름, 없으면 `UNKNOWN`) | org-node 범위 위반 DENIED 감사 행(`AdminActionDenyWriter.recordOrgNodeScopeDenied`) 기록 실패 횟수. 감사 기록은 best-effort(A10 override)라 요청 응답은 그대로 성공하고 이 카운터만 증가 — 증가하면 거부 감사 누락이므로 조사 |
+| `admin.audit.tenant_placement_deny_failure` | counter | `side` (거부된 쪽 SOURCE/DESTINATION, 없으면 `UNKNOWN`) | tenant 배치 거부 DENIED 감사 행(`AdminActionDenyWriter.recordTenantPlacementDenied`) 기록 실패 횟수. best-effort 이므로 응답은 영향 없고 이 카운터만 증가 — 증가하면 거부 감사 누락이므로 조사 |
 
 ### 비즈니스 메트릭
 

@@ -344,6 +344,10 @@ Full schema reflection lives in [`database-design.md`](database-design.md); doma
 - **Dashboard-specific**:
   - `admin.query.latency.p95{endpoint}` — slow dashboards visible
   - `admin.query.cache.hit.rate` — Redis query-cache effectiveness
+- **Outbox-relay-specific** (`AdminOutboxPublisher`, no tags):
+  - `admin.outbox.publish.success.total` — Counter. Outbox rows forwarded to Kafka and marked published
+  - `admin.outbox.publish.failure.total` — Counter. Failed outbox polls or Kafka publishes (each failure also triggers publisher backoff); alert on a sustained non-zero rate
+  - `admin.outbox.pending.count` — Gauge. Unpublished outbox rows (`published_at IS NULL`), read on each scrape; a steadily growing value means the relay is stuck
 
 ---
 

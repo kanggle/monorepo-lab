@@ -172,6 +172,11 @@ Metrics: `reorder_suggestions_raised_total{source}`, `reorder_alert_dedup_hits_t
 `reorder_draft_po_created_total`, `reorder_draft_po_failures_total`. Kafka consumer
 trace propagation from the wms envelope. Logs on every suggestion transition.
 
+Additional counters (no tags; both registered in the use cases):
+
+- `reorder_open_guard_hits_total` — Counter. Alert events skipped by the open-suggestion guard (D6): incremented when `EvaluateReorderUseCase` finds an already-open suggestion for the same SKU + warehouse and drops the event. A sustained high rate means repeated alerts are landing on suggestions nobody has actioned.
+- `reorder_sweep_skipped_unmapped_total` — Counter. Batch-sweep rows skipped because the SKU has no supplier mapping (`SweepReorderUseCase`, logged, not DLT'd — a batch row has no event to route). A non-zero value means SKUs are missing from the SKU-supplier mapping.
+
 ## Failure Modes
 
 | Failure | Behaviour |
