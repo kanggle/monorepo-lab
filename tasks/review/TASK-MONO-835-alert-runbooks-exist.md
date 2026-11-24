@@ -8,7 +8,7 @@ TASK-MONO-835
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -53,10 +53,10 @@ ecommerce 는 `knowledge/runbooks/`(README 색인 + 「새벽 3시에 쓴 사람
 
 # Acceptance Criteria
 
-- [ ] AC-1: 19개 runbook + README 2개가 있고, 각 runbook 이 ①~⑤ 절을 갖는다. 각 명령의 컨테이너 이름 · 포트 · 엔드포인트가 그 프로젝트의 `docker-compose.yml` / `prometheus.yml` / 코드와 맞는다(대조 근거를 PR 본문에 표로).
-- [ ] AC-2: 두 규칙 파일의 `runbook:` 이 전부 존재하는 파일을 가리킨다 · `promtool check rules` 통과.
-- [ ] AC-3: 가드 rc=0 · `--self-test` 전부 PASS(새 case 둘 포함) · bite — 사본에서 runbook 하나를 지우면 rc=1.
-- [ ] AC-4: 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께).
+- [x] AC-1: 19개 runbook + README 2개가 있고, 각 runbook 이 ①~⑤ 절을 갖는다. 각 명령의 컨테이너 이름 · 포트 · 엔드포인트가 그 프로젝트의 `docker-compose.yml` / `prometheus.yml` / 코드와 맞는다(대조 근거를 PR 본문에 표로).
+- [x] AC-2: 두 규칙 파일의 `runbook:` 이 전부 존재하는 파일을 가리킨다 · `promtool check rules` 통과.
+- [x] AC-3: 가드 rc=0 · `--self-test` 전부 PASS(새 case 둘 포함) · bite — 사본에서 runbook 하나를 지우면 rc=1.
+- [x] AC-4: 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께).
 - [ ] AC-5: PR CI 의 `Alert rule metrics …` 잡이 **실행되어** success.
 
 # Related Specs
@@ -81,6 +81,18 @@ ecommerce 는 `knowledge/runbooks/`(README 색인 + 「새벽 3시에 쓴 사람
 # Test Requirements
 
 - 가드 self-test · bite · promtool · 가드 전수 · CI.
+
+# Implementation Evidence (2026-11-24 UTC)
+
+runbook 작성은 Sonnet 에이전트 둘(iam · wms 병렬)에 위임, 핵심 사실은 직접 대조.
+
+- **AC-1** — iam `knowledge/runbooks/` 14 + README · wms `knowledge/runbooks/` 5 + README(영어 — 두 프로젝트의 `knowledge/README.md` 가 영어). 각 runbook ①~⑤ 절. 대조(직접): wms 컨테이너 `wms-postgres`(compose:52) · `wms-redis`(:83) · `wms-kafka`(:109) · `wms-prometheus`(:286, `expose` 만) · DB 6개(`docker/postgres/init.sh:36-41`) · master outbox 의 `occurred_at`(V8:33, 나머지는 `created_at`); iam `iam-mysql`(:59) · `iam-redis`(:86) · `iam-kafka`(:112) · `iam-prometheus`(:291, `expose` 만). 🔴 **두 프로젝트 모두 앱은 컨테이너가 아니다**(compose 머리말: `bootRun`) — runbook 은 `docker logs` 대신 «bootRun 터미널» 이라고 적는다. Prometheus 질의는 노출 포트가 없어 `docker exec <prom> wget …` 형식(컨테이너 자신의 healthcheck 가 쓰는 방식, 실행은 안 함 — 각 README 에 «not verified» 로 적음).
+- 🆕 **작성 중 드러난 결함 셋 — 이 티켓에서 고치지 않고 다른 곳으로**: ① auth · account 의 `/actuator/prometheus` 가 닫혀 있어 두 서비스 metric 이 한 번도 수집되지 않았다 ② auth 스펙 필수 `auth_login_total` · `auth_token_reuse_detected_total` 미구현 → 둘 다 **`TASK-BE-664`(#4678 머지)** 로 고쳤고, runbook 다섯 곳을 그 뒤 상태로 갱신. ③ `TASK-MONO-834` 가드가 ② 를 놓친 이유 = 토픽 이름 `"auth.token.reuse.detected"` 가 `_total` 을 뗀 알림 이름과 같아짐 → 이 티켓에서 가드를 좁혔다(아래 AC-3).
+- **AC-2** — 두 규칙 파일의 `runbook:` 19개 전부 `knowledge/runbooks/<name>.md`(iam 14 · wms 5, wms 새 알림 둘에 링크 추가) — 가드 «19 runbook link(s), all to tracked files». `promtool check rules`(도커): wms 5 · iam 14 SUCCESS — 이미지 삭제.
+- **AC-3** — `check-alert-rule-metrics.sh` 확장 둘: (a) `runbook:` 값이 `projects/<p>/<경로>` 의 **추적 파일**이어야 한다 — 링크 갱신 전 실제 트리에서 rc=1, 17줄; (b) 접미사를 뗀 이름 일치(`foo_total` → `foo`)는 **meter 등록에 넘어간 이름**(리터럴 또는 `builder(CONST)` 의 상수 값)에만 — 좁힌 직후 실제 트리(664 전)에서 정확히 2줄(`auth_login_total` · `auth_token_reuse_detected_total`), 다른 오탐 0. 664 위에서 rc=0(«54 metric reference(s) … 19 runbook link(s)»). `--self-test` **18/18**(새 5: 토픽 리터럴은 `_total` 매치 아님 · 상수로 등록한 Counter 는 매치 · 없는 runbook bite · 따옴표·뒤 공백 벗긴 링크 통과 · 디스크엔 있지만 추적 안 된 runbook bite).
+- **AC-4** — 스테이지 뒤 `check-*.sh` 43: 41 rc=0, 비0 둘 = 환경 전제(erp 래칫 · prerendered verdict). `.mjs` 6/6. 새 스크립트 없음 → 가드 수 산문 불변(`check-ls-files-guard-count` rc=0).
+- **AC-5** — PR CI 대기.
+- 🔵 남은 것(티켓 없음): `AuthAccountServiceDown` 은 스펙에만 있고 배포 규칙에 없다 · `HighLatencyP99` 가 쓰는 `_seconds_bucket` 은 percentiles-histogram 설정을 켠 곳이 보이지 않는다(no-data 가능 — iam·wms runbook 에 기록) · `security_dlq_depth` 는 소비 그룹이 없어 줄지 않는다(iam runbook 에 기록).
 
 # Definition of Done
 

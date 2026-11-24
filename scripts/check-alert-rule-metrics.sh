@@ -110,6 +110,12 @@ rule_metrics() {
                 if (kind == "alert") alert = name; else { alert = "(record " name ")"; print proj "\t#record\t" name }
                 next
             }
+            # TASK-MONO-835: runbook annotations — emitted as "#runbook <alert>|<path>".
+            if (match(line, /^[ \t]*runbook:[ \t]*/)) {
+                rb = substr(line, RSTART + RLENGTH); gsub(/["\x27]/, "", rb); gsub(/^[ \t]+|[ \t]+$/, "", rb)
+                if (rb != "") print proj "\t#runbook\t" alert "|" rb
+                next
+            }
             if (match(line, /^[ \t]*expr:[ \t]*/)) {
                 rest = substr(line, RSTART + RLENGTH)
                 if (rest ~ /^[|>][-+]?[ \t]*$/) {
@@ -128,6 +134,32 @@ defined_names() {
           ':(glob)libs/*/src/main/**/*.java' \
         | (cd "$root" && xargs -0 -r grep -ohE '"[A-Za-z][A-Za-z0-9_.]*"') \
         | tr -d '"' | tr '.' '_' | sort -u; } || true
+}
+
+# Normalised names that are actually HANDED TO A METER REGISTRATION — either as a literal
+# (`Counter.builder("x")`, `registry.counter("x"…)`) or as a constant whose `= "x"` value is
+# then looked up. TASK-MONO-835: a suffix-stripped match (`foo_total` → `foo`) is only
+# trusted against THIS set. Against every string literal it was wrong: the Kafka topic
+# "auth.token.reuse.detected" normalised to the base of `auth_token_reuse_detected_total`, so
+# two alerts on metrics nothing exported passed as "exported".
+registered_names() {
+    local root="$1" project="$2" files reg='((Counter|Timer|Gauge|DistributionSummary|LongTaskTimer|FunctionCounter|FunctionTimer)[.]builder|[.](counter|timer|gauge|summary))[(][[:space:]]*'
+    files="$(git -C "$root" ls-files -- \
+          ":(glob)projects/$project/apps/*/src/main/**/*.java" \
+          ':(glob)libs/*/src/main/**/*.java' 2>/dev/null || true)"
+    [[ -z "$files" ]] && return 0
+    local idents
+    idents="$( { printf '%s\n' "$files" | (cd "$root" && tr '\n' '\0' | xargs -0 -r grep -ohE "${reg}[A-Z][A-Z0-9_]*[[:space:]]*[,)]") \
+                 | sed -E "s/.*[(][[:space:]]*//; s/[[:space:]]*[,)]\$//" | sort -u; } || true)"
+    {
+        printf '%s\n' "$files" | (cd "$root" && tr '\n' '\0' | xargs -0 -r grep -ohE "${reg}\"[A-Za-z][A-Za-z0-9_.]*\"") \
+            | grep -oE '"[^"]+"' || true
+        if [[ -n "$idents" ]]; then
+            printf '%s\n' "$files" | (cd "$root" && tr '\n' '\0' | xargs -0 -r grep -ohE \
+                "\\b($(printf '%s' "$idents" | paste -sd'|' -))[[:space:]]*=[[:space:]]*\"[A-Za-z][A-Za-z0-9_.]*\"") \
+                | grep -oE '"[^"]+"' || true
+        fi
+    } | tr -d '"' | tr '.' '_' | sort -u
 }
 
 is_framework() {
@@ -149,31 +181,60 @@ run_check() {
         [[ -z "$f" ]] && continue
         rows="${rows}$(rule_metrics "$root" "$f")"$'\n'
     done <<< "$files"
-    if [[ -z "$(printf '%s' "$rows" | awk -F'\t' '$2 != "#record"' | tr -d '[:space:]')" ]]; then
+    if [[ -z "$(printf '%s' "$rows" | awk -F'\t' '$2 != "#record" && $2 != "#runbook"' | tr -d '[:space:]')" ]]; then
         echo "FAIL: parsed ZERO metric references from the alert rules — the parser or the files changed." >&2
         return 1
     fi
 
-    local missing="" nl=$'\n' p defined recs proj alert m base hit n_refs=0
+    local missing="" nl=$'\n' p defined registered recs proj alert m base hit n_refs=0
     for p in $(printf '%s' "$rows" | cut -f1 | sort -u); do
         defined="$(defined_names "$root" "$p")"
+        registered="$(registered_names "$root" "$p")"
         recs="$(printf '%s' "$rows" | awk -F'\t' -v p="$p" '$1 == p && $2 == "#record" { print $3 }')"
         defined="${defined}${nl}${recs}"
         while IFS=$'\t' read -r proj alert m; do
-            [[ "$proj" != "$p" || "$alert" == "#record" || -z "$m" ]] && continue
+            [[ "$proj" != "$p" || "$alert" == "#record" || "$alert" == "#runbook" || -z "$m" ]] && continue
             n_refs=$((n_refs + 1))
             if is_framework "$m"; then continue; fi
             hit=0
-            for base in "$m" \
-                        "$(printf '%s' "$m" | sed -E 's/_(total|count|sum|bucket|max)$//')" \
-                        "$(printf '%s' "$m" | sed -E 's/_(total|count|sum|bucket|max)$//; s/_seconds$//')"; do
-                case "${nl}${defined}${nl}" in *"${nl}${base}${nl}"*) hit=1; break ;; esac
-            done
+            # exact name: any string literal (a constant's value is a literal)
+            case "${nl}${defined}${nl}" in *"${nl}${m}${nl}"*) hit=1 ;; esac
+            # suffix-stripped name: only a name handed to a meter registration (TASK-MONO-835)
+            if [[ "$hit" == 0 ]]; then
+                for base in "$(printf '%s' "$m" | sed -E 's/_(total|count|sum|bucket|max)$//')" \
+                            "$(printf '%s' "$m" | sed -E 's/_(total|count|sum|bucket|max)$//; s/_seconds$//')"; do
+                    case "${nl}${registered}${nl}" in *"${nl}${base}${nl}"*) hit=1; break ;; esac
+                done
+            fi
             if [[ "$hit" == 0 ]]; then
                 missing="${missing}  projects/${proj}  ${alert}  ${m}${nl}"
             fi
         done <<< "$rows"
     done
+
+    # TASK-MONO-835: a runbook link that leads nowhere is the next thing an on-call reader
+    # hits after the alert fires. Paths are relative to the project root; the file must be
+    # tracked (index population, like everything else here).
+    local tracked dead="" n_rb=0 rest rb_alert rb_path
+    tracked="$(git -C "$root" ls-files -- ':(glob)projects/*/**' 2>/dev/null || true)"
+    while IFS=$'\t' read -r proj m rest; do
+        [[ "$m" != "#runbook" ]] && continue
+        n_rb=$((n_rb + 1))
+        rb_alert="${rest%%|*}"; rb_path="${rest#*|}"
+        case "${nl}${tracked}${nl}" in
+            *"${nl}projects/${proj}/${rb_path}${nl}"*) ;;
+            *) dead="${dead}  projects/${proj}  ${rb_alert}  ${rb_path}${nl}" ;;
+        esac
+    done <<< "$rows"
+
+    if [[ -n "$dead" ]]; then
+        echo "FAIL: alert runbook link(s) point at a file that does not exist:" >&2
+        printf '%s' "$dead" >&2
+        echo >&2
+        echo "  The path is relative to the project root (projects/<p>/). Write the runbook" >&2
+        echo "  (knowledge/runbooks/, see that project's README there) or fix the link." >&2
+        return 1
+    fi
 
     if [[ -n "$missing" ]]; then
         echo "FAIL: alert rule(s) query a metric nothing exports — they can never fire:" >&2
@@ -187,7 +248,7 @@ run_check() {
     if [[ "$quiet" != "quiet" ]]; then
         local nf
         nf="$(printf '%s\n' "$files" | grep -c .)"
-        echo "check-alert-rule-metrics: OK — ${n_refs} metric reference(s) in ${nf} rules file(s), all exported by code, libs, a record rule, or a framework."
+        echo "check-alert-rule-metrics: OK — ${n_refs} metric reference(s) in ${nf} rules file(s), all exported by code, libs, a record rule, or a framework; ${n_rb} runbook link(s), all to tracked files."
     fi
     return 0
 }
@@ -204,6 +265,7 @@ self_test() {
     local base="$tmp/base" f p
     mkdir -p "$base"
     (cd "$ROOT" && git ls-files -z -- ':(glob)projects/*/infra/prometheus/alert-rules.yml' \
+            ':(glob)projects/*/knowledge/runbooks/**' \
         | xargs -0 -r cp --parents -t "$base")
     for p in $(cd "$base" && ls projects); do
         mkdir -p "$base/projects/$p/apps/real/src/main/java"
@@ -292,6 +354,41 @@ self_test() {
     printf '\n  - name: selftest.block\n    rules:\n      - alert: SelfTestBlock\n        expr: |\n          sum(rate(selftest_block_only_total[5m]))\n            > 0\n        for: 5m\n' \
         >> "$d/projects/$P1/infra/prometheus/alert-rules.yml"; restage "$d"
     expect "a name inside an expr: | block bites" 1 "$d"
+
+    # TASK-MONO-835 — a plain string (a Kafka topic) must not satisfy a suffix-stripped match;
+    # the same base handed to Counter.builder must.
+    d="$(clone topic_not_metric)"
+    mkdir -p "$d/projects/$P1/apps/x/src/main/java"
+    printf 'class T { static final String TOPIC = "selftest.thing.detected"; }\n' > "$d/projects/$P1/apps/x/src/main/java/T.java"
+    add_rule "$d" "$P1" 'increase(selftest_thing_detected_total[5m]) > 0'; restage "$d"
+    expect "a topic-name literal does not count as the metric selftest_thing_detected_total" 1 "$d"
+
+    d="$(clone counter_constant)"
+    mkdir -p "$d/projects/$P1/apps/x/src/main/java"
+    printf 'class C { static final String NAME = "selftest.thing.counted"; Object c = io.micrometer.core.instrument.Counter.builder(NAME); }\n' > "$d/projects/$P1/apps/x/src/main/java/C.java"
+    add_rule "$d" "$P1" 'increase(selftest_thing_counted_total[5m]) > 0'; restage "$d"
+    expect "a Counter registered via a constant matches its _total spelling" 0 "$d"
+
+    # TASK-MONO-835 — runbook links
+    d="$(clone runbook_dead)"
+    printf '\n  - name: selftest.runbook\n    rules:\n      - alert: SelfTestRunbook\n        expr: up == 0\n        annotations:\n          runbook: "knowledge/runbooks/selftest-does-not-exist.md"\n' \
+        >> "$d/projects/$P1/infra/prometheus/alert-rules.yml"; restage "$d"
+    expect "a runbook link to a missing file bites" 1 "$d"
+
+    d="$(clone runbook_ok)"
+    mkdir -p "$d/projects/$P1/knowledge/runbooks"
+    printf '# selftest\n' > "$d/projects/$P1/knowledge/runbooks/selftest-exists.md"
+    printf '\n  - name: selftest.runbook\n    rules:\n      - alert: SelfTestRunbook\n        expr: up == 0\n        annotations:\n          runbook: "knowledge/runbooks/selftest-exists.md"  \n' \
+        >> "$d/projects/$P1/infra/prometheus/alert-rules.yml"; restage "$d"
+    expect "a quoted runbook link to a tracked file passes (quotes/trailing space stripped)" 0 "$d"
+
+    d="$(clone runbook_unstaged)"
+    mkdir -p "$d/projects/$P1/knowledge/runbooks"
+    printf '# selftest\n' > "$d/projects/$P1/knowledge/runbooks/selftest-unstaged.md"
+    printf '\n  - name: selftest.runbook\n    rules:\n      - alert: SelfTestRunbook\n        expr: up == 0\n        annotations:\n          runbook: knowledge/runbooks/selftest-unstaged.md\n' \
+        >> "$d/projects/$P1/infra/prometheus/alert-rules.yml"
+    git -C "$d" add -- "projects/$P1/infra/prometheus/alert-rules.yml" >/dev/null 2>&1
+    expect "a runbook that exists on disk but is not tracked bites" 1 "$d"
 
     d="$tmp/empty"; mkdir -p "$d"; git -C "$d" init -q
     expect "no rules file fails closed" 1 "$d"
