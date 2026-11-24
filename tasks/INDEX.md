@@ -207,7 +207,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-832-shared-library-catalog-drift-and-guard.md` — **공유 라이브러리 카탈로그에 빠진 4개 채우기 + `settings.gradle` ↔ 카탈로그 가드** (IN-PROGRESS, 2026-11-24 UTC · 소유자 «진행해»). 실측: 루트 `libs:*` 12 · 카탈로그 8 — 빠진 것 `java-security-servlet`(07-13) · `payment-core/portone/toss`(07-24). § Change Rule «카탈로그를 먼저» 를 넉 달 동안 네 PR 이 지나쳤다. 새 가드 `check-shared-lib-catalog.sh` = 양방향 · 프로젝트 전용 libs 제외 · 표 행만 셈 · 사본 변형 self-test. `scripts/` 추가 → 가드 전수 + 개수 산문 집. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 
 
@@ -219,6 +219,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-832-shared-library-catalog-drift-and-guard.md` — **공유 라이브러리 카탈로그에 빠진 4개 채우기 + `settings.gradle` ↔ 카탈로그 가드** (REVIEW, 2026-11-24 UTC · 소유자 «진행해»). 실측: 루트 `libs:*` 12 · 카탈로그 8 — 빠진 것 `java-security-servlet`(07-13) · `payment-core/portone/toss`(07-24). § Change Rule «카탈로그를 먼저» 를 넉 달 동안 네 PR 이 지나쳤다. 새 가드 `check-shared-lib-catalog.sh` = 양방향 · 프로젝트 전용 libs 제외 · 표 행만 셈 · 사본 변형 self-test. `scripts/` 추가 → 가드 전수 + 개수 산문 집. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 ## done
