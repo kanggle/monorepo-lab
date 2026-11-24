@@ -435,9 +435,21 @@ function judgeDenialInPage({ suffixes, textMarkers }) {
   const sel = suffixes.map((s) => `[data-testid$="${s}"]`).join(',');
   const cards = [];
   const others = [];
+  // 거부 요소를 품은 **카드 컨테이너**(`…-card-<domain>`, 꼬리 없음). 카드 하나가 거부 요소를 여럿 남긴다
+  // (`…-card-scm-forbidden` + `…-card-scm-headline-forbidden`, ADR-MONO-084 실적 줄 이후) — 요소 수가 아니라
+  // 컨테이너 수로 세야 «카드 전부 거부» 가 성립한다(2026-11-24 38차 창: 6 카드 중 3 거부가 «전부» 로 읽혀 콘솔 0장).
+  const isCardBox = (n) => /-card-[a-z0-9]+$/.test((n.getAttribute && n.getAttribute('data-testid')) || '');
+  const deniedBoxes = new Set();
   for (const el of document.querySelectorAll(sel)) {
     const id = el.getAttribute('data-testid');
-    (/-card-/.test(id) ? cards : others).push(id);
+    if (/-card-/.test(id)) {
+      cards.push(id);
+      let n = el;
+      while (n && !isCardBox(n)) n = n.parentElement;
+      if (n) deniedBoxes.add(n);
+    } else {
+      others.push(id);
+    }
   }
   // 거부 요소 밖에 남는 본문 글자 수 — 위 «구조로 가른다».
   let residual = 0;
@@ -470,7 +482,10 @@ function judgeDenialInPage({ suffixes, textMarkers }) {
   if (cards.length || others.length) {
     const clone = document.body ? document.body.cloneNode(true) : null;
     if (clone) {
-      for (const el of clone.querySelectorAll(sel)) el.remove();
+      // 🔴 `textContent` 는 `innerText` 와 달리 `<script>` 안 글자까지 센다 — Next.js 의 인라인 RSC 데이터
+      //    (`self.__next_f.push(...)`)가 거부 카드의 문구를 그대로 실어 와서, 화면에 없는 «권한이 없습니다» 가
+      //    «거부 요소 밖» 으로 읽혔다(2026-11-24 38차 창, `ecommerce` 개요 → 콘솔 0장). 화면에 안 그려지는 것은 뺀다.
+      for (const el of clone.querySelectorAll(`${sel},script,style,template,noscript`)) el.remove();
       outsideText = clone.textContent || '';
     }
   }
@@ -484,7 +499,7 @@ function judgeDenialInPage({ suffixes, textMarkers }) {
     residual,
     textHits: hitsIn(text),
     textHitsOutsideDenial: hitsIn(outsideText),
-    allCardsDenied: cards.length > 0 && cardBoxes > 0 && cards.length >= cardBoxes,
+    allCardsDenied: deniedBoxes.size > 0 && cardBoxes > 0 && deniedBoxes.size >= cardBoxes,
     chars: text.length,
   };
 }
@@ -1069,6 +1084,30 @@ async function main() {
         html: '<main><h1>운영자 통합 개요</h1><section data-testid="operator-overview-cards">'
           + '<article data-testid="operator-overview-card-wms"><h2>WMS</h2><div data-testid="operator-overview-card-wms-forbidden">선택한 테넌트에 대한 권한이 없습니다(TENANT_FORBIDDEN)</div></article>'
           + '<article data-testid="operator-overview-card-scm"><h2>SCM</h2><div data-testid="operator-overview-card-scm-forbidden">선택한 테넌트에 대한 권한이 없습니다(TENANT_FORBIDDEN)</div></article>'
+          + '</section></main>' },
+      // TASK-MONO-648 (2026-11-24 38차 창) — 거부 카드마다 헤드라인 거부 요소가 하나 더 붙는다. 6 카드 중 3 거부
+      // (요소 6개)를 «전부 거부» 로 읽으면 안 된다 — 실제 `ecommerce` 테넌트 개요의 모양.
+      { name: 'probe-overview-half-denied-with-headline-passes', ok: true, degraded: false,
+        html: '<main><h1>운영자 통합 개요</h1><section data-testid="operator-overview-cards">'
+          + '<article data-testid="operator-overview-card-iam"><h2>IAM</h2><p>로그인 실패 2</p></article>'
+          + '<article data-testid="operator-overview-card-wms"><h2>WMS</h2><p>출고 12</p></article>'
+          + '<article data-testid="operator-overview-card-ecommerce"><h2>E-Commerce</h2><p>매출 ₩1,200,000</p></article>'
+          + ['scm', 'finance', 'erp'].map((d) => `<article data-testid="operator-overview-card-${d}"><h2>${d}</h2>`
+            + `<div data-testid="operator-overview-card-${d}-headline-forbidden">권한이 없습니다</div>`
+            + `<div data-testid="operator-overview-card-${d}-forbidden">이 도메인 조회 권한이 없습니다(PERMISSION_DENIED)</div></article>`).join('')
+          + '</section></main>' },
+      // TASK-MONO-648 (2026-11-24) — 인라인 `<script>`(Next.js RSC 데이터)에 실린 거부 문구는 화면 글자가 아니다
+      { name: 'probe-denial-copy-only-in-inline-script-passes', ok: true, degraded: false,
+        html: '<main><h1>운영자 통합 개요</h1><section data-testid="operator-overview-cards">'
+          + '<article data-testid="operator-overview-card-wms"><h2>WMS</h2><p>출고 12</p></article>'
+          + '<article data-testid="operator-overview-card-scm"><h2>SCM</h2><div data-testid="operator-overview-card-scm-forbidden">선택한 테넌트에 대한 권한이 없습니다.</div></article>'
+          + '</section></main><script>self.__next_f.push([1,"선택한 테넌트에 대한 권한이 없습니다."])</script>' },
+      // 대조군 — 헤드라인 거부 요소가 붙어도 카드 **전부** 거부면 여전히 막는다
+      { name: 'probe-overview-every-card-denied-with-headline-blocks', ok: false, degraded: null,
+        html: '<main><h1>운영자 통합 개요</h1><section data-testid="operator-overview-cards">'
+          + ['wms', 'scm'].map((d) => `<article data-testid="operator-overview-card-${d}"><h2>${d}</h2>`
+            + `<div data-testid="operator-overview-card-${d}-headline-forbidden">권한이 없습니다</div>`
+            + `<div data-testid="operator-overview-card-${d}-forbidden">선택한 테넌트에 대한 권한이 없습니다(TENANT_FORBIDDEN)</div></article>`).join('')
           + '</section></main>' },
       // 대조군 — 거부 요소 **밖**의 거부 문구(마커 없는 «테넌트를 선택» 안내)는 여전히 막는다
       { name: 'probe-copy-outside-denial-elements-blocks', ok: false, degraded: null,

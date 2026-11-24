@@ -1862,3 +1862,35 @@ IAM 쪽을 더 원하면 이 둘을 대체 후보로 쓸 수 있다.
 - **증거:** `--self-test` 에 «경로해결» 9칸(양성 = 위 셋의 실제 모양 · 대조군 = 옛 동작이 옳았던 모양: 꼬리 없는 경로의 하위 링크 제외 · 다른 꼬리 거부 · 최상위 부모 · 인증 분기/프래그먼트 페이지). 🔴 이 호스트에선 전체 `--self-test` 를 못 돌렸다 — 설치된 브라우저(`chromium-1248`)가 저장소의 Playwright 1.59.1/1.60.0 과 안 맞는다. 새 칸은 브라우저가 필요 없는 순수 함수라 같은 함수를 import 해 같은 입력으로 쟀다(8/8), 그리고 옛 필터가 편집 전용 목록에서 `null` 을 내는 것(= 09-22 실패)을 재현했다. 전체 self-test 는 CI `frontend-e2e-smoke` 가 돈다.
 - 🔴 **남는 조건 (창에서 확인):** 템플릿 편집 링크는 `canWrite`(ecommerce 영역 `*_WRITE`, `TASK-PC-FE-346` 10-18)일 때만 그려진다. 촬영 운영자에게 그 역할이 없으면 이 칸은 여전히 «링크를 못 찾았습니다 — 본 곳: …» 로 남는다 — 이번엔 **사유가 맞게** 적힌다. 정산 기간은 `ecommerce` 테넌트에 기간 행이 있어야 한다(22차 촬영본에 CLOSED/OPEN 2건 있었다).
 - ⇒ AC-1 동적 경로 칸은 **다음 촬영 창**에서 `DEMO_TENANT=ecommerce` 로 두 칸이 찍히는지 보고 닫는다. 재촬영으로 안 풀린다는 앞의 판정은 철회한다.
+
+# 🟢 2026-11-24 UTC 38차 AMI 창 — 전량 재촬영 · 동적 경로 13/17 · 사전 점검 오탐 둘 더 고침 (분석=Opus 5.5)
+
+창 11:22:30Z(묶음 9개 전부) → ready → 11:59:09Z stop · 예산 56 → 87 / 2400 · AMI `ami-0f3dc38ba84b6d232`(`3277f0473`, **새 볼륨** — 이 티켓의 선행 «재굽기» 가 충족된 상태) · 인스턴스 `i-069bf41e85163a5f6`. 촬영 운영자 `demo@demo.com`, 뷰포트 1440 · 기존 설정 그대로.
+
+## 이 호스트에서 촬영 도구가 다시 돈다
+- 11-03 절의 «설치된 `chromium-1248` 이 저장소 Playwright 와 안 맞아 전체 `--self-test` 를 못 돌렸다» → console-web 의 Playwright **1.60.0**(`rev 1223`)에 맞는 브라우저를 공식 설치(`node_modules/.bin/playwright install chromium`, 사용자 캐시 · 저장소 변경 0). `--from <console-web>/node_modules/@playwright/test` 로 고정. 전체 `--self-test` **63/63**(이 호스트 첫 전수).
+
+## 페이지 수 (AC-0 «다시 세라»)
+`--dry-run`: console **79** (정적 63 · 동적 13, 리다이렉트 전용 3) · store **23** (19 · 2, 리다이렉트 2) · fan **11** (9 · 2) = **108**(정적 91 · 동적 17). 기안의 102 에서 늘었다.
+
+## 결과 (산출물 = `portfolio-captures/2026-11-24-38th-{demo-corp,ecommerce}/` — gitignored, § 산출물이 어디 사는가)
+| 실행 | 계획 | 찍음 | 실패 |
+|---|---|---|---|
+| `DEMO_TENANT=demo-corp` (세 앱) | 108 | 88 | 20 (권한 거부 7 · 동적 13 — 이커머스 목록이 이 테넌트에서 비어 있음) |
+| `DEMO_TENANT=ecommerce` `--app console` | 76 | 54 | 22 (구독 안 한 도메인 화면 거부 18 · 동적 4) |
+
+- 🟢 **«라이브에서 콘솔이 0장이 아니다»** (10-24 절의 ⚪) — 두 테넌트 모두 콘솔 촬영 성공.
+- 🟢 **동적 경로 13/17 촬영** — 이커머스 9개(`ecommerce`) 전부, store `/products/[id]` · `/my/orders/[id]`, fan `/artists/[id]` · `/posts/[id]`. 🔴 11-03 에 고친 두 칸 **둘 다 찍혔다**: `/ecommerce/notifications/templates/[id]/edit`(실 템플릿 «배송 상태 변경 · SMS») · `/ecommerce/settlements/periods/[id]`(지급 1건 PAID ₩3,570,000) — 이미지를 열어 확인. 남은 4개(콘솔 `/fan/agencies/[id]` · `/fan/artists/[id]` · `/fan/groups/[id]` · `/tenants/[tenantId]`)는 두 테넌트 모두에서 **부모 목록이 권한 거부**(의도 — 이전 창 기록과 같다).
+
+## 🔴 사전 점검 오탐 둘 — `ecommerce` 콘솔이 0장이었다, 고쳤다
+첫 `ecommerce` 실행은 `[sanity]` 로 콘솔 전체를 건너뛰었다. 화면(스크린샷 · DOM 실측)은 6 카드 중 SCM · Finance · ERP 만 거부, IAM · WMS · ecommerce 는 실데이터였다.
+1. **`allCardsDenied` 가 거부 «요소» 를 셌다** — 거부 카드 하나가 `…-card-<d>-forbidden` + `…-card-<d>-headline-forbidden`(ADR-MONO-084 실적 줄 이후) 두 요소를 남겨 3 카드 × 2 = 6 = 카드 컨테이너 6 → «전부». ⇒ 거부 요소마다 그것을 품은 카드 컨테이너를 찾아 **서로 다른 컨테이너 수**로 센다.
+2. **«거부 요소 밖» 문구가 `<script>` 안에 있었다** — `clone.textContent` 는 `innerText` 와 달리 인라인 스크립트 글자를 센다. Next.js RSC 데이터(`self.__next_f.push(...)`)가 거부 카드 문구를 실어 와 화면에 없는 «권한이 없습니다» 가 밖으로 읽혔다(텍스트 노드 · testid 조상 실측: 화면의 6개는 전부 거부 요소 안, 나머지 3개는 `self.__next_f` 스크립트). ⇒ 바깥 글자를 모으기 전에 `script,style,template,noscript` 도 지운다(같은 함수의 `residual` 은 이미 그렇게 한다).
+- 증거: `--self-test` 칸 셋 추가 — `probe-overview-half-denied-with-headline-passes` · `probe-overview-every-card-denied-with-headline-blocks`(대조군 — 여전히 막는다) · `probe-denial-copy-only-in-inline-script-passes`. **63 → 66/66**. bite 둘: 옛 `cards.length` 판정 → 첫 칸만 빨강(64/65) · 스크립트 제거를 되돌림 → 셋째 칸만 빨강(65/66), 복원 뒤 초록. 수정 뒤 같은 창 재실행이 54장.
+
+## 큐레이션 주의 (사람이 고를 때)
+- `/operators`(demo-corp)에 측정용 운영자 둘이 보인다 — `badge-11241038@example.com` · `narrow-11240959@example.com`(«narrow measure», `SUSPENDED` — `TASK-MONO-827` AC-4 · `TASK-PC-FE-384` AC-4 창 측정이 남긴 것). IAM README 의 `docs/screenshots/01-iam-operators.jpg` 를 이번 촬영으로 바꾸려면 그 둘을 먼저 «이 회사에서 내보내기» 하고 다시 찍는다.
+- «빈값» 표지 20(demo-corp) 중 `/wms` 는 실데이터 화면이다(실적 · 일별 차트 · 재고 87) — 알림 · 최근 재고 조정 섹션이 비어서 붙은 표지.
+
+## ⏳ 이 창 뒤의 상태
+- 10-26 결정의 «in-progress 유지» 사유(라이브 «console not 0 shots») 는 **충족됐다**. 동적 칸은 13/17 이고 남은 4개는 권한(의도) — 체크박스는 10-26 결정대로 두고 이 절이 기록이다. ⇒ 남은 결정은 소유자 몫: 이 티켓을 닫을지(리뷰로), README 큐레이션을 이번 촬영본으로 갱신할지.
