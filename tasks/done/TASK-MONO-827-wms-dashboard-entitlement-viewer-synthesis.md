@@ -8,7 +8,7 @@ TASK-MONO-827
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -174,3 +174,21 @@ AC-3 의 «남은 실행 증거» 가 나왔다 → **AC-3 ✅**(체크박스는
 - 두 스펙 모두 **실제로 실행됐다**. 로그 리포터가 합계만 찍으므로 산출물 `federation-hardening-playwright-report-nightly` 의 `test-results/` 에서 확인했다: `entitlement-trust-crossdom-…-domains-finance-wms-are-not-chromium/trace.zip` · `operator-overview-composit-…-heading-only--chromium/trace.zip`.
 - 🔴 **WMS 카드 not-forbidden 단언은 `entitlement-trust-crossdomain` 하나에만 있다.** 그 스펙(`specs/entitlement-trust-crossdomain.spec.ts:66-70`)은 `acme-corp` 운영자(`legacy-compat`, AC-0 ④ CI 행)의 토큰으로 `ENTITLED_DOMAINS = ['finance','wms']` 카드가 `data-status != forbidden` 임을 단언한다 — 합성 제거 뒤 `WMS_OPERATOR` 계층으로 통과하는 것이 이 행의 기대값이다. `operator-overview-composition` 은 SUPER_ADMIN 으로 개요 화면이 뜨는지(URL · 제목 · 헤딩)만 단언한다(`:37`). 위 AC-3 본문의 «두 스펙(WMS 카드 not-forbidden)» 은 이 구분을 뭉뚱그렸다 — 증거를 지는 것은 앞의 스펙이다.
 - AC-0 ④ 의 나머지 행(데모 시드 · console-demo · 콘솔 샘플 · 워크로드 · IT)은 서버를 안 부르거나 `legacy-compat` 이라 이 런과 무관하다. 그 판정은 AC-2 시험 셀이 이미 잰다.
+
+## CORRECTION — AC-4 라이브 측정 (38차 창, 2026-11-24 UTC · 분석=Opus 5.5)
+
+**AC-4 ✅**(체크박스는 review 동결이라 그대로 두고 이 절이 닫힘 기록이다). 굽기 = 38차 `ami-0f3dc38ba84b6d232`(`3277f0473`, 태그 `RepoCommit` 일치 · 핀 #4646 · apply 기록 #4647) — 827 의 `aaaad2dfa` 는 `3277f0473` 의 조상. 창 = 묶음 `console` + `console-wms`(09:55:23Z → 09:59:05Z ready → 10:02:29Z stop, 예산 48 → 51 / 2400).
+
+`TASK-MONO-672` § Order 22(37차) 절차: `demo@` 운영자 토큰(`/api/admin/auth/token-exchange`)으로 `narrow-11240959@example.com` 초대(`SUPPORT_READONLY`) → `iam-mailpit` 링크 → `/operator-invitations/signup` → 로그인 → `/email-verification` → `/verify-email` → 수락 200 «운영자가 되었습니다». 수락 직후 `GET …/domain-access` = `roles:[] · sets:[]`. 세트마다 부여 201 → 새 교환 토큰(`demo-corp`) → 두 대시보드 → 회수 204. 호스트 안 SSM 에서 `http://wms.<도메인>/api/v1/admin/...`.
+
+| 세트 | 토큰 역할(실측) | `/dashboard/orders` | `/dashboard/inventory` | 37차 | 판정 |
+|---|---|---|---|---|---|
+| (없음) — `entitled_domains ∋ wms` | 없음 | **403** `FORBIDDEN` | **403** `FORBIDDEN` | 200 | ✅ 합성 제거가 라이브 |
+| `wms-outbound-operate` | `OUTBOUND_READ` · `OUTBOUND_WRITE` | **200** | 403 | 200 | ✅ 대시보드별 판정(Q2) |
+| `wms-inventory-read` | `INVENTORY_READ` | 403 | **200** | 200 | ✅ 대시보드별 판정(Q2) |
+| `scm-read`(다른 도메인) | `SCM_*_READ` · `SCM_OPERATOR` | 403 | 403 | 200 | ✅ |
+| `legacy-compat`(시드 `demo@`) | 카탈로그 전부(`WMS_OPERATOR` 포함) | 200 | 200 | 200 | ✅ 이전과 같다 |
+
+- 🔴 판정의 핵심은 첫 행이다: 토큰의 `entitled_domains` 에 `wms` 가 **있는데** 403 — 37차(같은 «세트 없음» 행 200, `TASK-MONO-672` § 37th window Findings 2)에서 뒤집혔다.
+- 정리: 배정 전부 회수(세트 0 확인) · 운영자 `01a20cff-96ad-7aaf-9a7c-d8e696576741` `SUSPENDED`(볼륨에 남음) · 호스트 임시 디렉터리 삭제.
+- ⇒ done(4차원: #4632 MERGED · `aaaad2dfa` ⊂ main · 머지 시점 실패 0/68 · AC 절 — AC-0~2 체크 · AC-3 = § CORRECTION 11-10 · AC-4 = 이 절). 후속 `TASK-PC-FE-384` 의 AC-0 게이트가 이 측정으로 충족된다.

@@ -220,9 +220,10 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## review
 
-- `TASK-MONO-827-wms-dashboard-entitlement-viewer-synthesis.md` — **WMS admin-service 대시보드 · 설정 조회를 구독이 아닌 업무 역할로 판정 — `ROLE_WMS_VIEWER` 합성 제거** (REVIEW, 2026-11-09 UTC · 소유자 결정 Q1–Q4 · AC-0–AC-2 ✅ · AC-3 ✅ 2026-11-10 Federation 스케줄 런 `42739017018`(§ CORRECTION — WMS 단언은 `entitlement-trust-crossdomain` 하나) · 🔴 AC-4 = 굽기 뒤 창에서 `TASK-MONO-672` 세트별 표 WMS 행 재측정 대기 — `MONO-648` 촬영 창과 묶음). 대조군 `DashboardBusinessRoleGateSliceTest`(실 체인 · 실서명 JWT · 12셀, bite 확인). 콘솔 반영(권한 맵 · 개요 WMS 카드)은 별도 콘솔 티켓. 분석=Opus 5.5 / 구현 권장=Opus.
 
 ## done
+
+- ✅ `TASK-MONO-827-wms-dashboard-entitlement-viewer-synthesis.md` — **DONE 2026-11-24 UTC (4-dim verified)** — impl PR #4632(`aaaad2dfa`, 실패 0/68). WMS admin-service 대시보드 · 설정 조회를 업무 역할로(구독 합성 `ROLE_WMS_VIEWER` 제거). AC-4 = 38차 창(`ami-0f3dc38ba84b6d232` · `3277f0473`) 세트별 표: 세트 없음(`entitled_domains ∋ wms`) → orders · inventory **403**(37차 200) · `wms-outbound-operate` → orders 200 / inventory 403 · `wms-inventory-read` → 반대 · `scm-read` 403 · `legacy-compat` 200 — `## CORRECTION — AC-4`. `TASK-PC-FE-384` AC-0 충족.
 
 - ✅ `TASK-MONO-829-gradle-versions-to-gradle-properties.md` — **DONE 2026-11-23 UTC (4-dim verified)** — impl PR #4638(`ced51f247`, 실패 0 · 42 잡 실행). 서드파티 버전 13종 → `gradle.properties` 속성(57 파일 366곳) · 해석 그래프 전후 diff **0줄**(84 프로젝트) · 새 가드 `check-gradle-managed-versions.sh`(실트리 bite + self-test 6칸) · `scripts/` 28/68 산문 갱신. 🔴 기안 «2026-11-24 UTC» 는 KST 오기 — `## CORRECTION`.
 

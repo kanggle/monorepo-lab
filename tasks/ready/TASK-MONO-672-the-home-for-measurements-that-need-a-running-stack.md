@@ -2384,3 +2384,27 @@ Per-set table (card status; `iam` with the operator's own admin token, the rest 
 **Left behind on the demo volume:** operator `narrow-1109@example.com` (`01a1bf6c-223c-76d1-b913-e6c8b580f37d`) `SUSPENDED` with 0 domain sets; its pool account (email verified); a second `seed.sh finance` run.
 
 **Still open → next window:** `TASK-MONO-648` — capture window (`TASK-MONO-819` and `TASK-MONO-820` are already in `done/`, so the 36th list's lines for them are not carried).
+
+## 38th window — results (2026-11-24 UTC, 09:55Z–10:02Z · budget 48 → 51 / 2400 — November)
+
+**Bake.** `bake.sh --ref bake-3277f0473` (owner «3277f0473 으로 굽기를 승인»), AMI `ami-0f3dc38ba84b6d232`, tag RepoCommit `3277f0473` → provenance `ami-tag`; pin #4646 · apply/prune record #4647; instance `i-069bf41e85163a5f6` (fresh volume). First attempt passed (54 min 50 s). 🔴 `packer version` hangs 10 min+ on the online checkpoint — run with `CHECKPOINT_DISABLE=1`. 🔴 The plan was taken **before** the pin merged, so Lambda `AMI_REPO_COMMIT` kept the old commit; re-plan after the pin (`0 add · 1 change · 0 destroy`) fixed it.
+
+**Window.** `/bundle/start` `console` + `console-wms` at 09:55:23Z → both `ready` 09:59:05Z. Host over SSM (`AWS-RunShellScript`, scripts shipped base64). `/stop` 10:02:29Z → EC2 `stopped`, `/status` stopped (used 51).
+
+**Results — `TASK-MONO-827` AC-4 (the WMS row of the per-set table):** narrow operator `narrow-11240959@example.com` made by the item-22 procedure (zero sets confirmed before granting).
+
+| 세트 | 토큰 역할(실측) | `/dashboard/orders` | `/dashboard/inventory` | 37차 | 판정 |
+|---|---|---|---|---|---|
+| (없음) — `entitled_domains ∋ wms` | 없음 | **403** `FORBIDDEN` | **403** `FORBIDDEN` | 200 | ✅ 합성 제거가 라이브 |
+| `wms-outbound-operate` | `OUTBOUND_READ` · `OUTBOUND_WRITE` | **200** | 403 | 200 | ✅ 대시보드별 판정(Q2) |
+| `wms-inventory-read` | `INVENTORY_READ` | 403 | **200** | 200 | ✅ 대시보드별 판정(Q2) |
+| `scm-read`(다른 도메인) | `SCM_*_READ` · `SCM_OPERATOR` | 403 | 403 | 200 | ✅ |
+| `legacy-compat`(시드 `demo@`) | 카탈로그 전부(`WMS_OPERATOR` 포함) | 200 | 200 | 200 | ✅ 이전과 같다 |
+
+The first row is the change: the 37th window's «no set → WMS 200» (Findings 2) is now 403 while `entitled_domains ∋ wms`. Ticket record: `TASK-MONO-827` § CORRECTION — AC-4 (→ `done/`). Unblocks `TASK-PC-FE-384` AC-0.
+
+**Notes:** `/api/admin/operators` caps `size` at 100 (`size=200` → 400 `VALIDATION_ERROR`). The host clone's `git rev-parse` fails with «dubious ownership» under SSM root — the AMI tag is the commit authority.
+
+**Left behind on the demo volume:** operator `01a20cff-96ad-7aaf-9a7c-d8e696576741` `SUSPENDED`, 0 sets; its pool account (email verified).
+
+**Still open → next window:** `TASK-PC-FE-384` AC-4 (live console badges with a single-set operator, after its Vercel deploy) · `TASK-MONO-648` capture window.
