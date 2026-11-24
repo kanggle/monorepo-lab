@@ -121,9 +121,10 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-- `TASK-BE-663-auth-outbox-lag-reads-empty-v1-table.md` — **auth `auth_outbox_lag_seconds` 가 빈 v1 `outbox` 를 읽어 늘 0 → `AuthOutboxLagHigh` 가 울릴 수 없음** (REVIEW, 2026-11-24 UTC · 소유자 «진행해»). `TASK-BE-450` 의 «harmless» 기록이 틀렸다(알림·스펙이 이 값에 기댄다). v2 `auth_outbox` `published_at IS NULL` + `UTC_TIMESTAMP(6)` — 본보기 = `TASK-BE-662` 의 account `OutboxLagMetric`. 분석=Opus 5.5 / 구현 권장=Sonnet.
+(empty)
 
 ## done
+- ✅ `TASK-BE-663-auth-outbox-lag-reads-empty-v1-table.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4674 머지, `36da29d63`, 실패 0 · SUCCESS 20 · SKIPPED 53) · 기안 #4673. auth `auth_outbox_lag_seconds` 가 빈 v1 `outbox` 를 읽어 늘 0 → v2 `auth_outbox` `published_at IS NULL` + `UTC_TIMESTAMP(6)`(`TASK-BE-662` account 본보기). `AuthOutboxLagHigh` 가 이제 relay 정지를 잡는다. 단위 테스트 5건 신설. AC-3 = iam Build & Test · Integration A/B · E2E smoke **실행되어** SUCCESS.
 
 - ✅ `TASK-BE-662-implement-spec-required-metrics-alerts-query.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4669 머지, `08bb2e01f`, 실패 0 · SUCCESS 18 · SKIPPED 54). 스펙 필수 metric 4개 구현 — `gateway_jwt_validation_total{result}` · `admin_command_total{action_code,outcome}` · `account_outbox_lag_seconds`(v2 `account_outbox`, `UTC_TIMESTAMP(6)`) · `security_auto_lock_issued_total{result}` — 영원히 no-data 이던 알림 5개가 동작. AC-4 = Build & Test · Integration iam A/B · E2E smoke **실행되어** SUCCESS. 티켓 정정 둘(`recordDenied` 는 fail-closed · auth `OutboxLagMetric` 은 v1 빈 테이블을 읽는 결함 — 복사 안 함). 후속(티켓 없음): auth 형제의 같은 결함.
 - ✅ `TASK-BE-641-end-session-endpoint-answers-401.md` — **DONE 2026-10-25 UTC (4-dim verified)** — impl PR #4440(`c118382d8`, 실패 0) · AC-1 35차 창 ✅ — 정상 `/connect/logout` 302 → `/login` · 재로그인 시 비밀번호 요구(IdP 세션 종료) · AC-3 = 34차. 기록 = 티켓 끝 `## CORRECTION — 35차 창` · `TASK-MONO-672` § 35th.
