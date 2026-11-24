@@ -54,8 +54,9 @@ import { useOperatorsScreen } from '../hooks/use-operators-screen';
  * delivery is a WARNING with «다시 보내기», never an error — the invitation
  * exists. No token or link is ever rendered (the producer never sends one).
  *
- * ── MODULE SPLIT (TASK-PC-FE-105) ── this container owns ALL state, the
- * mutations, and the gating; the list region (filter + table + pagination)
+ * ── MODULE SPLIT (TASK-PC-FE-105) ── the screen owns ALL state, the
+ * mutations, and the gating (since TASK-PC-FE-387 they sit in its hook, see
+ * HOOK SPLIT below); the list region (filter + table + pagination)
  * is the prop-driven `OperatorsTable` presentational child, and the
  * pending-action model + the `OperatorConfirmDialog` copy builders live in
  * `operators-confirm-copy.tsx`. The badges / create form / confirm / profile /
