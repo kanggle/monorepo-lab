@@ -8,7 +8,7 @@ TASK-MONO-835
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
