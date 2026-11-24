@@ -2,6 +2,7 @@ package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.event.AuthEventPublisher;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.port.AuthMetricsPort;
 import com.example.auth.application.port.OAuthAuthorizationRevocationPort;
 import com.example.auth.application.port.OperatorAssignmentPort;
 import com.example.auth.domain.repository.BulkInvalidationStore;
@@ -117,6 +118,9 @@ public class AuthorizationServerConfig {
     private DeviceSessionRepository deviceSessionRepository;
     @Autowired
     private AuthEventPublisher authEventPublisher;
+    // TASK-BE-664: auth_token_reuse_detected_total, counted by the manually-built refresh provider.
+    @Autowired
+    private AuthMetricsPort authMetrics;
     // TASK-BE-274: SasRefreshTokenAuthenticationProvider needs a PlatformTransactionManager
     // to wrap its rotation-write path (SAS save + persistRotation) and the reuse-detected
     // bulk revoke path. Manual instantiation in this @Configuration class disables AOP
@@ -525,7 +529,8 @@ public class AuthorizationServerConfig {
                 oAuthAuthorizationRevocationPort,
                 new RotatedTokenReplayPolicy(refreshTokenRepository,
                         Duration.ofSeconds(refreshTokenReuseGraceSeconds)),
-                Clock.systemUTC());
+                Clock.systemUTC(),
+                authMetrics);
     }
 
     /**

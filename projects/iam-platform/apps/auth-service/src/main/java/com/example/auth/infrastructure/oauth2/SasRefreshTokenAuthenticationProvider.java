@@ -1,6 +1,7 @@
 package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.event.AuthEventPublisher;
+import com.example.auth.application.port.AuthMetricsPort;
 import com.example.auth.application.port.OAuthAuthorizationRevocationPort;
 import com.example.auth.domain.repository.BulkInvalidationStore;
 import com.example.auth.domain.repository.DeviceSessionRepository;
@@ -144,6 +145,8 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
     /** TASK-BE-606: rotated-token replay classification (grace window vs reuse). */
     private final RotatedTokenReplayPolicy replayPolicy;
     private final Clock clock;
+    /** TASK-BE-664 — {@code auth_token_reuse_detected_total}, counted in {@link #rejectReplay}. */
+    private final AuthMetricsPort authMetrics;
 
     public SasRefreshTokenAuthenticationProvider(
             OAuth2AuthorizationService authorizationService,
@@ -156,7 +159,8 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
             PlatformTransactionManager transactionManager,
             OAuthAuthorizationRevocationPort authorizationRevocationPort,
             RotatedTokenReplayPolicy replayPolicy,
-            Clock clock) {
+            Clock clock,
+            AuthMetricsPort authMetrics) {
         this.authorizationService = authorizationService;
         this.tokenGenerator = tokenGenerator;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -168,6 +172,7 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         this.authorizationRevocationPort = authorizationRevocationPort;
         this.replayPolicy = replayPolicy;
         this.clock = clock;
+        this.authMetrics = authMetrics;
     }
 
     @Override
@@ -619,6 +624,11 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
             return new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_GRANT);
         }
 
+        // TASK-BE-664: the detection itself — counted before the revoke and the event write can
+        // fail, and also when the family was already closed and no event is emitted. Both reuse
+        // paths of authenticate() (pre-check, in-flow race) reach this line, and a request takes
+        // at most one of them, so one request is counted at most once.
+        authMetrics.tokenReuseDetected();
         handleReuse(submittedTokenValue, assessment, knownAuthorization, reusedRowTenant, requestTime);
         return new OAuth2AuthenticationException(new OAuth2Error(
                 OAuth2ErrorCodes.INVALID_GRANT,

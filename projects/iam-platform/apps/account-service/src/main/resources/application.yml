@@ -71,7 +71,14 @@ server:
 
 # TASK-MONO-770 — a mail-server outage must not mark account-service DOWN (Traefik and compose drop an
 # unhealthy container; the mail path has its own error answer, 503 VERIFICATION_EMAIL_SEND_FAILED).
+# TASK-BE-664 — without `exposure.include` Spring Boot exposes `health` only, so /actuator/prometheus
+# answered 404 and Prometheus' account-service job never scraped a single metric. Same value as the
+# gateway / security siblings. The registry comes in through libs/java-observability.
 management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
   health:
     mail:
       enabled: false

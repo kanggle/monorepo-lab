@@ -21,11 +21,14 @@ import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.TokenPair;
 import com.example.auth.domain.token.TokenReuseDetector;
 import com.example.auth.application.port.TenantTypePort;
+import com.example.auth.application.port.AuthMetricsPort;
+import com.example.auth.infrastructure.metrics.AuthMetricsProbe;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
@@ -58,6 +61,10 @@ class RefreshTokenUseCaseTest {
     private DeviceSessionRepository deviceSessionRepository;
     @Mock
     private TenantTypePort tenantTypePort;
+    // TASK-BE-664: a real auth_token_reuse_detected_total on a SimpleMeterRegistry.
+    private final AuthMetricsProbe metrics = new AuthMetricsProbe();
+    @Spy
+    private AuthMetricsPort authMetrics = metrics.port();
 
     @InjectMocks
     private RefreshTokenUseCase refreshTokenUseCase;
@@ -106,6 +113,7 @@ class RefreshTokenUseCaseTest {
         verify(tokenBlacklist).blacklist(eq(TENANT_ID), eq(OLD_JTI), anyLong());
         verify(authEventPublisher).publishTokenRefreshed(ACCOUNT_ID, TENANT_ID, OLD_JTI, NEW_JTI, CTX);
         verify(bulkInvalidationStore, never()).invalidateAll(anyString(), anyLong());
+        assertThat(metrics.tokenReuse()).isZero();
     }
 
     @Test
@@ -184,6 +192,8 @@ class RefreshTokenUseCaseTest {
         assertThatThrownBy(() -> refreshTokenUseCase.execute(
                 new RefreshTokenCommand(refreshTokenStr, CTX)))
                 .isInstanceOf(SessionRevokedException.class);
+        // A revoked token without a reuse chain is not a reuse detection.
+        assertThat(metrics.tokenReuse()).isZero();
     }
 
     @Test
@@ -239,6 +249,31 @@ class RefreshTokenUseCaseTest {
                 eq(ACCOUNT_ID), anyString(), eq("dev-2"), eq(RevokeReason.TOKEN_REUSE.name()),
                 eq(List.of("sibling-jti-2")), any(Instant.class),
                 eq("SYSTEM"), isNull());
+        assertThat(metrics.tokenReuse()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-664: the reuse is counted even when publishing auth.token.reuse.detected fails")
+    void reuseDetected_countedEvenWhenEventPublishFails() {
+        String refreshTokenStr = "reused-token";
+        when(tokenGeneratorPort.extractJti(refreshTokenStr)).thenReturn(OLD_JTI);
+        when(tokenGeneratorPort.extractAccountId(refreshTokenStr)).thenReturn(ACCOUNT_ID);
+        when(tokenGeneratorPort.extractTenantId(refreshTokenStr)).thenReturn(TENANT_ID);
+        RefreshToken existingToken = activeToken(OLD_JTI, TENANT_ID);
+        when(refreshTokenRepository.findByJti(OLD_JTI)).thenReturn(Optional.of(existingToken));
+        when(tokenReuseDetector.isReuse(existingToken)).thenReturn(true);
+        when(deviceSessionRepository.findActiveByAccountId(ACCOUNT_ID)).thenReturn(List.of());
+        when(refreshTokenRepository.revokeAllByAccountId(ACCOUNT_ID)).thenReturn(1);
+        when(tokenGeneratorPort.refreshTokenTtlSeconds()).thenReturn(604800L);
+        IllegalStateException outboxDown = new IllegalStateException("outbox down");
+        doThrow(outboxDown).when(authEventPublisher).publishTokenReuseDetected(
+                anyString(), anyString(), anyString(), any(), any(), any(), any(), anyBoolean(), anyInt());
+
+        assertThatThrownBy(() -> refreshTokenUseCase.execute(
+                new RefreshTokenCommand(refreshTokenStr, CTX)))
+                .isSameAs(outboxDown);
+
+        assertThat(metrics.tokenReuse()).isEqualTo(1.0);
     }
 
     @Test
@@ -325,5 +360,7 @@ class RefreshTokenUseCaseTest {
         verify(authEventPublisher, never()).publishAuthSessionRevoked(
                 anyString(), anyString(), anyString(), anyString(), anyList(), any(Instant.class), anyString(), any());
         verify(deviceSessionRepository, never()).save(any());
+        // TASK-BE-664: no event (already-revoked chain), but the detection itself is counted.
+        assertThat(metrics.tokenReuse()).isEqualTo(1.0);
     }
 }

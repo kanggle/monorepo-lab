@@ -230,7 +230,14 @@ iam:
     console-url: ${IAM_OPERATOR_INVITATION_CONSOLE_URL:http://localhost:3000}
 
 # TASK-MONO-770 — a mail-server outage must not mark the IdP DOWN (the reset endpoint answers 204 anyway).
+# TASK-BE-664 — without `exposure.include` Spring Boot exposes `health` only, so /actuator/prometheus
+# answered 404 and Prometheus' auth-service job never scraped a single metric. Same value as the
+# gateway / security siblings. The registry comes in through libs/java-observability.
 management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
   health:
     mail:
       enabled: false

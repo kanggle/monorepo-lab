@@ -21,6 +21,9 @@ import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.TokenPair;
 import com.example.auth.application.port.TenantTypePort;
+import com.example.auth.application.port.AuthMetricsPort;
+import com.example.auth.application.exception.AccountStatusException;
+import com.example.auth.infrastructure.metrics.AuthMetricsProbe;
 import com.example.security.password.PasswordHasher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,6 +32,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -62,6 +66,10 @@ class LoginUseCaseTest {
     private RegisterOrUpdateDeviceSessionUseCase registerOrUpdateDeviceSessionUseCase;
     @Mock
     private TenantTypePort tenantTypePort;
+    // TASK-BE-664: a real counter on a SimpleMeterRegistry, read back per branch.
+    private final AuthMetricsProbe metrics = new AuthMetricsProbe();
+    @Spy
+    private AuthMetricsPort authMetrics = metrics.port();
 
     @InjectMocks
     private LoginUseCase loginUseCase;
@@ -112,6 +120,7 @@ class LoginUseCaseTest {
         assertThat(result.tokenType()).isEqualTo("Bearer");
 
         verify(loginAttemptCounter).resetFailureCount(eq(TENANT_ID), anyString());
+        metrics.assertOnlyLogin("success");
     }
 
     @Test
@@ -196,6 +205,7 @@ class LoginUseCaseTest {
         // No password verification should happen
         verify(passwordHasher, never()).verify(anyString(), anyString());
         verify(accountServicePort, never()).getAccountStatus(anyString());
+        metrics.assertOnlyLogin("failure");
     }
 
     @Test
@@ -234,6 +244,7 @@ class LoginUseCaseTest {
                 .isInstanceOf(CredentialsInvalidException.class);
 
         verify(loginAttemptCounter).incrementFailureCount(eq(TENANT_ID), anyString());
+        metrics.assertOnlyLogin("failure");
     }
 
     @Test
@@ -247,6 +258,7 @@ class LoginUseCaseTest {
 
         verify(loginAttemptCounter).incrementFailureCount(eq(TENANT_ID), anyString());
         verify(accountServicePort, never()).getAccountStatus(anyString());
+        metrics.assertOnlyLogin("failure");
     }
 
     @Test
@@ -261,6 +273,7 @@ class LoginUseCaseTest {
                 .isInstanceOf(CredentialsInvalidException.class);
 
         verify(loginAttemptCounter).incrementFailureCount(eq(TENANT_ID), anyString());
+        metrics.assertOnlyLogin("failure");
     }
 
     @Test
@@ -273,6 +286,7 @@ class LoginUseCaseTest {
 
         verify(credentialRepository, never()).findAllByEmail(anyString());
         verify(accountServicePort, never()).getAccountStatus(anyString());
+        metrics.assertOnlyLogin("rate_limited");
     }
 
     /**
@@ -303,6 +317,21 @@ class LoginUseCaseTest {
 
         assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, null, CTX)))
                 .isInstanceOf(AccountLockedException.class);
+        metrics.assertOnlyLogin("account_locked");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-664: a DORMANT account is a failure, not account_locked")
+    void loginFailsAccountDormant_countsFailure() {
+        when(loginAttemptCounter.getFailureCount(anyString(), anyString())).thenReturn(0);
+        Credential cred = credential(ACCOUNT_ID, TENANT_ID, EMAIL, HASH);
+        when(credentialRepository.findAllByEmail(EMAIL)).thenReturn(List.of(cred));
+        when(accountServicePort.getAccountStatus(ACCOUNT_ID))
+                .thenReturn(Optional.of(new AccountStatusLookupResult(ACCOUNT_ID, "DORMANT")));
+
+        assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, null, CTX)))
+                .isInstanceOf(AccountStatusException.class);
+        metrics.assertOnlyLogin("failure");
     }
 
     @Test
@@ -313,6 +342,7 @@ class LoginUseCaseTest {
 
         assertThatThrownBy(() -> loginUseCase.execute(new LoginCommand(EMAIL, PASSWORD, "wms", CTX)))
                 .isInstanceOf(CredentialsInvalidException.class);
+        metrics.assertOnlyLogin("failure");
     }
 
     @Test

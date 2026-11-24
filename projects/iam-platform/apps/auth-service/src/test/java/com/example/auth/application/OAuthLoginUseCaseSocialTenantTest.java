@@ -18,6 +18,7 @@ import com.example.auth.domain.repository.OAuthStateStore;
 import com.example.auth.domain.repository.SocialIdentityRepository;
 import com.example.auth.domain.session.SessionContext;
 import com.example.auth.domain.social.SocialIdentity;
+import com.example.auth.infrastructure.metrics.AuthMetricsProbe;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -77,13 +78,16 @@ class OAuthLoginUseCaseSocialTenantTest {
 
     private OAuthLoginUseCase useCase;
     private OAuthCallbackCommand command;
+    // TASK-BE-664: auth_login_total, counted against the REAL AccountStatusRule rejections here.
+    private final AuthMetricsProbe metrics = new AuthMetricsProbe();
 
     @BeforeEach
     void setUp() {
         SocialIdentityPersistStep realPersistStep =
                 new SocialIdentityPersistStep(new SocialLoginSteps(socialIdentityRepository));
         useCase = new OAuthLoginUseCase(oAuthProviderConfigPort, oAuthClientProvider, oAuthStateStore,
-                accountServicePort, socialIdentityRepository, realPersistStep, loginEventRecorder);
+                accountServicePort, socialIdentityRepository, realPersistStep, loginEventRecorder,
+                metrics.port());
         command = new OAuthCallbackCommand("GOOGLE", CODE, STATE, REDIRECT_URI, CTX);
 
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
@@ -121,6 +125,7 @@ class OAuthLoginUseCaseSocialTenantTest {
         // The tenant-less lookup replaced the pinned one; the pinned one is not called at all.
         verify(accountServicePort, never()).getAccountStatus(anyString());
         verify(accountServicePort, never()).getAccountStatus(anyString(), any());
+        metrics.assertOnlyLogin("account_locked");
     }
 
     @Test
@@ -131,6 +136,7 @@ class OAuthLoginUseCaseSocialTenantTest {
 
         assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, CLIENT_TENANT, CLIENT_TENANT))
                 .isInstanceOf(AccountStatusException.class);
+        metrics.assertOnlyLogin("failure");
     }
 
     @Test
@@ -149,6 +155,8 @@ class OAuthLoginUseCaseSocialTenantTest {
         verify(socialIdentityRepository).save(any(SocialIdentity.class));
         // No answer = no account tenant to report — nothing is emitted rather than a guessed tenant.
         verifyNoInteractions(loginEventRecorder);
+        // TASK-BE-664: the metric needs no tenant — the success is counted all the same.
+        metrics.assertOnlyLogin("success");
     }
 
     @Test
@@ -163,6 +171,7 @@ class OAuthLoginUseCaseSocialTenantTest {
 
         verify(socialIdentityRepository, never()).save(any());
         verifyNoInteractions(loginEventRecorder);
+        metrics.assertNoLogin();
     }
 
     // ── TASK-BE-611: the identity lookup is confined to the initiating client's tenant ───────
@@ -246,6 +255,7 @@ class OAuthLoginUseCaseSocialTenantTest {
         verify(loginEventRecorder).recordAttempted("acc-ec", EMAIL_HASH, "ecommerce", null, CTX);
         verify(loginEventRecorder).recordSucceeded("acc-ec", "ecommerce", null, CTX, "OAUTH_GOOGLE");
         verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), any(), any());
+        metrics.assertOnlyLogin("success");
     }
 
     @Test
@@ -286,6 +296,8 @@ class OAuthLoginUseCaseSocialTenantTest {
         verify(loginEventRecorder).recordAttempted("acc-ec", EMAIL_HASH, "ecommerce", null, CTX);
         verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), any(), any());
         verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any(), any(), any());
+        // TASK-BE-664: no failed EVENT (no enum value), but the attempt is still a counted failure.
+        metrics.assertOnlyLogin("failure");
     }
 
     @Test
@@ -301,6 +313,8 @@ class OAuthLoginUseCaseSocialTenantTest {
         BrowserLoginResolution result = useCase.resolveBrowserLogin(command, CLIENT_TENANT, CLIENT_TENANT);
 
         assertThat(result.accountId()).isEqualTo("acc-ec");
+        // TASK-BE-664: the metric does not depend on the event write succeeding.
+        metrics.assertOnlyLogin("success");
     }
 
     @Test
@@ -313,5 +327,6 @@ class OAuthLoginUseCaseSocialTenantTest {
 
         assertThatThrownBy(() -> useCase.resolveBrowserLogin(command, CLIENT_TENANT, CLIENT_TENANT))
                 .isInstanceOf(AccountLockedException.class);
+        metrics.assertOnlyLogin("account_locked");
     }
 }

@@ -7,6 +7,7 @@ import com.example.auth.application.exception.TokenExpiredException;
 import com.example.auth.application.exception.TokenParseException;
 import com.example.auth.application.exception.TokenReuseDetectedException;
 import com.example.auth.application.exception.TokenTenantMismatchException;
+import com.example.auth.application.port.AuthMetricsPort;
 import com.example.auth.application.port.TenantTypePort;
 import com.example.auth.application.port.TokenGeneratorPort;
 import com.example.auth.application.result.RefreshTokenResult;
@@ -47,6 +48,8 @@ public class RefreshTokenUseCase {
     private final AuthEventPublisher authEventPublisher;
     private final DeviceSessionRepository deviceSessionRepository;
     private final TenantTypePort tenantTypePort;
+    /** TASK-BE-664 — {@code auth_token_reuse_detected_total}. */
+    private final AuthMetricsPort authMetrics;
 
     @Transactional
     public RefreshTokenResult execute(RefreshTokenCommand command) {
@@ -78,6 +81,9 @@ public class RefreshTokenUseCase {
 
         // Check for reuse FIRST (security-first ordering).
         if (tokenReuseDetector.isReuse(existingToken)) {
+            // TASK-BE-664: counted at detection, before anything that can fail (the revoke, the
+            // event write) — and also when the account was already revoked and no event is emitted.
+            authMetrics.tokenReuseDetected();
             handleReuseDetected(existingToken, jti, accountId, ctx);
             throw new TokenReuseDetectedException();
         }

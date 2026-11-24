@@ -8,7 +8,7 @@ auth · account 의 `/actuator/prometheus` 가 열려 있지 않아 두 서비�
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -52,9 +52,9 @@ backend
 
 # Acceptance Criteria
 
-- [ ] AC-1: 두 서비스의 노출 설정에 `prometheus` 가 들어 있다.
-- [ ] AC-2: 두 metric 이 스펙의 이름 · 태그(값 4종)로 등록되고, 시도/탐지당 한 번이다. 어느 경로에서 세는지와 그 근거가 증거 절에 있다.
-- [ ] AC-3: 분기별 단위 테스트 · auth-service · account-service `test` rc=0.
+- [x] AC-1: 두 서비스의 노출 설정에 `prometheus` 가 들어 있다.
+- [x] AC-2: 두 metric 이 스펙의 이름 · 태그(값 4종)로 등록되고, 시도/탐지당 한 번이다. 어느 경로에서 세는지와 그 근거가 증거 절에 있다.
+- [x] AC-3: 분기별 단위 테스트 · auth-service · account-service `test` rc=0.
 - [ ] AC-4: PR CI 의 iam Build & Test · Integration (iam A/B) 가 **실행되어** success.
 
 # Related Specs
@@ -79,6 +79,19 @@ backend
 # Test Requirements
 
 - 단위 테스트 · 두 서비스 `test` · CI.
+
+# Implementation Evidence (2026-11-24 UTC)
+
+구현은 Opus 백엔드 에이전트에 위임, 설정 diff 와 판단은 직접 검토.
+
+- **AC-1** — auth · account `application.yml` 에 `management.endpoints.web.exposure.include: health,info,prometheus,metrics`(형제와 같은 값, `health.mail.enabled: false` 유지, 의존성 추가 없음). `ActuatorExposureConfigTest` ×2 — 실제 `application.yml` 을 `YamlPropertiesFactoryBean` 으로 읽어 단언(iam 에 actuator 테스트 선례가 없어 wms `ProjectionTopicWiringTest` 방식).
+- **AC-2** — `AuthMetricsPort`(application) + `MicrometerAuthMetrics`(infrastructure, 다섯 시리즈 0 으로 선등록). 세는 곳과 판단:
+  - `auth_login_total` — 폼 로그인 `CredentialAuthenticationProvider.authenticate`(살아 있는 유일한 비밀번호 경로: 조회 실패 · 비밀번호 불일치 → `failure`, 비밀번호는 맞고 LOCKED → `account_locked`(응답은 오답과 동일, 구분은 metric 만), 반환 직전 → `success`) · 소셜 `OAuthLoginUseCase.resolveBrowserLogin`(계정 해석 뒤에만) · `LoginUseCase.execute`(HTTP 진입점 없음, 통합 테스트만 — `rate_limited` 는 여기뿐). 세 경로는 서로를 부르지 않는 별개 요청 → 이중 집계 없음.
+  - 🔴 **티켓 정정**: 티켓의 Edge Case 는 «rate-limit 필터와 use case 를 모두 지남» 을 가정했지만 살아 있는 폼 로그인에는 rate limit 이 없다(소유자 결정 `TASK-BE-599` AC-0 ⓑ 기각) → **운영에서 `result="rate_limited"` 는 늘 0** 이다. gateway `RateLimitFilter` 의 거절은 auth 에 닿지 않는다.
+  - 🔵 **판단**: 인프라 장애(account-service fail-closed `AuthenticationServiceException`, 소셜 콜백 앞단 실패)는 `failure` 로 세지 않는다 — 세면 장애가 `AuthLoginFailureSpike`(크리덴셜 스터핑 알림)를 울린다. ⚠️ 그 장애를 맡는다는 `AuthAccountServiceDown` 은 **스펙(`auth-service/observability.md:73`)에만 있고 배포 규칙에는 없다** → 후속 거리.
+  - `auth_token_reuse_detected_total` — `RefreshTokenUseCase.execute` 재사용 분기 · `SasRefreshTokenAuthenticationProvider.rejectReplay`(유예 내 재제출 · `NOT_ROTATED` 제외), revoke · 이벤트 발행 **전에** → 발행 실패와 무관. 두 클래스는 다른 엔드포인트(`/api/auth/refresh` · `/oauth2/token`). 이미 닫힌 패밀리의 재제출도 센다(→ critical 알림이 울린다).
+- **AC-3** — 새 `MicrometerAuthMetricsTest` 3 · `ActuatorExposureConfigTest` 2 · 기존 `LoginUseCaseTest` · `OAuthLoginUseCaseTest` · `OAuthLoginUseCaseSocialTenantTest` · `CredentialAuthenticationProviderTest` · `RefreshTokenUseCaseTest` · `SasRefreshTokenAuthenticationProviderTest` 에 분기별 단언. `:auth-service:test` **rc=0**(4m31s, 새/수정 8 클래스 실패 0) · `:account-service:test` **rc=0**(4m45s). `check-metric-name-registry.sh` rc=0.
+- **AC-4** — PR CI 대기.
 
 # Definition of Done
 

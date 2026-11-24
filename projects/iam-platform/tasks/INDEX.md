@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-664-auth-account-metrics-never-scraped.md` — **auth · account 의 `/actuator/prometheus` 가 닫혀 있어 metric 이 한 번도 수집 안 됨 + 스펙 필수 `auth_login_total{result}` · `auth_token_reuse_detected_total` 미구현** (READY, 2026-11-24 UTC). 662·663 이 고친 outbox lag 도 Prometheus 에 안 들어갔다. 레지스트리는 `java-observability` 로 있음 — 빠진 건 노출 한 줄. 후속 = `TASK-MONO-835`(가드 오탐 좁히기, 이 티켓이 먼저). 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
@@ -121,7 +121,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-664-auth-account-metrics-never-scraped.md` — **auth · account 의 `/actuator/prometheus` 가 닫혀 있어 metric 이 한 번도 수집 안 됨 + 스펙 필수 `auth_login_total{result}` · `auth_token_reuse_detected_total` 미구현** (REVIEW, 2026-11-24 UTC). 662·663 이 고친 outbox lag 도 Prometheus 에 안 들어갔다. 레지스트리는 `java-observability` 로 있음 — 빠진 건 노출 한 줄. 후속 = `TASK-MONO-835`(가드 오탐 좁히기, 이 티켓이 먼저). 분석=Opus 5.5 / 구현 권장=Opus.
 
 ## done
 - ✅ `TASK-BE-663-auth-outbox-lag-reads-empty-v1-table.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4674 머지, `36da29d63`, 실패 0 · SUCCESS 20 · SKIPPED 53) · 기안 #4673. auth `auth_outbox_lag_seconds` 가 빈 v1 `outbox` 를 읽어 늘 0 → v2 `auth_outbox` `published_at IS NULL` + `UTC_TIMESTAMP(6)`(`TASK-BE-662` account 본보기). `AuthOutboxLagHigh` 가 이제 relay 정지를 잡는다. 단위 테스트 5건 신설. AC-3 = iam Build & Test · Integration A/B · E2E smoke **실행되어** SUCCESS.

@@ -3,6 +3,7 @@ package com.example.auth.application;
 import com.example.auth.application.command.OAuthCallbackCommand;
 import com.example.auth.application.exception.*;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.port.AuthMetricsPort;
 import com.example.auth.application.port.OAuthClient;
 import com.example.auth.application.port.OAuthClientProvider;
 import com.example.auth.application.port.OAuthProviderConfig;
@@ -42,6 +43,16 @@ public class OAuthLoginUseCase {
     private final SocialIdentityPersistStep socialIdentityPersistStep;
     // TASK-BE-602: auth.login.* for the social path — the same recorder the form path uses.
     private final LoginEventRecorder loginEventRecorder;
+    /**
+     * TASK-BE-664 — {@code auth_login_total{result}} for the social path, counted once the account is
+     * resolved (the point the attempt's outcome is decided): {@code account_locked} (LOCKED),
+     * {@code failure} (any other status rejection), {@code success} (the session-establishing tail
+     * passed). Unlike the events this does NOT need account-service's tenant, so a 404 account
+     * (status rule not applied) still counts its success. Not counted: a failure before resolution
+     * (state / redirect-uri / provider / code / missing email / account-service outage) — a protocol or
+     * infrastructure failure, not an authentication outcome of an identity.
+     */
+    private final AuthMetricsPort authMetrics;
 
     /**
      * Generates an authorization URL for the given OAuth provider.
@@ -141,12 +152,15 @@ public class OAuthLoginUseCase {
                         loginEventRecorder.recordFailed(t.accountId(), t.emailHash(), t.tenantId(),
                                 t.siteTenantId(), reason, t.ctx())));
             }
+            authMetrics.loginAttempt(rejection instanceof AccountLockedException
+                    ? AuthMetricsPort.LoginOutcome.ACCOUNT_LOCKED : AuthMetricsPort.LoginOutcome.FAILURE);
             throw rejection;
         }
 
         telemetry.ifPresent(t -> recordTelemetry("succeeded", () ->
                 loginEventRecorder.recordSucceeded(t.accountId(), t.tenantId(), t.siteTenantId(),
                         t.ctx(), t.loginMethod())));
+        authMetrics.loginAttempt(AuthMetricsPort.LoginOutcome.SUCCESS);
 
         return new BrowserLoginResolution(
                 resolved.accountId(), resolved.userInfo().email(), resolved.isNewAccount(),
