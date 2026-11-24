@@ -220,10 +220,10 @@ _(없음)_
 
 ## review
 
-- `TASK-MONO-824-portfolio-sync-token-renewal-before-2026-12-10.md` — ⏳ **SCHEDULED — DO NOT START before 2026-12-01 UTC** · **동기화 토큰 `PORTFOLIO_SYNC_TOKEN` 이 2026-12-10 만료 — 갱신 + 드라이런 확인** (REVIEW 2026-11-24 UTC — 소유자 결정으로 조기 착수 · 기안 2026-11-01 UTC · 소유자 요청). AC-0 게이트 = 날짜(UTC, 만료 뒤 착수면 복구 경로) · 갱신 여부는 시크릿 `updated_at`(기준 2026-09-11T09:35:09Z) · 워크플로 존속. 🔴 Regenerate 는 값을 바꾼다 — AC-2 는 드라이런 success **와** `updated_at` 변경 둘 다. 이미 갱신됐어도 AC-3(다음 만료 9일 전 티켓)은 한다. 분석=Opus 5.5 / 구현 권장=Haiku·Sonnet.
-
 
 ## done
+
+- ✅ `TASK-MONO-824-portfolio-sync-token-renewal-before-2026-12-10.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4660 머지, `b8ea54773`, 실패 0 — 티켓 기록만, 코드 없음). 소유자 결정으로 날짜 게이트(12-01)보다 앞당겨 **조기 갱신**. AC-1 새 만료 2027-02-23(소유자 화면) · AC-2 (a) 시크릿 `updated_at` `2026-09-11T09:35:09Z` → `2026-11-24T15:02:11Z` · (b) dry-run run `45420888950` success(push 7/7 · Workflows 탐침 7/7 409) · AC-3 다음 갱신 `TASK-MONO-831`(⏳ 2027-02-14, #4659).
 
 - ✅ `TASK-MONO-830-retire-unconsumed-java-notification-library.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4657 머지, `4eab8ccc7`, 실패 0 · SUCCESS 46 · SKIPPED 26) · 기안 #4656(`2001ffd10`, `ADR-MONO-043` § 8 = 소유자 결정 «폐기»). 소비자 0 인 `libs/java-notification` 23파일 + `settings.gradle` · `ci.yml` `GRADLE_TASKS_CORE` · 정책 카탈로그 행 삭제, 루트 `.gitignore` 에 `/runs/`. AC-5 = Build & Test (JDK 21, Linux) **실행되어** SUCCESS. AC-4 = 메인 체크아웃 `git status` 깨끗 · `check-ignore` → `.gitignore:113:/runs/`. AC-3 = 가드 40개 중 39 초록(`check-prerendered-demo-verdict` 는 로컬 env 부재로 rc=1 → CI `frontend-checks` 에서 초록) · ⚪ `check-erp-single-tenant-ratchet` 1개 측정 불가 — 실행 중인 erp DB 를 읽는 가드라 데모 스택이 필요하고 CI 에도 없다; 입력(erp 테넌트 데이터)이 이 삭제와 겹치지 않는다.
 
