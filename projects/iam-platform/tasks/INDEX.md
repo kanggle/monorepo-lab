@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-664-auth-account-metrics-never-scraped.md` — **auth · account 의 `/actuator/prometheus` 가 닫혀 있어 metric 이 한 번도 수집 안 됨 + 스펙 필수 `auth_login_total{result}` · `auth_token_reuse_detected_total` 미구현** (READY, 2026-11-24 UTC). 662·663 이 고친 outbox lag 도 Prometheus 에 안 들어갔다. 레지스트리는 `java-observability` 로 있음 — 빠진 건 노출 한 줄. 후속 = `TASK-MONO-835`(가드 오탐 좁히기, 이 티켓이 먼저). 분석=Opus 5.5 / 구현 권장=Opus.
+(empty)
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
@@ -115,7 +115,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## in-progress
 
-(empty)
+- `TASK-BE-664-auth-account-metrics-never-scraped.md` — **auth · account 의 `/actuator/prometheus` 가 닫혀 있어 metric 이 한 번도 수집 안 됨 + 스펙 필수 `auth_login_total{result}` · `auth_token_reuse_detected_total` 미구현** (IN-PROGRESS, 2026-11-24 UTC). 662·663 이 고친 outbox lag 도 Prometheus 에 안 들어갔다. 레지스트리는 `java-observability` 로 있음 — 빠진 건 노출 한 줄. 후속 = `TASK-MONO-835`(가드 오탐 좁히기, 이 티켓이 먼저). 분석=Opus 5.5 / 구현 권장=Opus.
 
 Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO-046-7/7a/8/8a closed 2026-05-08~09. BE-272/273/274 closed 2026-05-09 (PR #292/#294/#296 모두 main 머지 완료). **TASK-MONO-079/080/081/082 + TASK-BE-278/279 closed 2026-05-13 — Phase 3 nightly full e2e 5/5 GREEN 완전 종결** (7 cycle archaeological inspection: settings.gradle + boot jars + JWT keys + Phase 0 진단 + MySQL TEMPORARY TABLES privilege + e2e test seed schema 모두 해소).
 

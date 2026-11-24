@@ -8,6 +8,7 @@ import com.example.auth.domain.repository.RefreshTokenRepository;
 import com.example.auth.domain.token.RefreshToken;
 import com.example.auth.domain.token.RotatedTokenReplayPolicy;
 import com.example.auth.domain.token.TokenReuseDetector;
+import com.example.auth.infrastructure.metrics.AuthMetricsProbe;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -105,6 +106,8 @@ class SasRefreshTokenAuthenticationProviderTest {
     private static final Duration GRACE = Duration.ofSeconds(30);
 
     private SasRefreshTokenAuthenticationProvider provider;
+    /** TASK-BE-664: a real auth_token_reuse_detected_total on a SimpleMeterRegistry. */
+    private AuthMetricsProbe metrics;
 
     @BeforeEach
     void setUp() {
@@ -117,6 +120,7 @@ class SasRefreshTokenAuthenticationProviderTest {
         org.mockito.Mockito.lenient().doNothing().when(transactionManager).commit(any(TransactionStatus.class));
         org.mockito.Mockito.lenient().doNothing().when(transactionManager).rollback(any(TransactionStatus.class));
 
+        metrics = new AuthMetricsProbe();
         provider = new SasRefreshTokenAuthenticationProvider(
                 authorizationService,
                 tokenGenerator,
@@ -128,7 +132,8 @@ class SasRefreshTokenAuthenticationProviderTest {
                 transactionManager,
                 authorizationRevocationPort,
                 new RotatedTokenReplayPolicy(refreshTokenRepository, GRACE),
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                metrics.port());
 
         // SAS AuthorizationServerContextHolder is a ThreadLocal — set a minimal context
         AuthorizationServerContext ctx = new AuthorizationServerContext() {
@@ -294,6 +299,8 @@ class SasRefreshTokenAuthenticationProviderTest {
         verify(authEventPublisher).publishTokenReuseDetected(
                 eq("account-001"), eq("fan-platform"), eq(SasRefreshTokenAuthenticationProvider.reuseTokenDigest(tokenValue)),
                 any(), any(), any(), any(), eq(true), eq(1));
+        // TASK-BE-664: in-flow race path — counted once (the pre-check found no child, so it did not count).
+        assertThat(metrics.tokenReuse()).isEqualTo(1.0);
     }
 
     // -----------------------------------------------------------------------
@@ -708,6 +715,8 @@ class SasRefreshTokenAuthenticationProviderTest {
         verifyNoInteractions(tokenGenerator);
         verify(authorizationService, never()).save(any());
         verify(refreshTokenRepository, never()).save(any());
+        // TASK-BE-664: a revoked (non-reused) row is not a reuse detection.
+        assertThat(metrics.tokenReuse()).isZero();
     }
 
     @Test
@@ -777,6 +786,8 @@ class SasRefreshTokenAuthenticationProviderTest {
                 any(), any(), eq(true), eq(2));
         verifyNoInteractions(tokenGenerator);
         verify(authorizationService, never()).save(any());
+        // TASK-BE-664: pre-check path — counted once.
+        assertThat(metrics.tokenReuse()).isEqualTo(1.0);
     }
 
     @Test
@@ -801,6 +812,8 @@ class SasRefreshTokenAuthenticationProviderTest {
         verify(refreshTokenRepository, never()).revokeAllByAccountId(any());
         verifyNoInteractions(authorizationRevocationPort, authEventPublisher, bulkInvalidationStore,
                 deviceSessionRepository, tokenGenerator, authorizationService);
+        // TASK-BE-664: a grace-window replay is a client race, not a reuse — not counted.
+        assertThat(metrics.tokenReuse()).isZero();
     }
 
     @Test
@@ -865,6 +878,28 @@ class SasRefreshTokenAuthenticationProviderTest {
         verify(authorizationRevocationPort).revokeActiveRefreshTokens(accountId);
         verify(authEventPublisher, never()).publishTokenReuseDetected(
                 any(), any(), any(), any(), any(), any(), any(), anyBoolean(), anyInt());
+        // TASK-BE-664: no event (family already closed), but the detection itself is counted.
+        assertThat(metrics.tokenReuse()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-664: the reuse is counted even when publishing auth.token.reuse.detected fails")
+    void rotatedAwayToken_eventPublishFails_reuseStillCounted() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient client = buildDemoSpaClient();
+        String tokenA = "rt-A-" + UUID.randomUUID();
+
+        OAuth2RefreshTokenAuthenticationToken auth = refreshRequest(buildAuthenticatedClient(client), tokenA);
+        when(refreshTokenRepository.findAllByRotatedFrom(tokenA))
+                .thenReturn(List.of(child(tokenA, accountId, NOW.minusSeconds(600))));
+        when(refreshTokenRepository.revokeAllByAccountId(accountId)).thenReturn(1);
+        IllegalStateException outboxDown = new IllegalStateException("outbox down");
+        doThrow(outboxDown).when(authEventPublisher).publishTokenReuseDetected(
+                any(), any(), any(), any(), any(), any(), any(), anyBoolean(), anyInt());
+
+        assertThatThrownBy(() -> provider.authenticate(auth)).isSameAs(outboxDown);
+
+        assertThat(metrics.tokenReuse()).isEqualTo(1.0);
     }
 
     @Test
@@ -893,6 +928,7 @@ class SasRefreshTokenAuthenticationProviderTest {
 
         verify(refreshTokenRepository, never()).revokeAllByAccountId(any());
         verifyNoInteractions(authorizationRevocationPort, authEventPublisher, tokenGenerator);
+        assertThat(metrics.tokenReuse()).isZero();
     }
 
     @Test

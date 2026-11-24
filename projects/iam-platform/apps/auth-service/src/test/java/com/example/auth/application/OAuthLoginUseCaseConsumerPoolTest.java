@@ -18,6 +18,7 @@ import com.example.auth.domain.repository.OAuthStateStore;
 import com.example.auth.domain.repository.SocialIdentityRepository;
 import com.example.auth.domain.session.SessionContext;
 import com.example.auth.domain.social.SocialIdentity;
+import com.example.auth.infrastructure.metrics.AuthMetricsProbe;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -80,7 +81,8 @@ class OAuthLoginUseCaseConsumerPoolTest {
         SocialIdentityPersistStep realPersistStep =
                 new SocialIdentityPersistStep(new SocialLoginSteps(socialIdentityRepository));
         useCase = new OAuthLoginUseCase(oAuthProviderConfigPort, oAuthClientProvider, oAuthStateStore,
-                accountServicePort, socialIdentityRepository, realPersistStep, loginEventRecorder);
+                accountServicePort, socialIdentityRepository, realPersistStep, loginEventRecorder,
+                new AuthMetricsProbe().port());
         command = new OAuthCallbackCommand("GOOGLE", CODE, STATE, REDIRECT_URI, CTX);
 
         when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));

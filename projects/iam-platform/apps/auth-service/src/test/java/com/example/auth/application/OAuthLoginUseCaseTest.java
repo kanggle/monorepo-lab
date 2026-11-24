@@ -6,7 +6,11 @@ import com.example.auth.application.exception.InvalidOAuthRedirectUriException;
 import com.example.auth.application.exception.InvalidOAuthStateException;
 import com.example.auth.application.exception.OAuthEmailRequiredException;
 import com.example.auth.application.exception.OAuthProviderException;
+import com.example.auth.application.exception.AccountLockedException;
+import com.example.auth.application.exception.AccountStatusException;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.port.AuthMetricsPort;
+import com.example.auth.infrastructure.metrics.AuthMetricsProbe;
 import com.example.auth.application.port.OAuthClient;
 import com.example.auth.application.port.OAuthClientProvider;
 import com.example.auth.application.port.OAuthProviderConfig;
@@ -28,6 +32,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
@@ -93,6 +98,9 @@ class OAuthLoginUseCaseTest {
     // TASK-BE-602: the use case now records login events. Its behaviour is asserted in
     // OAuthLoginUseCaseSocialTenantTest; here it only has to exist.
     @Mock private LoginEventRecorder loginEventRecorder;
+    // TASK-BE-664: a real auth_login_total on a SimpleMeterRegistry.
+    private final AuthMetricsProbe metrics = new AuthMetricsProbe();
+    @Spy private AuthMetricsPort authMetrics = metrics.port();
 
     @InjectMocks
     private OAuthLoginUseCase oAuthLoginUseCase;
@@ -167,6 +175,7 @@ class OAuthLoginUseCaseTest {
         assertThat(result.accountId()).isEqualTo("acc-123");
         assertThat(result.email()).isEqualTo("user@example.com");
         assertThat(result.isNewAccount()).isTrue();
+        metrics.assertOnlyLogin("success");
     }
 
     @Test
@@ -244,6 +253,8 @@ class OAuthLoginUseCaseTest {
 
         verify(socialIdentityPersistStep, never())
                 .persistIdentityAndCheckStatus(any(), any(), any(), any(), any());
+        // TASK-BE-664: an outage is not an authentication outcome — nothing counted.
+        metrics.assertNoLogin();
     }
 
     @Test
@@ -267,6 +278,47 @@ class OAuthLoginUseCaseTest {
         assertThat(result.isNewAccount()).isTrue();
         verify(socialIdentityPersistStep).persistIdentityAndCheckStatus(
                 any(), any(), eq("acc-new"), eq(TENANT_ID), eq(Optional.empty()));
+        // TASK-BE-664: no tenant → no events, but the success is still counted.
+        metrics.assertOnlyLogin("success");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-664: a LOCKED account rejected by the persist step counts account_locked once")
+    void callback_lockedAccount_countsAccountLocked() {
+        stubExistingIdentityWithStatus("LOCKED");
+        doThrow(new AccountLockedException()).when(socialIdentityPersistStep)
+                .persistIdentityAndCheckStatus(any(), any(), anyString(), anyString(), any());
+
+        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID, TENANT_ID))
+                .isInstanceOf(AccountLockedException.class);
+
+        metrics.assertOnlyLogin("account_locked");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-664: a DORMANT account rejected by the persist step counts failure once")
+    void callback_dormantAccount_countsFailure() {
+        stubExistingIdentityWithStatus("DORMANT");
+        doThrow(new AccountStatusException("DORMANT", AccountStatusRule.REASON_DORMANT))
+                .when(socialIdentityPersistStep)
+                .persistIdentityAndCheckStatus(any(), any(), anyString(), anyString(), any());
+
+        assertThatThrownBy(() -> oAuthLoginUseCase.resolveBrowserLogin(command, TENANT_ID, TENANT_ID))
+                .isInstanceOf(AccountStatusException.class);
+
+        metrics.assertOnlyLogin("failure");
+    }
+
+    private void stubExistingIdentityWithStatus(String status) {
+        when(oAuthStateStore.consumeAtomic(STATE)).thenReturn(Optional.of(OAuthProvider.GOOGLE));
+        when(oAuthClientProvider.getClient(OAuthProvider.GOOGLE)).thenReturn(oAuthClient);
+        when(oAuthClient.exchangeCodeForUserInfo(CODE, REDIRECT_URI)).thenReturn(USER_INFO);
+        SocialIdentity existing = SocialIdentity.create(
+                "acc-existing", "fan-platform", "GOOGLE", "provider-user-1", "user@example.com");
+        when(socialIdentityRepository.findByTenantIdAndProviderAndProviderUserId(TENANT_ID, "GOOGLE", "provider-user-1"))
+                .thenReturn(Optional.of(existing));
+        when(accountServicePort.getAccountStatusAndTenant("acc-existing"))
+                .thenReturn(Optional.of(new AccountStatusWithTenantLookupResult("acc-existing", TENANT_ID, status)));
     }
 
     @Test
@@ -278,6 +330,8 @@ class OAuthLoginUseCaseTest {
                 .isInstanceOf(InvalidOAuthStateException.class);
 
         verifyNothingDownstreamRan();
+        // TASK-BE-664: a protocol failure before the account is resolved is not counted.
+        metrics.assertNoLogin();
     }
 
     @Test
@@ -357,6 +411,8 @@ class OAuthLoginUseCaseTest {
         verify(oAuthClient).exchangeCodeForUserInfo(CODE, REDIRECT_URI);
         verify(accountServicePort).socialSignup("user@example.com", "GOOGLE", "provider-user-1", "User", TENANT_ID);
         verify(accountServicePort).getAccountStatusAndTenant("acc-1");
+        // TASK-BE-664: a DB failure of the tail is neither a success nor an auth refusal.
+        metrics.assertNoLogin();
     }
 
     @Test

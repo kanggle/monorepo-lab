@@ -58,7 +58,8 @@ class AuthorizationServerConfigRefreshProviderTest {
                 authorizationRevocationPort,
                 new com.example.auth.domain.token.RotatedTokenReplayPolicy(
                         refreshTokenRepository, java.time.Duration.ofSeconds(30)),
-                java.time.Clock.systemUTC());
+                java.time.Clock.systemUTC(),
+                new com.example.auth.infrastructure.metrics.AuthMetricsProbe().port());
     }
 
     private OAuth2RefreshTokenAuthenticationProvider builtIn() {

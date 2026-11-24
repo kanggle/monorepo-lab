@@ -2,6 +2,7 @@ package com.example.auth.infrastructure.security;
 
 import com.example.auth.application.LoginEventRecorder;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.port.AuthMetricsPort;
 import com.example.auth.application.port.TenantTypePort;
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.domain.repository.CredentialRepository;
@@ -60,6 +61,8 @@ class CredentialAuthenticationProviderInvitationTest {
     @Mock private SavedRequestTenantResolver savedRequestTenantResolver;
     @Mock private LoginEventRecorder loginEventRecorder;
     @Mock private AccountServicePort accountServicePort;
+    // TASK-BE-664: counted branch by branch in CredentialAuthenticationProviderTest; here it only has to exist.
+    @Mock private AuthMetricsPort authMetrics;
 
     @InjectMocks private CredentialAuthenticationProvider provider;
 

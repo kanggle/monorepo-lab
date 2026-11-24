@@ -7,6 +7,8 @@ import com.example.auth.application.exception.AccountLockedException;
 import com.example.auth.application.exception.AccountServiceUnavailableException;
 import com.example.auth.application.exception.AccountStatusException;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.port.AuthMetricsPort;
+import com.example.auth.application.port.AuthMetricsPort.LoginOutcome;
 import com.example.auth.application.port.TenantTypePort;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.domain.credentials.Credential;
@@ -117,6 +119,17 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
     private final SavedRequestTenantResolver savedRequestTenantResolver;
     private final LoginEventRecorder loginEventRecorder;
     private final AccountServicePort accountServicePort;
+    /**
+     * TASK-BE-664 — {@code auth_login_total{result}}, once per attempt where its outcome is decided:
+     * {@code failure} (no single credential · wrong password · DORMANT/DELETED/unknown status),
+     * {@code account_locked} (right password, LOCKED account — the response is still the wrong-password
+     * one, the metric is internal), {@code success} (authenticated principal returned). Not counted: a
+     * malformed submission (blank email/password — no events either) and an account-service failure
+     * ({@link AuthenticationServiceException}, fail-closed — an outage, not an authentication outcome;
+     * it would otherwise read as a credential-stuffing spike). No {@code rate_limited}: this path has
+     * no login rate limit (TASK-BE-599 AC-0 ⓑ).
+     */
+    private final AuthMetricsPort authMetrics;
 
     /** {@code auth.login.failed.failureReason} values this path produces (auth-events.md enum). */
     static final String REASON_CREDENTIALS_INVALID = "CREDENTIALS_INVALID";
@@ -392,6 +405,7 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
                     loginEventRecorder.recordAttempted(null, emailHash, contextTenant, null, ctx));
             telemetry("failed", () -> loginEventRecorder.recordFailed(
                     null, emailHash, contextTenant, null, lookup.failureReason(), ctx));
+            authMetrics.loginAttempt(LoginOutcome.FAILURE);
             throw new BadCredentialsException("Invalid credentials");
         }
 
@@ -421,6 +435,8 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
             // accountId MUST be present: VelocityRule ignores failures without one.
             telemetry("failed", () -> loginEventRecorder.recordFailed(
                     accountId, emailHash, tenantId, siteTenantId, REASON_CREDENTIALS_INVALID, ctx));
+            // Wrong password wins over any status (the event says CREDENTIALS_INVALID too).
+            authMetrics.loginAttempt(LoginOutcome.FAILURE);
             throw new BadCredentialsException("Invalid credentials");
         }
 
@@ -438,6 +454,8 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
                 log.warn("form-login: account-service returned a status outside the contract "
                         + "enum — rejected, no auth.login.failed emitted");
             }
+            authMetrics.loginAttempt(AccountStatusRule.REASON_LOCKED.equals(rejection)
+                    ? LoginOutcome.ACCOUNT_LOCKED : LoginOutcome.FAILURE);
             // Owner decision (AC-1 ⓐ): EXACTLY the wrong-password outcome — same exception,
             // same message, so /login?error and "Invalid email or password." are identical.
             throw new BadCredentialsException("Invalid credentials");
@@ -499,6 +517,7 @@ public class CredentialAuthenticationProvider implements AuthenticationProvider 
         // succeeded event is never recorded for a login that then fails.
         telemetry("succeeded", () ->
                 loginEventRecorder.recordSucceeded(accountId, tenantId, siteTenantId, ctx));
+        authMetrics.loginAttempt(LoginOutcome.SUCCESS);
         return authenticated;
     }
 

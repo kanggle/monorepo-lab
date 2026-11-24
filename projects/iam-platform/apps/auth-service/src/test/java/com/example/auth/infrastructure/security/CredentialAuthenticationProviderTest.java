@@ -6,6 +6,8 @@ import com.example.auth.application.exception.AccountServiceUnavailableException
 import com.example.auth.domain.credentials.Credential;
 import com.example.auth.application.port.AccountServicePort;
 import com.example.auth.application.port.TenantTypePort;
+import com.example.auth.application.port.AuthMetricsPort;
+import com.example.auth.infrastructure.metrics.AuthMetricsProbe;
 import com.example.auth.application.result.AccountStatusLookupResult;
 import com.example.auth.domain.repository.CredentialRepository;
 import com.example.auth.domain.session.SessionContext;
@@ -18,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -81,6 +84,11 @@ class CredentialAuthenticationProviderTest {
     // tests above keep exercising the path they always did.
     @Mock
     private AccountServicePort accountServicePort;
+
+    // TASK-BE-664: a real auth_login_total on a SimpleMeterRegistry, read back per branch.
+    private final AuthMetricsProbe metrics = new AuthMetricsProbe();
+    @Spy
+    private AuthMetricsPort authMetrics = metrics.port();
 
     @InjectMocks
     private CredentialAuthenticationProvider provider;
@@ -166,6 +174,8 @@ class CredentialAuthenticationProviderTest {
                 new UsernamePasswordAuthenticationToken(EMAIL, PASSWORD)))
                 .isInstanceOf(AuthenticationServiceException.class)
                 .hasCauseInstanceOf(AccountServiceUnavailableException.class);
+        // TASK-BE-664: an outage is not an authentication outcome — nothing counted.
+        metrics.assertNoLogin();
     }
 
     // ---------------------------------------------------------------------------------
@@ -219,6 +229,7 @@ class CredentialAuthenticationProviderTest {
         assertThat(ctx.getValue().ipMasked()).isEqualTo("203.0.*.*");
         assertThat(ctx.getValue().userAgentFamily()).isEqualTo("Chrome");
         assertThat(ctx.getValue().resolvedGeoCountry()).isEqualTo("XX");
+        metrics.assertOnlyLogin("success");
     }
 
     @Test
@@ -236,6 +247,7 @@ class CredentialAuthenticationProviderTest {
         verify(loginEventRecorder).recordFailed(
                 eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), isNull(), eq("CREDENTIALS_INVALID"), any());
         verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any(), any());
+        metrics.assertOnlyLogin("failure");
     }
 
     @Test
@@ -350,6 +362,7 @@ class CredentialAuthenticationProviderTest {
         verifyNoInteractions(passwordHasher);
         verify(loginEventRecorder).recordFailed(
                 isNull(), eq(EMAIL_HASH), eq("iam"), isNull(), eq("LOGIN_TENANT_AMBIGUOUS"), any());
+        metrics.assertOnlyLogin("failure");
     }
 
     @Test
@@ -380,6 +393,7 @@ class CredentialAuthenticationProviderTest {
         verify(loginEventRecorder).recordFailed(
                 isNull(), eq(EMAIL_HASH), eq("fan-platform"), isNull(), eq("CREDENTIALS_INVALID"), any());
         verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any(), any());
+        metrics.assertOnlyLogin("failure");
     }
 
     @Test
@@ -424,6 +438,8 @@ class CredentialAuthenticationProviderTest {
 
         assertThat(result.isAuthenticated()).isTrue();
         assertThat(result.getName()).isEqualTo(EMAIL);
+        // TASK-BE-664: the metric does not depend on the event write succeeding.
+        metrics.assertOnlyLogin("success");
     }
 
     @Test
@@ -449,6 +465,8 @@ class CredentialAuthenticationProviderTest {
                 .isInstanceOf(BadCredentialsException.class);
 
         verifyNoInteractions(loginEventRecorder);
+        // TASK-BE-664: not a login attempt against an identity — not counted either.
+        metrics.assertNoLogin();
     }
 
     @Test
@@ -535,24 +553,37 @@ class CredentialAuthenticationProviderTest {
         assertThat(result.isAuthenticated()).isTrue();
         verify(accountServicePort).getAccountStatus("acc-1", "acme-corp");
         verify(loginEventRecorder).recordSucceeded(eq("acc-1"), eq("acme-corp"), isNull(), any());
+        metrics.assertOnlyLogin("success");
     }
 
     @Test
     @DisplayName("BE-600 AC-1/AC-2: LOCKED + right password → identical to a wrong password; failed=ACCOUNT_LOCKED")
     void lockedAccount_rejectedLikeWrongPassword() {
         assertRejectedLikeWrongPassword("LOCKED", "ACCOUNT_LOCKED");
+        // TASK-BE-664: two attempts ran (the wrong-password reference, then the locked one). The
+        // response is identical, but the internal metric tells them apart.
+        assertThat(metrics.login("failure")).isEqualTo(1.0);
+        assertThat(metrics.login("account_locked")).isEqualTo(1.0);
+        assertThat(metrics.login("success")).isZero();
+        assertThat(metrics.login("rate_limited")).isZero();
     }
 
     @Test
     @DisplayName("BE-600 AC-1/AC-2: DORMANT + right password → identical to a wrong password; failed=ACCOUNT_DORMANT")
     void dormantAccount_rejectedLikeWrongPassword() {
         assertRejectedLikeWrongPassword("DORMANT", "ACCOUNT_DORMANT");
+        // TASK-BE-664: the reference wrong password + the DORMANT rejection — both failures.
+        assertThat(metrics.login("failure")).isEqualTo(2.0);
+        assertThat(metrics.login("account_locked")).isZero();
+        assertThat(metrics.login("success")).isZero();
     }
 
     @Test
     @DisplayName("BE-600 AC-1/AC-2: DELETED + right password → identical to a wrong password; failed=ACCOUNT_DELETED")
     void deletedAccount_rejectedLikeWrongPassword() {
         assertRejectedLikeWrongPassword("DELETED", "ACCOUNT_DELETED");
+        assertThat(metrics.login("failure")).isEqualTo(2.0);
+        assertThat(metrics.login("account_locked")).isZero();
     }
 
     @Test
@@ -576,6 +607,8 @@ class CredentialAuthenticationProviderTest {
         verify(loginEventRecorder).recordFailed(
                 eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), isNull(), eq("CREDENTIALS_INVALID"), any());
         verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), eq("ACCOUNT_LOCKED"), any());
+        // TASK-BE-664: wrong password wins — a failure, not account_locked.
+        metrics.assertOnlyLogin("failure");
     }
 
     @Test
@@ -592,6 +625,8 @@ class CredentialAuthenticationProviderTest {
         verify(loginEventRecorder).recordAttempted(eq("acc-1"), eq(EMAIL_HASH), eq("acme-corp"), isNull(), any());
         verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), any(), any());
         verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any(), any());
+        // TASK-BE-664: no failed event (no enum value), but a counted failure.
+        metrics.assertOnlyLogin("failure");
     }
 
     @Test
@@ -624,6 +659,8 @@ class CredentialAuthenticationProviderTest {
         verify(loginEventRecorder, never()).recordSucceeded(any(), any(), any(), any());
         verify(loginEventRecorder, never()).recordFailed(any(), any(), any(), any(), any(), any());
         verifyNoInteractions(tenantTypePort);
+        // TASK-BE-664: fail-closed outage — not counted.
+        metrics.assertNoLogin();
     }
 
     @Test

@@ -8,6 +8,8 @@ import com.example.auth.application.exception.CredentialsInvalidException;
 import com.example.auth.application.exception.LoginRateLimitedException;
 import com.example.auth.application.exception.LoginTenantAmbiguousException;
 import com.example.auth.application.port.AccountServicePort;
+import com.example.auth.application.port.AuthMetricsPort;
+import com.example.auth.application.port.AuthMetricsPort.LoginOutcome;
 import com.example.auth.application.port.TenantTypePort;
 import com.example.auth.application.port.TokenGeneratorPort;
 import com.example.auth.application.result.AccountStatusLookupResult;
@@ -57,6 +59,13 @@ public class LoginUseCase {
     private final AuthEventPublisher authEventPublisher;
     private final RegisterOrUpdateDeviceSessionUseCase registerOrUpdateDeviceSessionUseCase;
     private final TenantTypePort tenantTypePort;
+    /**
+     * TASK-BE-664 — {@code auth_login_total{result}}, once per attempt where it is decided. This is
+     * the only auth-service path with a login rate limit, hence the only producer of
+     * {@code rate_limited} — and it has no HTTP caller (see class javadoc), so in a running service
+     * that series stays 0 until this class is revived.
+     */
+    private final AuthMetricsPort authMetrics;
 
     @Value("${auth.login.max-failure-count:5}")
     private int maxFailureCount;
@@ -79,6 +88,7 @@ public class LoginUseCase {
             // Retry-After (rate-limiting.md "429 응답은 항상 Retry-After 포함") — Layer-1
             // (gateway RateLimitFilter) already does this; Layer-2 (this counter) did not.
             long retryAfterSeconds = loginAttemptCounter.getTtlSeconds(tenantIdForRateLimit, emailHash);
+            authMetrics.loginAttempt(LoginOutcome.RATE_LIMITED);
             throw new LoginRateLimitedException(retryAfterSeconds);
         }
 
@@ -107,6 +117,7 @@ public class LoginUseCase {
 
         TokenPair tokenPair =
                 issueTokensAndPublishSuccess(accountId, resolvedTenantId, emailHash, ctx);
+        authMetrics.loginAttempt(LoginOutcome.SUCCESS);
         return LoginResult.of(tokenPair.accessToken(), tokenPair.refreshToken(), tokenPair.expiresIn());
     }
 
@@ -138,6 +149,7 @@ public class LoginUseCase {
                     credentials.size(), emailHash);
             authEventPublisher.publishLoginFailed(null, emailHash, tenantIdForRateLimit,
                     "LOGIN_TENANT_AMBIGUOUS", 0, ctx);
+            authMetrics.loginAttempt(LoginOutcome.FAILURE);
             throw new LoginTenantAmbiguousException();
         }
         Credential credential = credentials.get(0);
@@ -216,11 +228,16 @@ public class LoginUseCase {
         int newCount = loginAttemptCounter.getFailureCount(tenantId, emailHash);
         authEventPublisher.publishLoginFailed(accountId, emailHash, tenantId,
                 "CREDENTIALS_INVALID", newCount, ctx);
+        authMetrics.loginAttempt(LoginOutcome.FAILURE);
         throw new CredentialsInvalidException();
     }
 
     private void checkAccountStatus(String status, String accountId, String emailHash,
                                      String tenantId, SessionContext ctx) {
+        if (!"ACTIVE".equals(status)) {
+            authMetrics.loginAttempt("LOCKED".equals(status)
+                    ? LoginOutcome.ACCOUNT_LOCKED : LoginOutcome.FAILURE);
+        }
         switch (status) {
             case "ACTIVE" -> { /* proceed */ }
             case "LOCKED" -> {
