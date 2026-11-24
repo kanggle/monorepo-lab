@@ -8,7 +8,7 @@ console-web `shared/api/errors.ts` — 본문이 같은 `*UnavailableError` 20�
 
 # Status
 
-review
+done
 
 # Owner
 
