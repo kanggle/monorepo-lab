@@ -7,22 +7,30 @@ Assumptions: [`README.md`](README.md) § Environment.
 `rate(auth_login_total{result="failure"}[5m]) > 20` for 5 minutes, severity `warning` — more than
 20 failed logins per second.
 
-🔴 **No code in this repository exports `auth_login_total`.** `auth-service/observability.md` lists
-it as required, but searching `projects/iam-platform/apps/*/src/main` and `libs/*/src/main` finds
-no `auth_login_total` / `auth.login` meter (auth-service registers meters only in
-`OutboxLagMetric`, `AuthOutboxPublisher`, `AccountLockedConsumer`, `KafkaConsumerConfig`). Until
-something exports it, **this alert cannot fire** and its silence says nothing about logins. Confirm:
+The metric is exported by `infrastructure/metrics/MicrometerAuthMetrics` (TASK-BE-664, through
+`application/port/AuthMetricsPort`), once per login attempt, `result` ∈
+`success` / `failure` / `rate_limited` / `account_locked`. Counted in: the form login
+(`infrastructure/.../CredentialAuthenticationProvider.authenticate` — the only live password path),
+social login (`application/OAuthLoginUseCase.resolveBrowserLogin`, after the account is resolved),
+and `application/LoginUseCase` (no HTTP entry point today).
+
+What `failure` does **not** include: infrastructure faults — account-service unreachable
+(fail-closed `AuthenticationServiceException`) or a social-callback failure before the account is
+resolved. Those are deliberately left out so an outage does not look like credential stuffing.
+🔴 `result="rate_limited"` is 0 in practice: the live form login has no login rate limit (owner
+decision, TASK-BE-599); only `LoginUseCase` has one. Before TASK-BE-664 (2026-11-24) the metric did
+not exist and auth-service was not scraped at all, so history before that date is empty.
+
+Sanity check that the series is being scraped:
 
 ```bash
-docker exec iam-prometheus wget -qO- --post-data='query=count(auth_login_total)' http://localhost:9090/api/v1/query
+docker exec iam-prometheus wget -qO- --post-data='query=sum by (result) (auth_login_total)' http://localhost:9090/api/v1/query
 ```
 
-Empty result = still not exported. If you are reading this because it did fire, someone has since
-added the metric — read its exporting class first; the rest of this page then still applies.
-
-Login failures are still observable through the events auth-service emits
-(`LoginEventRecorder.recordFailed` → `auth.login.failed`) and through security-service's history of
-them. That is what the checks below use.
+Empty result = auth-service is not being scraped (see `service-down.md`). Login failures are also
+observable through the events auth-service emits (`LoginEventRecorder.recordFailed` →
+`auth.login.failed`) and through security-service's history of them — the checks below use that to
+find *who* is failing.
 
 ## 2. First checks
 

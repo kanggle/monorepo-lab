@@ -43,7 +43,7 @@ docker compose -f projects/iam-platform/docker-compose.yml ps
 |---|---|
 | The `bootRun` process exited or was never started | `health=000` above; the terminal that ran `./gradlew :apps:<service>:bootRun` shows the stack trace |
 | Boot failed because MySQL / Redis / Kafka is down or unhealthy | `docker compose ... ps` shows `iam-mysql` / `iam-redis` / `iam-kafka` not `healthy`; app log has a connection error |
-| `health=200` but `prometheus=404` | `/actuator/prometheus` is not exposed. gateway, security and admin set `management.endpoints.web.exposure.include` with `prometheus` (`apps/*/src/main/resources/application.yml`); **auth-service and account-service set no exposure in the repository — not verified whether another source supplies it** |
+| `health=200` but `prometheus=404` | `/actuator/prometheus` is not exposed. All five services set `management.endpoints.web.exposure.include` with `prometheus` (`apps/*/src/main/resources/application.yml`) — auth-service and account-service only since TASK-BE-664 (2026-11-24), so a build older than that shows exactly this for `:8081` / `:8082` |
 | `/api/v1/targets` `lastError` mentions DNS / `host.docker.internal` | The Prometheus container cannot resolve the host. The compose file declares no `extra_hosts` for `iam-prometheus` (`docker-compose.yml:289-310`); Docker Desktop provides the name by itself, a plain Linux engine may not — not verified |
 | Prometheus itself is the target (`job="prometheus"`) | `docker compose -f projects/iam-platform/docker-compose.yml ps prometheus` |
 

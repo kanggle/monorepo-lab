@@ -8,13 +8,18 @@ Assumptions: [`README.md`](README.md) § Environment.
 token that was already rotated was presented again. Possible token theft, or a client that raced its
 own rotation outside the grace window.
 
-🔴 **No code in this repository exports `auth_token_reuse_detected_total`** (searched
-`projects/iam-platform/apps/*/src/main` and `libs/*/src/main`; `auth-service/observability.md`
-lists it as required). This alert cannot fire today, so **a quiet alert does not mean no reuse**.
-Confirm and use the other signals below:
+Exported by `infrastructure/metrics/MicrometerAuthMetrics` (TASK-BE-664), incremented once per
+detection **before** the family is revoked and before the event is written — so it counts even when
+publishing `auth.token.reuse.detected` fails. Counted in `application/RefreshTokenUseCase.execute`
+(`/api/auth/refresh`) and `SasRefreshTokenAuthenticationProvider.rejectReplay` (`/oauth2/token`).
+Not counted: a re-submission inside the grace window, and a token that was never rotated. 🔴 A
+replay of an **already-dead** family is counted (and so fires this critical alert) although it
+writes no event — check the log line below before assuming a fresh theft. Before TASK-BE-664
+(2026-11-24) the metric did not exist and auth-service was not scraped, so history before that date
+is empty.
 
 ```bash
-docker exec iam-prometheus wget -qO- --post-data='query=count(auth_token_reuse_detected_total)' http://localhost:9090/api/v1/query
+docker exec iam-prometheus wget -qO- --post-data='query=increase(auth_token_reuse_detected_total[1h])' http://localhost:9090/api/v1/query
 ```
 
 What the code does on reuse (`SasRefreshTokenAuthenticationProvider.handleReuse`, line ~659): it

@@ -18,8 +18,8 @@ Created by TASK-MONO-835: until then every `runbook:` link in this project point
 | [`high-latency-p99.md`](high-latency-p99.md) | `HighLatencyP99` | One service whose p99 request latency stays above 1 second |
 | [`gateway-jwt-failure-spike.md`](gateway-jwt-failure-spike.md) | `GatewayJwtFailureSpike` | The edge rejecting more than 5 access tokens per second |
 | [`gateway-rate-limit-exceeded.md`](gateway-rate-limit-exceeded.md) | `GatewayRateLimitExceeded` | The edge answering 429 more than 10 times per second |
-| [`auth-login-failure-spike.md`](auth-login-failure-spike.md) | `AuthLoginFailureSpike` | Login failures; **the alert's metric is not exported today** |
-| [`auth-refresh-token-reuse.md`](auth-refresh-token-reuse.md) | `AuthRefreshTokenReuseDetected` | Refresh-token replay; **the alert's metric is not exported today** |
+| [`auth-login-failure-spike.md`](auth-login-failure-spike.md) | `AuthLoginFailureSpike` | More than 20 failed logins per second (infrastructure faults excluded) |
+| [`auth-refresh-token-reuse.md`](auth-refresh-token-reuse.md) | `AuthRefreshTokenReuseDetected` | A rotated refresh token presented again — possible theft |
 | [`auth-outbox-lag-high.md`](auth-outbox-lag-high.md) | `AuthOutboxLagHigh` | `auth_outbox` rows not reaching Kafka |
 | [`account-outbox-lag-high.md`](account-outbox-lag-high.md) | `AccountOutboxLagHigh` | `account_outbox` rows not reaching Kafka |
 | [`security-consumer-lag-high.md`](security-consumer-lag-high.md) | `SecurityConsumerLagHigh` | security-service falling behind its Kafka topics |
@@ -62,11 +62,13 @@ Read this once; the runbooks do not repeat it.
   (the broker's own healthcheck, `docker-compose.yml:150`, uses that path and listener).
 - **Redis:** `docker exec iam-redis redis-cli -a redispass …` — `redispass` is the compose default
   (`docker-compose.yml:90`); use `REDIS_PASSWORD` instead if it was overridden.
-- **Actuator on the apps:** gateway, security and admin declare
-  `management.endpoints.web.exposure.include` containing `prometheus` in their `application.yml`.
-  **auth-service and account-service declare no exposure setting in the repository** (searched
-  `apps/*/src/main/resources` and `libs/*/src/main`); whether `/actuator/prometheus` answers on
-  `:8081` / `:8082` is **not verified** — `service-down.md` § 3 says how to test it.
+- **Actuator on the apps:** all five declare `management.endpoints.web.exposure.include` with
+  `prometheus` in their `application.yml` (auth's and account's `SecurityConfig` `permitAll`
+  `/actuator/**`; the other three were not re-checked here).
+  🔴 auth-service and account-service only since TASK-BE-664 (2026-11-24) — before that their
+  `/actuator/prometheus` answered 404 and **none** of their metrics (outbox lag included) reached
+  Prometheus. An old checkout or image without that change shows the same symptom; `service-down.md`
+  § 3 says how to test it.
 - **Demo host (EC2):** same container names; reach them through `ssm` instead of a local shell.
   How the apps are run there is not verified.
 

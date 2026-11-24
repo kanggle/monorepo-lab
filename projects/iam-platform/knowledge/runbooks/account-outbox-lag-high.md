@@ -44,9 +44,10 @@ docker compose -f projects/iam-platform/docker-compose.yml ps kafka
 
 Log (the `bootRun` terminal of account-service): `Failed to publish outbox row <id> (<event_type>)`,
 `Outbox poll failed`. If the series is absent entirely, account-service is not being scraped:
-`service-down.md` — and note there that **account-service sets no actuator exposure in the
-repository**, so check `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8082/actuator/prometheus`
-before trusting any silence from this alert.
+`service-down.md`. account-service only exposes `/actuator/prometheus` since TASK-BE-664
+(2026-11-24); on an older build it answers 404 and this alert can never fire, so check
+`curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8082/actuator/prometheus` (expect `200`)
+before trusting any silence from it.
 
 ## 3. Likely causes and how to confirm each
 
