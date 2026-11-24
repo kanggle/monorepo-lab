@@ -220,10 +220,10 @@ _(없음)_
 
 ## review
 
-- `TASK-MONO-830-retire-unconsumed-java-notification-library.md` — **소비자 0 인 `libs/java-notification` 삭제 + 루트 `.gitignore` 에 `runs/`** (REVIEW, 2026-11-24 UTC · 소유자 결정 «1번으로 진행 4번을 함께»). 결정 기록 = `ADR-MONO-043` § 8(이 기안 PR). 범위 = 모듈 23파일 · `settings.gradle` 한 줄 · `ci.yml` `GRADLE_TASKS_CORE` 한 줄 · 정책 카탈로그 행. AC-0 = 소비자 0 재측정(0 아니면 STOP) · AC-3 = 가드 **전수**(스테이지 뒤) · AC-5 = Build & Test 가 **실행되어** success. 분석=Opus 5.5 / 구현 권장=Sonnet.
-
 
 ## done
+
+- ✅ `TASK-MONO-830-retire-unconsumed-java-notification-library.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4657 머지, `4eab8ccc7`, 실패 0 · SUCCESS 46 · SKIPPED 26) · 기안 #4656(`2001ffd10`, `ADR-MONO-043` § 8 = 소유자 결정 «폐기»). 소비자 0 인 `libs/java-notification` 23파일 + `settings.gradle` · `ci.yml` `GRADLE_TASKS_CORE` · 정책 카탈로그 행 삭제, 루트 `.gitignore` 에 `/runs/`. AC-5 = Build & Test (JDK 21, Linux) **실행되어** SUCCESS. AC-4 = 메인 체크아웃 `git status` 깨끗 · `check-ignore` → `.gitignore:113:/runs/`. AC-3 = 가드 40개 중 39 초록(`check-prerendered-demo-verdict` 는 로컬 env 부재로 rc=1 → CI `frontend-checks` 에서 초록) · ⚪ `check-erp-single-tenant-ratchet` 1개 측정 불가 — 실행 중인 erp DB 를 읽는 가드라 데모 스택이 필요하고 CI 에도 없다; 입력(erp 테넌트 데이터)이 이 삭제와 겹치지 않는다.
 
 - ✅ `TASK-MONO-648-capture-every-page-for-the-application-portfolio.md` — **DONE 2026-11-24 UTC (4-dim verified)** — 세 앱 전 페이지 포트폴리오 촬영(09-08 기안 · 여러 창). 마지막 impl PR #4652(`dfc9a37af`, 실패 0 — 사전 점검 오탐 둘: 카드 요소 수 · 인라인 스크립트 문구). 38차 창: 108 페이지 · demo-corp 88 · ecommerce 콘솔 54 · 동적 13/17(남은 4 = 권한, 10-26 결정 ⚪) · AC-2 «652 뒤 재촬영» = `/erp/masters` UUID 0. AC 처분 표 = 티켓 끝 § AC 처분. 촬영본은 `portfolio-captures/`(gitignored).
 
