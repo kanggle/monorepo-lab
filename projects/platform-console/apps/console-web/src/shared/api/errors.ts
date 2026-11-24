@@ -177,6 +177,42 @@ export class AssumeTenantError extends Error {
   }
 }
 
+/** Why a domain section degraded (the shared `*UnavailableError` signal). */
+export type UnavailableReason = 'timeout' | 'circuit_open' | 'downstream';
+
+/**
+ * Shared shape of the per-domain `*UnavailableError` degrade signals below
+ * (TASK-PC-FE-386). Each subclass stays its own class — callers branch on
+ * `instanceof <Domain>UnavailableError`, so one section's degrade never
+ * catches another's — and each keeps its own JSDoc describing that domain's
+ * degrade contract. Only the identical body moved here.
+ *
+ * 🔴 `name` is passed as a string LITERAL by every subclass, never derived
+ *    from `new.target.name`: a minified production bundle renames classes,
+ *    and the name is what logs and error boundaries see.
+ * 🔴 Fields are plain declarations, NOT `declare`: the app targets ES2022
+ *    (`useDefineForClassFields`), so `reason` / `code` are defined right after
+ *    `super()` and `name` is added after them — own-property order
+ *    `reason, code, name`, exactly what the 20 hand-written classes produced
+ *    (measured on the pre-386 file). `declare` would reorder it to
+ *    `name, reason, code`.
+ */
+export abstract class DomainUnavailableError extends Error {
+  readonly reason: UnavailableReason;
+  readonly code: string;
+  protected constructor(
+    name: string,
+    reason: UnavailableReason,
+    code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = name;
+    this.reason = reason;
+    this.code = code;
+  }
+}
+
 /**
  * IAM accounts surface degrade signal (console-integration-contract § 2.4.1 /
  * § 2.5). Mirrors {@link RegistryUnavailableError}: a `503 DOWNSTREAM_ERROR` /
@@ -189,18 +225,9 @@ export class AssumeTenantError extends Error {
  * {@link ApiError} too so the UI can render an inline actionable message
  * without crashing. No token / PII is ever placed in this error.
  */
-export class AccountsUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: AccountsUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'AccountsUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class AccountsUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('AccountsUnavailableError', reason, code, message);
   }
 }
 
@@ -218,18 +245,9 @@ export class AccountsUnavailableError extends Error {
  * an inline actionable message without crashing. No token / audit-row PII
  * is ever placed in this error.
  */
-export class AuditUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: AuditUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'AuditUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class AuditUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('AuditUnavailableError', reason, code, message);
   }
 }
 
@@ -251,18 +269,9 @@ export class AuditUnavailableError extends Error {
  * renders an inline actionable message without crashing. No token /
  * operator email / password is ever placed in this error.
  */
-export class OperatorsUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: OperatorsUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'OperatorsUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class OperatorsUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('OperatorsUnavailableError', reason, code, message);
   }
 }
 
@@ -282,18 +291,9 @@ export class OperatorsUnavailableError extends Error {
  * {@link ApiError} so the UI renders an inline actionable message without
  * crashing. No token / PII is ever placed in this error.
  */
-export class RbacUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: RbacUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'RbacUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class RbacUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('RbacUnavailableError', reason, code, message);
   }
 }
 
@@ -318,18 +318,9 @@ export class RbacUnavailableError extends Error {
  * it; the #569 invariant is GAP-domain-scoped — § 2.4.5). No token / PII is
  * ever placed in this error.
  */
-export class WmsUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: WmsUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'WmsUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class WmsUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('WmsUnavailableError', reason, code, message);
   }
 }
 
@@ -358,18 +349,9 @@ export class WmsUnavailableError extends Error {
  * requires the IAM OIDC token; the #569 invariant is GAP-domain-scoped —
  * § 2.4.5.1). No token / PII is ever placed in this error.
  */
-export class WmsOutboundUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: WmsOutboundUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'WmsOutboundUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class WmsOutboundUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('WmsOutboundUnavailableError', reason, code, message);
   }
 }
 
@@ -399,18 +381,9 @@ export class WmsOutboundUnavailableError extends Error {
  * `{ code, message, timestamp }` (DISTINCT from wms's nested
  * `{ error: { code } }`). No token / PII is ever placed in this error.
  */
-export class ScmUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: ScmUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'ScmUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class ScmUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('ScmUnavailableError', reason, code, message);
   }
 }
 
@@ -464,18 +437,9 @@ export class ScmRateLimitedError extends Error {
  * **flat** `{ code, message, details?, timestamp }` (DISTINCT from wms's nested
  * `{ error: { code } }`). No token / PII is ever placed in this error.
  */
-export class ScmReplenishmentUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: ScmReplenishmentUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'ScmReplenishmentUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class ScmReplenishmentUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('ScmReplenishmentUnavailableError', reason, code, message);
   }
 }
 
@@ -511,18 +475,9 @@ export class ScmReplenishmentUnavailableError extends Error {
  * balance / txn / account-ref is ever placed in this error
  * (confidential + F7).
  */
-export class FinanceUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: FinanceUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'FinanceUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class FinanceUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('FinanceUnavailableError', reason, code, message);
   }
 }
 
@@ -562,18 +517,9 @@ export class FinanceUnavailableError extends Error {
  * account code / reconciliation amount is ever placed in this error
  * (confidential + F7).
  */
-export class LedgerUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: LedgerUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'LedgerUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class LedgerUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('LedgerUnavailableError', reason, code, message);
   }
 }
 
@@ -615,18 +561,9 @@ export class LedgerUnavailableError extends Error {
  * cost-center sensitive attrs is ever placed in this error
  * (confidential + audit-heavy).
  */
-export class ErpUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: ErpUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'ErpUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class ErpUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('ErpUnavailableError', reason, code, message);
   }
 }
 
@@ -664,18 +601,9 @@ export class ErpUnavailableError extends Error {
  * `Idempotency-Key`/`version` — confirm-gate + producer state guards are the
  * double-submit defence. No token / PII is ever placed in this error.
  */
-export class EcommerceUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: EcommerceUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'EcommerceUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class EcommerceUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('EcommerceUnavailableError', reason, code, message);
   }
 }
 
@@ -687,18 +615,9 @@ export class EcommerceUnavailableError extends Error {
  * TASK-MONO-748/759), and the agency screen renders that code as its own state. The code is
  * carried here so the screen can tell the two apart.
  */
-export class FanUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: FanUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'FanUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class FanUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('FanUnavailableError', reason, code, message);
   }
 }
 
@@ -716,18 +635,9 @@ export class FanUnavailableError extends Error {
  * No `subjectToken` value is ever placed in this error or logged (the § 2.1
  * invariant — the token is only the onboarding `subjectToken` input).
  */
-export class OnboardingUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: OnboardingUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'OnboardingUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class OnboardingUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('OnboardingUnavailableError', reason, code, message);
   }
 }
 
@@ -747,18 +657,9 @@ export class OnboardingUnavailableError extends Error {
  * the resume affordance — a suspended/cancelled row exists). No token / tenant
  * PII is ever placed in this error.
  */
-export class SubscriptionsUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: SubscriptionsUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'SubscriptionsUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class SubscriptionsUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('SubscriptionsUnavailableError', reason, code, message);
   }
 }
 
@@ -781,18 +682,9 @@ export class SubscriptionsUnavailableError extends Error {
  * raised as {@link ApiError} so the UI renders an inline actionable message
  * without crashing. No token / tenant PII is ever placed in this error.
  */
-export class PartnershipsUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: PartnershipsUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'PartnershipsUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class PartnershipsUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('PartnershipsUnavailableError', reason, code, message);
   }
 }
 
@@ -812,18 +704,9 @@ export class PartnershipsUnavailableError extends Error {
  * {@link ApiError} so the UI renders an inline actionable message without
  * crashing. No token / tenant PII is ever placed in this error.
  */
-export class TenantsUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: TenantsUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'TenantsUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class TenantsUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('TenantsUnavailableError', reason, code, message);
   }
 }
 
@@ -846,18 +729,9 @@ export class TenantsUnavailableError extends Error {
  * inline actionable message without crashing. No token / org PII is ever
  * placed in this error.
  */
-export class OrgNodesUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: OrgNodesUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'OrgNodesUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class OrgNodesUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('OrgNodesUnavailableError', reason, code, message);
   }
 }
 
@@ -881,18 +755,9 @@ export class OrgNodesUnavailableError extends Error {
  * {@link ApiError} so the UI renders an inline actionable message without
  * crashing. No token / group PII is ever placed in this error.
  */
-export class GroupsUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: GroupsUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'GroupsUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class GroupsUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('GroupsUnavailableError', reason, code, message);
   }
 }
 
@@ -916,18 +781,9 @@ export class GroupsUnavailableError extends Error {
  * (status honesty, ADR-083 D9); no error/message here may claim otherwise.
  * No token / PII is ever placed in this error.
  */
-export class DomainPermissionSetsUnavailableError extends Error {
-  readonly reason: 'timeout' | 'circuit_open' | 'downstream';
-  readonly code: string;
-  constructor(
-    reason: DomainPermissionSetsUnavailableError['reason'],
-    code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'DomainPermissionSetsUnavailableError';
-    this.reason = reason;
-    this.code = code;
+export class DomainPermissionSetsUnavailableError extends DomainUnavailableError {
+  constructor(reason: UnavailableReason, code: string, message: string) {
+    super('DomainPermissionSetsUnavailableError', reason, code, message);
   }
 }
 
