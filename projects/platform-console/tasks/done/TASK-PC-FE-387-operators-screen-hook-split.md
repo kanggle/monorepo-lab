@@ -8,7 +8,7 @@ console-web `OperatorsScreen.tsx`(893줄) 상태 · 변이 · 핸들러를 `use-
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -94,3 +94,8 @@ platform-console
 # Definition of Done
 
 - AC 전부 · PR CI 초록 · 머지.
+
+## CORRECTION (close chore, 2026-11-24 UTC)
+
+- AC-5 재대조(구현 에이전트 보고와 별개로 직접): 원본 `const [statusFilter` ~ `return (` 직전 vs 훅 파일 같은 구간 — 차이 = 원본의 `return (` 앞 빈 줄 1개뿐 · JSX 구간 바이트 동일.
+- 구현 뒤 JSDoc MODULE SPLIT 문장(«이 컨테이너가 모든 상태를 소유한다»)이 훅 분리와 어긋나 같은 PR 에서 문구를 맞췄다(커밋 `51a8cee7a`).
