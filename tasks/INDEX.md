@@ -220,10 +220,10 @@ _(없음)_
 
 ## review
 
-- `TASK-MONO-832-shared-library-catalog-drift-and-guard.md` — **공유 라이브러리 카탈로그에 빠진 4개 채우기 + `settings.gradle` ↔ 카탈로그 가드** (REVIEW, 2026-11-24 UTC · 소유자 «진행해»). 실측: 루트 `libs:*` 12 · 카탈로그 8 — 빠진 것 `java-security-servlet`(07-13) · `payment-core/portone/toss`(07-24). § Change Rule «카탈로그를 먼저» 를 넉 달 동안 네 PR 이 지나쳤다. 새 가드 `check-shared-lib-catalog.sh` = 양방향 · 프로젝트 전용 libs 제외 · 표 행만 셈 · 사본 변형 self-test. `scripts/` 추가 → 가드 전수 + 개수 산문 집. 분석=Opus 5.5 / 구현 권장=Sonnet.
-
 
 ## done
+
+- ✅ `TASK-MONO-832-shared-library-catalog-drift-and-guard.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4663 머지, `4daf076d2`, 실패 0 · SUCCESS 43 · SKIPPED 30) · 기안 #4662. 카탈로그에 빠진 4행(`java-security-servlet` · `payment-core/portone/toss`, Consumers 실측 · 프로젝트 이름까지만) + 새 가드 `check-shared-lib-catalog.sh`(양방향 · 프로젝트 전용 libs 제외 · self-test 12) + `ci.yml` 잡 + 가드 수 산문 68→69. AC-5 = `Shared-library catalog …` 잡 **실행되어** SUCCESS. 🔵 scm e2e 첫 실행 실패는 Maven Central **HTTP 429**(로그로 측정, 컴파일 전 의존성 다운로드) → 실패 잡 재실행 SUCCESS. AC-4 비0 둘(erp 래칫 · prerendered verdict)은 830 과 같은 환경 전제.
 
 - ✅ `TASK-MONO-824-portfolio-sync-token-renewal-before-2026-12-10.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4660 머지, `b8ea54773`, 실패 0 — 티켓 기록만, 코드 없음). 소유자 결정으로 날짜 게이트(12-01)보다 앞당겨 **조기 갱신**. AC-1 새 만료 2027-02-23(소유자 화면) · AC-2 (a) 시크릿 `updated_at` `2026-09-11T09:35:09Z` → `2026-11-24T15:02:11Z` · (b) dry-run run `45420888950` success(push 7/7 · Workflows 탐침 7/7 409) · AC-3 다음 갱신 `TASK-MONO-831`(⏳ 2027-02-14, #4659).
 
