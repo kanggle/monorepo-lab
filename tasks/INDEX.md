@@ -207,7 +207,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-834-alert-rule-metrics-must-exist-guard.md` — **배포 알림 규칙이 조회하는 metric 은 실제로 있어야 한다 — 가드 + wms 의 iam 복사본 알림 교체** (IN-PROGRESS, 2026-11-24 UTC). 🔴 선행 `TASK-BE-662`(iam 4 metric 구현). wms `alert-rules.yml` 은 iam 것과 알림 목록이 동일(wms 서비스 알림 0개). ecommerce 의 «없음» 1건은 `libs/` 를 안 본 측정의 오탐 → 가드 모집단에 `libs/`. 분석=Opus 5.5 / 구현 권장=Sonnet.
+_(없음)_
 
 
 
@@ -219,6 +219,8 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 
 ## review
+
+- `TASK-MONO-834-alert-rule-metrics-must-exist-guard.md` — **배포 알림 규칙이 조회하는 metric 은 실제로 있어야 한다 — 가드 + wms 의 iam 복사본 알림 교체** (REVIEW, 2026-11-24 UTC). 🔴 선행 `TASK-BE-662`(iam 4 metric 구현). wms `alert-rules.yml` 은 iam 것과 알림 목록이 동일(wms 서비스 알림 0개). ecommerce 의 «없음» 1건은 `libs/` 를 안 본 측정의 오탐 → 가드 모집단에 `libs/`. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 
 ## done
