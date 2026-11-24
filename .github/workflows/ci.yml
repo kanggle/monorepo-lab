@@ -3046,7 +3046,6 @@ jobs:
         :libs:java-common:check
         :libs:java-gateway:check
         :libs:java-messaging:check
-        :libs:java-notification:check
         :libs:java-observability:check
         :libs:java-security:check
         :libs:java-security-servlet:check

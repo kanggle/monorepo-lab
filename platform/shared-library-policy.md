@@ -21,7 +21,6 @@ They must not become a container for service-specific business logic.
 | `libs/java-common` | framework-neutral technical utilities | most services |
 | `libs/java-gateway` | **reactive** (WebFlux / Spring Cloud Gateway) edge plumbing — error envelope + writer, request-id / retry-after filters, the fail-open rate-limiter decorator, the shared reactive security chain, and the token/identity boundary: allowed-issuer validator, parameterized tenant gate, identity-header strip (add-only baseline) + JWT header enrichment, claim extractors, JWT decoder + validator-chain assembly | **gateway services only** (wms, scm, fan, ecommerce). Not iam — its gateway is an independent implementation (ADR-MONO-048 § D2) |
 | `libs/java-messaging` | messaging / outbox transport scaffolding (ADR-MONO-004) | event producers + consumers |
-| `libs/java-notification` | 🗑️ **폐기 예정** — 소비자 0, `ADR-MONO-043` § 8 (2026-11-24 UTC). 삭제는 `TASK-MONO-830`. 새로 의존하지 마라 | (없음) |
 | `libs/java-observability` | tracing / metrics helpers | most services |
 | `libs/java-security` | JWT signing/verification, password hashing, TOTP (RFC 6238) code generation/verification | auth-side services |
 | `libs/java-test-support` | test fixtures + helpers | test source sets |

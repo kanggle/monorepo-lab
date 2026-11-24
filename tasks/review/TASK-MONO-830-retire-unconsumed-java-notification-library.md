@@ -8,7 +8,7 @@ TASK-MONO-830
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -55,11 +55,11 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] AC-0: 착수 직전 재측정 — `projects/**` 에서 `java-notification` 의존 · `com.example.platform.notification` import 가 **여전히 0**. 0 이 아니면 STOP(새 소비자가 생겼다 = § 8 의 근거 1 이 무너졌다).
-- [ ] AC-1: 삭제 뒤 `java-notification` · `com.example.platform.notification` 이 `tasks/done/**` · `tasks/INDEX.md` · `projects/*/tasks/INDEX.md` · `docs/adr/ADR-MONO-043-*` **밖에서 0건**(Grep 결과를 PR 본문에).
-- [ ] AC-2: `./gradlew help` 가 설정 단계 성공(모듈 등록 해제가 깨뜨린 참조 없음) + `./gradlew :assertNoApiOnSharedLibs` rc=0.
-- [ ] AC-3: `scripts/` 의 가드 **전부** 실행, rc=0 (스테이지 뒤에 — CLAUDE.md § Stage Before You Run a Guard). 특히 `check-libs-ci-coverage.sh`(ci.yml ↔ libs 모듈) · `check-shared-lib-jpa-scan.sh` · `check-error-code-registry.sh`(모집단이 `libs/*/src/main`) · `check-outside-module-input-filter-coverage.sh`. 실행 목록과 rc 를 PR 본문에.
-- [ ] AC-4: `git status` 가 메인 체크아웃에서 `runs/` 를 더는 보이지 않는다(`git check-ignore -v runs/` 가 `.gitignore` 의 새 줄을 가리킨다).
+- [x] AC-0: 착수 직전 재측정 — `projects/**` 에서 `java-notification` 의존 · `com.example.platform.notification` import 가 **여전히 0**. 0 이 아니면 STOP(새 소비자가 생겼다 = § 8 의 근거 1 이 무너졌다).
+- [x] AC-1: 삭제 뒤 `java-notification` · `com.example.platform.notification` 이 `tasks/done/**` · `tasks/INDEX.md` · `projects/*/tasks/INDEX.md` · `docs/adr/ADR-MONO-043-*` **밖에서 0건**(Grep 결과를 PR 본문에).
+- [x] AC-2: `./gradlew help` 가 설정 단계 성공(모듈 등록 해제가 깨뜨린 참조 없음) + `./gradlew :assertNoApiOnSharedLibs` rc=0.
+- [x] AC-3: `scripts/` 의 가드 **전부** 실행, rc=0 (스테이지 뒤에 — CLAUDE.md § Stage Before You Run a Guard). 특히 `check-libs-ci-coverage.sh`(ci.yml ↔ libs 모듈) · `check-shared-lib-jpa-scan.sh` · `check-error-code-registry.sh`(모집단이 `libs/*/src/main`) · `check-outside-module-input-filter-coverage.sh`. 실행 목록과 rc 를 PR 본문에.
+- [x] AC-4: `git status` 가 메인 체크아웃에서 `runs/` 를 더는 보이지 않는다(`git check-ignore -v runs/` 가 `.gitignore` 의 새 줄을 가리킨다).
 - [ ] AC-5: PR CI 의 Build & Test 잡(`GRADLE_TASKS_CORE` 를 돌리는 잡)이 **실행되어** success — `SKIPPED` 는 통과가 아니다.
 
 # Related Specs
@@ -101,6 +101,20 @@ monorepo
 # Test Requirements
 
 - 코드 테스트 없음(삭제). 검증 = AC-1 Grep · AC-2 Gradle · AC-3 가드 전수 · AC-5 CI.
+
+# Implementation Evidence (2026-11-24 UTC)
+
+- **AC-0** — 착수 직전 `projects/**` 의 `*.gradle` · `*.java` · `*.kts` · `*.yml` · `*.properties` 에서 `java-notification` · `com.example.platform.notification` 검색: **0건**. 소비자 0 유지 → 진행.
+- **AC-1** — 삭제 뒤 같은 검색을 리포 전체에 (`tasks/done/**` · 각 `tasks/INDEX.md` · `docs/adr/ADR-MONO-043-*` · 이 티켓 · `build/` 제외): **0건**.
+- **AC-2** — `gradlew help` rc=0 · `gradlew :assertNoApiOnSharedLibs` rc=0 · `gradlew projects` 출력에 `java-notification` 없음.
+- **AC-3** — 스테이지 뒤 `scripts/check-*.sh` **40개 전부** 실행: **37 rc=0**, 비0 셋:
+  - `check-index-queue-drift` rc=1 → 원인은 INDEX 행을 아직 안 옮긴 것(가드가 정확히 이 티켓을 지목). 행을 옮긴 뒤 rc=0.
+  - `check-erp-single-tenant-ratchet` rc=1 — «컨테이너 `erp-platform-mysql` 가 떠 있지 않다»(데모 스택 필요, 이 변경과 무관한 환경 전제).
+  - `check-prerendered-demo-verdict` rc=1 — «`DEMO_API_BASE` 가 비어 있다»(web-store 빌드 + env 필요, 이 변경과 무관한 환경 전제).
+  - 🔵 이름으로 지목한 넷 — `check-libs-ci-coverage` · `check-shared-lib-jpa-scan` · `check-error-code-registry` · `check-outside-module-input-filter-coverage` — 전부 rc=0.
+- **AC-4** — `git check-ignore -v --no-index runs/ runs/ktg-x/a.md` → `.gitignore:113:/runs/` (rc=0). 대조: `projects/x/runs/a.md` 는 무시되지 **않음**(rc=1) — 루트 고정이 하위 `runs/` 를 먹지 않는다. 🔴 메인 체크아웃의 `git status` 에서 `?? runs/` 가 사라지는 것은 머지 후 `main` 을 당긴 뒤에 확인한다(close chore).
+- **AC-5** — PR CI 대기.
+- 범위: 29파일, +9 / −1634.
 
 # Definition of Done
 

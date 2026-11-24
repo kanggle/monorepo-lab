@@ -33,7 +33,6 @@ include(
     'libs:java-common',
     'libs:java-gateway',
     'libs:java-messaging',
-    'libs:java-notification',
     'libs:java-observability',
     'libs:java-security',
     'libs:java-security-servlet',
