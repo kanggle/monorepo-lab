@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-663-auth-outbox-lag-reads-empty-v1-table.md` — **auth `auth_outbox_lag_seconds` 가 빈 v1 `outbox` 를 읽어 늘 0 → `AuthOutboxLagHigh` 가 울릴 수 없음** (READY, 2026-11-24 UTC · 소유자 «진행해»). `TASK-BE-450` 의 «harmless» 기록이 틀렸다(알림·스펙이 이 값에 기댄다). v2 `auth_outbox` `published_at IS NULL` + `UTC_TIMESTAMP(6)` — 본보기 = `TASK-BE-662` 의 account `OutboxLagMetric`. 분석=Opus 5.5 / 구현 권장=Sonnet.
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
