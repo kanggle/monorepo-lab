@@ -78,17 +78,8 @@ export type GrantDomainSetResult = z.infer<typeof GrantDomainSetResultSchema>;
 
 /** Trimmed from the `/api/domain-permission-sets` (slice a) response — this
  *  module intentionally does NOT import `DomainPermissionSet`. */
-export const GrantableSetOptionSchema = z
-  .object({
-    setId: z.string(),
-    name: z.string(),
-    systemKey: z.string().nullable(),
-    readOnly: z.boolean(),
-    domains: z.array(z.string()),
-  })
-  .passthrough();
-export type GrantableSetOption = z.infer<typeof GrantableSetOptionSchema>;
-
-export const GrantableSetOptionListSchema = z.object({
-  items: z.array(GrantableSetOptionSchema),
-});
+export {
+  GrantableSetOptionSchema,
+  GrantableSetOptionListSchema,
+  type GrantableSetOption,
+} from '@/shared/api/grantable-domain-sets';
