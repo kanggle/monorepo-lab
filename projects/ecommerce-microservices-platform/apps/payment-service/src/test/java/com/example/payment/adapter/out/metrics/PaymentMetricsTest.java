@@ -2,6 +2,8 @@ package com.example.payment.adapter.out.metrics;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.prometheusmetrics.PrometheusConfig;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,6 +43,27 @@ class PaymentMetricsTest {
         paymentMetrics.incrementPaymentRefunded();
 
         assertThat(registry.counter("payment_refunded_total").count()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-669: 결제 실패 시 payment_failed_total{reason} 이 reason 별로 증가한다")
+    void incrementPaymentFailed_countsPerReason() {
+        paymentMetrics.incrementPaymentFailed("pg_rejected");
+        paymentMetrics.incrementPaymentFailed("pg_rejected");
+        paymentMetrics.incrementPaymentFailed("other");
+
+        assertThat(registry.counter("payment_failed_total", "reason", "pg_rejected").count()).isEqualTo(2.0);
+        assertThat(registry.counter("payment_failed_total", "reason", "other").count()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-669: 실제 PrometheusMeterRegistry scrape 에 payment_failed_total{reason=...} 로 노출된다")
+    void incrementPaymentFailed_scrapedAsPrometheusName() {
+        PrometheusMeterRegistry prom = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        new PaymentMetrics(prom).incrementPaymentFailed("pg_rejected");
+
+        String scrape = prom.scrape();
+        assertThat(scrape).contains("payment_failed_total{reason=\"pg_rejected\"} 1.0");
     }
 
     @Test

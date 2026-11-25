@@ -90,6 +90,16 @@ public class PaymentMetrics implements PaymentMetricRecorder {
     }
 
     @Override
+    public void incrementPaymentFailed(String reason) {
+        Objects.requireNonNull(reason, "reason must not be null");
+        Counter.builder("payment_failed_total")
+                .description("Total payment failures by reason")
+                .tag("reason", reason)
+                .register(registry)
+                .increment();
+    }
+
+    @Override
     public void incrementRefundStranded() {
         paymentRefundStrandedTotal.increment();
     }

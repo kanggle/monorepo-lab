@@ -8,6 +8,15 @@ public interface PaymentMetricRecorder {
 
     void incrementPaymentRefunded();
 
+    /** {@code reason} value: the PG definitively rejected the confirm (4xx) and the row was locked FAILED. */
+    String FAILED_REASON_PG_REJECTED = "pg_rejected";
+
+    /**
+     * Counts a payment that was FINALLY decided as failed (TASK-BE-669), tagged by {@code reason}.
+     * Call once, at the point the row is moved to FAILED — never on a retryable fault.
+     */
+    void incrementPaymentFailed(String reason);
+
     /**
      * Money-safety counter (TASK-BE-437): the confirm() post-capture auto-refund
      * failed at the PG, leaving captured funds stranded pending operator action.

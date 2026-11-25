@@ -67,6 +67,7 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation "org.wiremock:wiremock-standalone:${wiremockVersion}"
     testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'io.micrometer:micrometer-registry-prometheus'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:junit-jupiter'
 }

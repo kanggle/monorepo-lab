@@ -67,6 +67,7 @@ public class PaymentConfirmService {
             // declined this confirm.
             payment.fail();
             paymentRepository.save(payment);
+            paymentMetricRecorder.incrementPaymentFailed(PaymentMetricRecorder.FAILED_REASON_PG_REJECTED);
             throw e;
         } catch (PgGatewayUnavailableException e) {
             // Transport failure (5xx exhaustion / circuit open / timeout —
