@@ -18,6 +18,7 @@ import com.example.auth.application.result.SocialSignupResult;
 import com.example.common.resilience.ResilienceClientFactory;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.retry.Retry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -67,6 +68,9 @@ public class AccountServiceClient implements AccountServicePort {
     private final Environment environment;
     private final int connectTimeoutMs;
     private final int readTimeoutMs;
+    /** Registry name of this client's breaker — the {@code name} label AuthAccountServiceDown filters on. */
+    static final String CIRCUIT_BREAKER_NAME = "accountService";
+
     private final CircuitBreaker circuitBreaker;
     private final Retry retry;
     private final IamClientCredentialsTokenProvider tokenProvider;
@@ -90,11 +94,17 @@ public class AccountServiceClient implements AccountServicePort {
             Environment environment,
             @Value("${auth.account-service.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${auth.account-service.read-timeout-ms:5000}") int readTimeoutMs,
-            IamClientCredentialsTokenProvider tokenProvider) {
+            IamClientCredentialsTokenProvider tokenProvider,
+            CircuitBreakerRegistry circuitBreakerRegistry) {
         this.environment = environment;
         this.connectTimeoutMs = connectTimeoutMs;
         this.readTimeoutMs = readTimeoutMs;
-        this.circuitBreaker = ResilienceClientFactory.buildCircuitBreaker("accountService");
+        // TASK-BE-665: taken from Spring's registry (same standard config as before) so that
+        // resilience4j-micrometer exports resilience4j_circuitbreaker_state{name="accountService"},
+        // which AuthAccountServiceDown queries. A standalone CircuitBreaker.of(...) instance is
+        // unknown to that registry and exports nothing.
+        this.circuitBreaker = circuitBreakerRegistry.circuitBreaker(CIRCUIT_BREAKER_NAME,
+                ResilienceClientFactory.standardCircuitBreakerConfig().build());
         this.retry = ResilienceClientFactory.buildRetry("accountService");
         this.tokenProvider = tokenProvider;
     }

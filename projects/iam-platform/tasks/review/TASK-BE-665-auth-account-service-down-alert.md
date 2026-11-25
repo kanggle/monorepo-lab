@@ -8,7 +8,7 @@ TASK-BE-665
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -54,9 +54,9 @@ backend
 
 # Acceptance Criteria
 
-- [ ] AC-1: 테스트 ①~④ 통과 · ② 는 독립 인스턴스의 지표가 **없음** 을 단언한다.
-- [ ] AC-2: 알림 식의 label 이 테스트 scrape 에서 본 실제 이름과 같다(PR 본문에 scrape 줄 인용). `promtool check rules` SUCCESS.
-- [ ] AC-3: `check-alert-rule-metrics.sh` rc=0(runbook 링크 포함) · auth-service `test` 통과.
+- [x] AC-1: 테스트 ①~④ 통과 · ② 는 독립 인스턴스의 지표가 **없음** 을 단언한다.
+- [x] AC-2: 알림 식의 label 이 테스트 scrape 에서 본 실제 이름과 같다(PR 본문에 scrape 줄 인용). `promtool check rules` SUCCESS.
+- [x] AC-3: `check-alert-rule-metrics.sh` rc=0(runbook 링크 포함) · auth-service `test` 통과.
 - [ ] AC-4: 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께) · PR CI 실패 0.
 
 # Related Specs
@@ -81,6 +81,15 @@ backend
 # Test Requirements
 
 - 위 ①~④ · auth-service `test` · promtool · 가드 · CI.
+
+# Implementation Evidence (2026-11-25 UTC)
+
+- **변경**: `AccountServiceClient` 운영 생성자가 `CircuitBreakerRegistry` 를 받아 `registry.circuitBreaker("accountService", ResilienceClientFactory.standardCircuitBreakerConfig().build())` — 설정값 그대로. 테스트 전용 생성자는 독립 인스턴스 그대로(기존 클라이언트 테스트 5클래스 60건 PASS). 이름은 상수 `CIRCUIT_BREAKER_NAME`. `alert-rules.yml` 에 `AuthAccountServiceDown` · runbook `auth-account-service-down.md` + README 행. auth-service `testImplementation 'io.micrometer:micrometer-registry-prometheus'`(실제 scrape 용 — 런타임엔 이미 `libs/java-observability` 로 있음).
+- **AC-1** — `AccountServiceCircuitBreakerMetricsTest` 5/5(Boot metrics + Prometheus + resilience4j-spring-boot3 자체 자동 구성, 실제 scrape 문자열): ① 운영 생성자의 차단기 → `state="closed"` 1.0 ② **대조군 — `CircuitBreaker.of("accountService")` 를 open 시켜도 scrape 에 `name="accountService"` 가 없다**(이 티켓 전제의 증명) ③ `transitionToOpenState()` → `state="open"` 1.0 ④ 설정값(실패율 · 창 · 최소 호출 · half-open 호출 · open 대기) 동일 ⑤(추가) 차단기 open 이 auth-service health 를 DOWN 으로 만들지 않는다 — (a) 기본값에선 resilience4j health indicator 자체가 없다(메타데이터 `management.health.circuitbreakers.enabled` default false, auth yml 미설정) (b) 강제로 켜도 `accountService` 는 indicator 에 없고 DOWN 아님. **bite**: 운영 생성자를 `CircuitBreaker.of` 로 되돌리면 ①④ 실패 → 복원.
+- **AC-2** — 테스트 scrape 에서 본 줄: `resilience4j_circuitbreaker_state{name="accountService",state="open"} 1.0`(state 값 = closed · disabled · forced_open · half_open · metrics_only · open). 운영에선 `service="auth-service"` 가 `prometheus.yml` 정적 label 과 라이브러리 공통 태그로 붙는다. 식 = `max(resilience4j_circuitbreaker_state{service="auth-service",name="accountService",state=~"open|forced_open"}) == 1`, `for: 1m`(차단기가 10초마다 half_open 을 오가므로 `max` + 1분). `promtool check rules` SUCCESS 15 rules — 이미지 삭제.
+- **AC-3** — `check-alert-rule-metrics.sh` rc=0(«55 metric reference(s) … 20 runbook link(s)»). auth-service 전체 `test` rc=0 — **1344 tests, 실패 0**.
+- **AC-4** — 스테이지 뒤 `check-*.sh` 43: 41 rc=0, 비0 둘 = 환경 전제(erp 래칫 · prerendered verdict). `.mjs` 6/6. PR CI: 대기.
+- 🔵 남은 것(티켓 없음): auth-service 의 나머지 독립 차단기 3(`adminAssignment` · `adminOperatorFacet` · `adminOperatorInvitation`) · account-service `authService` · ecommerce order-service 1 — 알림이 없어 지표가 없어도 지금은 아무것도 안 깨진다.
 
 # Definition of Done
 

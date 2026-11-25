@@ -19,6 +19,7 @@ Created by TASK-MONO-835: until then every `runbook:` link in this project point
 | [`gateway-jwt-failure-spike.md`](gateway-jwt-failure-spike.md) | `GatewayJwtFailureSpike` | The edge rejecting more than 5 access tokens per second |
 | [`gateway-rate-limit-exceeded.md`](gateway-rate-limit-exceeded.md) | `GatewayRateLimitExceeded` | The edge answering 429 more than 10 times per second |
 | [`auth-login-failure-spike.md`](auth-login-failure-spike.md) | `AuthLoginFailureSpike` | More than 20 failed logins per second (infrastructure faults excluded) |
+| [`auth-account-service-down.md`](auth-account-service-down.md) | `AuthAccountServiceDown` | auth-service's breaker to account-service open — logins failing closed |
 | [`auth-refresh-token-reuse.md`](auth-refresh-token-reuse.md) | `AuthRefreshTokenReuseDetected` | A rotated refresh token presented again — possible theft |
 | [`auth-outbox-lag-high.md`](auth-outbox-lag-high.md) | `AuthOutboxLagHigh` | `auth_outbox` rows not reaching Kafka |
 | [`account-outbox-lag-high.md`](account-outbox-lag-high.md) | `AccountOutboxLagHigh` | `account_outbox` rows not reaching Kafka |

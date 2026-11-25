@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-665-auth-account-service-down-alert.md` — **스펙의 `AuthAccountServiceDown` 이 배포 규칙에 없고, 물을 차단기 상태 지표도 없다** (READY, 2026-11-25 UTC). `accountService` 차단기가 `CircuitBreaker.of` 독립 인스턴스라 Micrometer 레지스트리 밖 → Spring `CircuitBreakerRegistry` 로 옮기고 알림 + runbook. 대조군 테스트(독립 인스턴스는 지표 없음). 분석=Opus 5.5 / 구현 권장=Sonnet 5.5.
+(empty)
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
@@ -121,7 +121,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-665-auth-account-service-down-alert.md` — **스펙의 `AuthAccountServiceDown` 이 배포 규칙에 없고, 물을 차단기 상태 지표도 없다** (REVIEW, 2026-11-25 UTC). `accountService` 차단기가 `CircuitBreaker.of` 독립 인스턴스라 Micrometer 레지스트리 밖 → Spring `CircuitBreakerRegistry` 로 옮기고 알림 + runbook. 대조군 테스트(독립 인스턴스는 지표 없음). 분석=Opus 5.5 / 구현 권장=Sonnet 5.5.
 
 ## done
 - ✅ `TASK-BE-664-auth-account-metrics-never-scraped.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4678 머지, `e64928bb5`, 실패 0 · SUCCESS 21 · SKIPPED 52) · 기안 #4677. auth · account `/actuator/prometheus` 노출(없어서 두 서비스 metric 이 한 번도 수집 안 됨 — 662·663 의 outbox lag 포함) + 스펙 필수 `auth_login_total{result}` · `auth_token_reuse_detected_total`(`AuthMetricsPort` + `MicrometerAuthMetrics`). AC-4 = iam Build & Test · Integration A/B · E2E smoke **실행되어** SUCCESS. 티켓 정정: 살아 있는 로그인엔 rate limit 이 없어 `rate_limited` 는 운영에서 0. 후속(티켓 없음): `AuthAccountServiceDown` 은 스펙에만.
