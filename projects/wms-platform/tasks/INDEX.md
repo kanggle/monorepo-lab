@@ -89,10 +89,11 @@ _(없음)_
 
 ## review
 
-- `TASK-BE-666-grafana-dashboards-are-iam-copies.md` — **wms Grafana 대시보드 9개가 iam 복사본** (REVIEW, 2026-11-25 UTC · `TASK-MONO-837` 곁가지). 8개 바이트 동일 · auth/account/security 는 wms 에 없는 서비스 → 삭제, admin · gateway 를 wms 지표로, `wms-operations` 신설, `alerts.json` datasource uid 수정. 이름은 실제 scrape 로 확정. 분석=Opus 5.5 / 구현 권장=Sonnet 5.5.
+(empty)
 
 ## done
 
+- ✅ `TASK-BE-666-grafana-dashboards-are-iam-copies.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4691 머지, 실패 0 · SUCCESS 11) · 기안 #4690. 대시보드 9개 중 8개가 iam 바이트 복사본 → wms 에 없는 서비스 3개 삭제 · admin · gateway 를 wms 지표로 · `wms-operations` 신설 · `alerts.json` 없는 datasource uid(404) 11곳 수정. 이름은 실제 scrape 로 — 알 수 없는 이름 0(옛 36). Grafana 11.2.0 프로비저닝 7개 오류 0.
 - ✅ `TASK-BE-661-inventory-seed-lacks-wh01-warehouse-snapshot.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4568(`d5e2928b1`, 실패 0) · AC-4 36차 창 라이브 ✅
 - ✅ `TASK-BE-652-admin-settings-list-without-filters-500.md` — **DONE 2026-10-26 UTC (4-dim verified)** — impl PR #4502(`adae12ea4`, 실패 0) · AC-0 닫힘(코드·CI: run `39969962421` 83건 중 `users_noFilters…` 1건 빨강 · master-service 형제 6줄은 `:q = ''` 모양이 달라 범위 밖 — Partner·Sku null-q 실 PG 는 미측정 ⚪ · 콘솔 settings 는 GET 만, 쓰기 경로 0) · AC-1 · AC-2(34·35차 창) — 조건 없는 `GET /settings` 500 수선. 기록 = 티켓 끝 `## CORRECTION — AC-0 닫힘`.
 - ✅ `TASK-BE-657-dead-letter-resolver-returns-source-partition.md` — **DONE 2026-10-25 UTC (4-dim verified)** — impl PR #4543(`8aa66d152`, 실패 0) · AC-3 35차 창 ✅ — p1·p2 독 레코드 → `.DLT` · «non-existent partition» 0. 기록 = 티켓 끝 `## CORRECTION — 35차 창` · `TASK-MONO-672` § 35th.
