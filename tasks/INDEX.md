@@ -220,11 +220,10 @@ _(없음)_
 
 ## review
 
-- `TASK-MONO-838-grafana-dashboard-datasource-uid-not-provisioned.md` — **iam · ecommerce `alerts.json` 패널 11개씩이 없는 datasource uid(Grafana 404)** (REVIEW, 2026-11-25 UTC · `TASK-BE-666` 기록). 고치고 + 대시보드 uid ⊆ 프로젝트 프로비저닝 uid 가드(`.mjs`, 가드 수 산문 +1/+1). 분석=Opus 5.5 / 구현 권장=Sonnet 5.5.
-
 
 ## done
 
+- ✅ `TASK-MONO-838-grafana-dashboard-datasource-uid-not-provisioned.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4695 머지, `535edace0`, 실패 0 · SUCCESS 42) · 기안 #4693. iam · ecommerce `alerts.json` 이 프로비저닝 안 된 uid `prometheus` 를 11곳씩(Grafana 404) → 수정 + `check-grafana-datasource-uid.mjs`(대시보드 uid ⊆ 그 프로젝트 프로비저닝, 고치기 전 22곳 bite, self-test 13/13). 가드 수 산문 31/72.
 - ✅ `TASK-MONO-837-classify-spec-declared-metrics-not-implemented.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4688 머지, 실패 0 — 분석 티켓, 코드 없음) · 기안 #4687. 스펙 선언 metric·span 고유 251(4 프로젝트): A 구현 74 · A2 이름만 다름 3 · B 프레임워크 6 · C 파생 12 · D1 미구현+대시보드 6 · D2 미구현 120 · E span 23 · F 폐기 7. 오탐 두 종(«Contract»→span 217행 · 토픽/태그 리터럴→구현) 처리. 곁가지: wms Grafana 대시보드 = iam 복사본. 소유자 결정 선택지 = 증거 AC-5.
 - ✅ `TASK-MONO-836-http-latency-histogram-never-exported.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4682 머지, `4359256ec`, 실패 0 · SUCCESS 35 · SKIPPED 40) · 기안 #4681. p99 알림 5개(iam·wms·ecommerce)가 묻는 `http_server_requests_seconds_bucket` 을 아무도 안 내보냄 → `libs/java-observability` 정확 일치 MeterFilter(명시적 `false` 존중) + 라이브러리 밖 wms admin·notification 은 yml. 대조군 테스트(필터 없이 `_bucket` 없음) · wms 실서버 IT 두 경로 · bite 2.
 - ✅ `TASK-MONO-835-alert-runbooks-exist.md` — **DONE 2026-11-24 UTC (4-dim verified)** — (impl PR #4679 머지, `48abefb31`, 실패 0 · SUCCESS 19 · SKIPPED 54) · 기안 #4676. 알림 runbook 링크 17개 전부 404 → iam 14 · wms 5 runbook + README 2(`knowledge/runbooks/`) · 링크 19개 갱신 · `check-alert-rule-metrics.sh` 에 runbook 존재 검사 + 접미사 매치를 meter 등록 이름으로 좁힘(토픽 이름 오탐 제거, self-test 18). 작성 중 드러난 iam 결함은 `TASK-BE-664`. promtool wms 5 · iam 14 SUCCESS. AC-5 = `Alert rule metrics …` **실행되어** SUCCESS.

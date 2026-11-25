@@ -8,7 +8,7 @@ iam · ecommerce 의 `alerts.json` 패널 11개씩이 프로비저닝되지 않�
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -57,7 +57,7 @@ monorepo
 - [x] AC-1: 고치기 **전** 실제 트리에서 가드 rc=1, 정확히 22곳(iam 11 · ecommerce 11)을 파일 · uid 와 함께 보고. 고친 뒤 rc=0.
 - [x] AC-2: `--self-test` 전부 PASS.
 - [x] AC-3: 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께) — `check-ls-files-guard-count.sh` 포함.
-- [ ] AC-4: PR CI 에서 새 잡이 **실행되어** success · 실패 0.
+- [x] AC-4: PR CI 에서 새 잡이 **실행되어** success · 실패 0.
 
 # Related Specs
 
@@ -88,7 +88,7 @@ monorepo
 - **AC-1** — 고치기 **전** 실제 트리(두 파일 치환 전, 가드만 추가): rc=1, **정확히 22줄** — `projects/ecommerce-microservices-platform/…/alerts.json` 11 · `projects/iam-platform/…/alerts.json` 11, 각 줄에 JSON 경로 · 값 · 그 프로젝트의 프로비저닝 uid 목록(예: `$.panels[0].datasource.uid = "prometheus" — … (provisioned uids: PBFA97CFB590B2093, loki)`). 고친 뒤 rc=0: «226 datasource reference(s) in 20 dashboard(s) across 3 project(s)». 🔴 첫 실행은 `spawnSync … ENOBUFS` 로 죽었다 — `git ls-files -- projects` 출력이 `execFileSync` 기본 버퍼(1 MiB)를 넘었다. pathspec 을 `projects/*/infra/grafana/**` 로 좁히고 `maxBuffer` 를 올렸다.
 - **AC-2** — `--self-test` **13/13**: 맞는 uid 통과 · 없는 uid bite(패널 + target 2) · 템플릿 변수 `${DS_PROMETHEUS}` 통과 · `-- Grafana --` 통과 · 대시보드 최상위 `uid` 무시 · Loki `derivedFields` 의 중첩 `name:`/`datasourceUid:` 는 datasource 아님(그 값을 쓰면 bite) · 옛 문자열 형식 = 프로비저닝 이름이면 통과 / 아니면 bite · 다른 프로젝트의 uid 는 통과 안 됨 · 프로비저닝 없음 bite · 대시보드 0 bite · 깨진 JSON bite · 추적 안 된 대시보드는 모집단 밖.
 - **AC-3** — 스테이지 뒤 **전 가드**(`scripts/` 에 파일이 늘었으므로 관련 가드만이 아니라 전부): `check-*.sh` 43 중 41 rc=0, 비0 둘 = 환경 전제(erp 래칫 · prerendered verdict). `check-*.mjs` **7/7**(새 가드 포함). `check-ls-files-guard-count.sh` «2 homes agree with the measured 31/72».
-- **AC-4** — PR CI 대기.
+- **AC-4** — PR CI(#4695): 실패 0 · SUCCESS 42 · SKIPPED 34 — 새 잡 `Grafana datasource uid (dashboards vs the project's provisioning)` 가 **실행되어** SUCCESS(9s).
 
 # Definition of Done
 
