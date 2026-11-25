@@ -1,6 +1,7 @@
 package com.wms.admin.infra.observability;
 
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
@@ -58,7 +59,15 @@ public class ProjectionMetrics {
         // anyway so Grafana dashboards + Prometheus alert rules authored
         // against this metric name remain stable across the v1 → v2 boundary.
         // Per TASK-BE-048 deviation #8 — see also architecture.md § Observability.
-        meterRegistry.gauge(CACHE_HIT_RATE_METRIC, 0.0d);
+        //
+        // TASK-BE-667: NOT `meterRegistry.gauge(CACHE_HIT_RATE_METRIC, 0.0d)`. That form holds
+        // the boxed Double only through a WEAK reference; nothing else holds it, so the first GC
+        // collects it and the gauge reads NaN from then on (measured) — the "stable name, value 0"
+        // this registration exists for broke minutes after startup. The Supplier builder keeps a
+        // strong reference.
+        Gauge.builder(CACHE_HIT_RATE_METRIC, () -> 0.0d)
+                .description("Redis query-cache hit rate — v1 has no query cache, always 0 (TASK-BE-048 #8)")
+                .register(meterRegistry);
     }
 
     public void recordLag(String sourceService, String topic, Instant eventTime) {
