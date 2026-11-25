@@ -2,6 +2,7 @@ package com.example.auth.infrastructure.jwt;
 
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.TokenPair;
+import com.example.auth.infrastructure.metrics.AuthMetricsProbe;
 import com.example.security.jwt.Rs256JwtSigner;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -36,9 +37,31 @@ class JwtTokenGeneratorTenantClaimTest {
         publicKey = readPublic("/keys/public.pem");
     }
 
+    /** TASK-BE-668 — a fresh probe per test instance (JUnit creates one instance per test). */
+    private final AuthMetricsProbe metrics = new AuthMetricsProbe();
+
     private JwtTokenGenerator generator() {
         Rs256JwtSigner signer = new Rs256JwtSigner(privateKey, "test-key");
-        return new JwtTokenGenerator(signer, publicKey, "test-iss", 1800L, 604800L);
+        return new JwtTokenGenerator(signer, publicKey, "test-iss", 1800L, 604800L, metrics.port());
+    }
+
+    @Test
+    @DisplayName("TASK-BE-668: one generated pair counts auth_token_issued_total access=1 and refresh=1")
+    void generatedPairCountsOneAccessAndOneRefresh() {
+        generator().generateTokenPair("acc-m1", "user", null, new TenantContext("wms", "B2B_ENTERPRISE"));
+
+        assertThat(metrics.issued("access")).isEqualTo(1.0);
+        assertThat(metrics.issued("refresh")).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("TASK-BE-668: a fail-closed refusal (no tenant context) mints nothing and counts nothing")
+    void failClosedRefusalCountsNothing() {
+        assertThatThrownBy(() -> generator().generateTokenPair("acc-m2", "user", null, null))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(metrics.issued("access")).isZero();
+        assertThat(metrics.issued("refresh")).isZero();
     }
 
     @Test

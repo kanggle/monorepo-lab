@@ -2,6 +2,7 @@ package com.example.auth.infrastructure.oauth2;
 
 import com.example.auth.application.event.AuthEventPublisher;
 import com.example.auth.application.port.AuthMetricsPort;
+import com.example.auth.application.port.AuthMetricsPort.RefreshOutcome;
 import com.example.auth.application.port.OAuthAuthorizationRevocationPort;
 import com.example.auth.domain.repository.BulkInvalidationStore;
 import com.example.auth.domain.repository.DeviceSessionRepository;
@@ -220,6 +221,13 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         OAuth2Authorization.Token<OAuth2RefreshToken> refreshTokenHolder =
                 authorization.getToken(OAuth2RefreshToken.class);
         if (refreshTokenHolder == null || !refreshTokenHolder.isActive()) {
+            // TASK-BE-668: auth_token_refresh_total{result} — SAS's own token state says which of the
+            // spec's results this is; a token not yet valid (nbf) or absent is none of them.
+            if (refreshTokenHolder != null && refreshTokenHolder.isInvalidated()) {
+                authMetrics.refreshAttempt(RefreshOutcome.REVOKED);
+            } else if (refreshTokenHolder != null && refreshTokenHolder.isExpired()) {
+                authMetrics.refreshAttempt(RefreshOutcome.EXPIRED);
+            }
             throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_GRANT);
         }
 
@@ -252,11 +260,13 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
 
             // Revoked check
             if (existingDomainToken.isRevoked()) {
+                authMetrics.refreshAttempt(RefreshOutcome.REVOKED);
                 throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_GRANT);
             }
 
             // Expired check
             if (existingDomainToken.isExpired()) {
+                authMetrics.refreshAttempt(RefreshOutcome.EXPIRED);
                 throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_GRANT);
             }
 
@@ -484,6 +494,10 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
             }
         });
 
+        // TASK-BE-668: rotated — counted only once the rotation transaction committed (a failure in
+        // it throws out of the template above, and that request is not a successful refresh).
+        authMetrics.refreshAttempt(RefreshOutcome.SUCCESS);
+
         // TASK-MONO-705 ⓐ: hand the ID token back on the response. Without `openid`
         // in the authorized scopes there is nothing to hand back and the map stays
         // empty — a non-OIDC client must not suddenly start receiving an ID token.
@@ -629,6 +643,8 @@ public class SasRefreshTokenAuthenticationProvider implements AuthenticationProv
         // paths of authenticate() (pre-check, in-flow race) reach this line, and a request takes
         // at most one of them, so one request is counted at most once.
         authMetrics.tokenReuseDetected();
+        // TASK-BE-668: the same detection, as this refresh attempt's result (the spec asks for both).
+        authMetrics.refreshAttempt(RefreshOutcome.REUSE_DETECTED);
         handleReuse(submittedTokenValue, assessment, knownAuthorization, reusedRowTenant, requestTime);
         return new OAuth2AuthenticationException(new OAuth2Error(
                 OAuth2ErrorCodes.INVALID_GRANT,

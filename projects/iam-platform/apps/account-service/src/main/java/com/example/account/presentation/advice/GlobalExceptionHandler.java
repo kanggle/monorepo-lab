@@ -23,6 +23,8 @@ import com.example.account.application.exception.TenantNotFoundException;
 import com.example.account.application.exception.TenantScopeDeniedException;
 import com.example.account.application.exception.TenantSuspendedException;
 import com.example.account.application.port.AuthServicePort;
+import com.example.account.application.port.SignupMetricsPort;
+import com.example.account.presentation.SignupController;
 import com.example.account.domain.account.PasswordPolicyViolationException;
 import com.example.account.domain.orgnode.OrgNodeCeilingNotSubsetException;
 import com.example.account.domain.orgnode.OrgNodeCycleException;
@@ -33,6 +35,7 @@ import com.example.account.domain.tenant.IllegalSubscriptionTransitionException;
 import com.example.web.dto.ErrorResponse;
 import com.example.web.exception.CommonGlobalExceptionHandler;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -43,6 +46,18 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
+
+    /**
+     * TASK-BE-668 — {@code account_signup_total{result="validation_error"}} for the request-body
+     * ({@code @Valid}) refusals of {@code POST /api/accounts/signup}, which never reach
+     * {@code SignupUseCase}. An {@link ObjectProvider} so a slice context that does not load the
+     * metrics adapter still builds this advice (it then counts nothing).
+     */
+    private final ObjectProvider<SignupMetricsPort> signupMetrics;
+
+    public GlobalExceptionHandler(ObjectProvider<SignupMetricsPort> signupMetrics) {
+        this.signupMetrics = signupMetrics;
+    }
 
     @ExceptionHandler(AccountAlreadyExistsException.class)
     public ResponseEntity<ErrorResponse> handleAccountAlreadyExists(AccountAlreadyExistsException e) {
@@ -230,7 +245,17 @@ public class GlobalExceptionHandler extends CommonGlobalExceptionHandler {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ErrorResponse.of("BULK_LIMIT_EXCEEDED", message));
         }
+        if (isSignupRequest(e)) {
+            // TASK-BE-668: the signup attempt's outcome is decided here — a VALIDATION_ERROR answer.
+            signupMetrics.ifAvailable(m -> m.signupAttempt(SignupMetricsPort.SignupOutcome.VALIDATION_ERROR));
+        }
         return super.handleValidation(e);
+    }
+
+    /** TASK-BE-668: the failed {@code @Valid} parameter belongs to the public signup endpoint. */
+    private static boolean isSignupRequest(MethodArgumentNotValidException e) {
+        return e.getParameter() != null
+                && SignupController.class.isAssignableFrom(e.getParameter().getContainingClass());
     }
 
     private static boolean isBulkItemsSizeViolation(FieldError err) {

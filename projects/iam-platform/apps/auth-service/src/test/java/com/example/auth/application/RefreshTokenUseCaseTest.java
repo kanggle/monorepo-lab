@@ -114,6 +114,8 @@ class RefreshTokenUseCaseTest {
         verify(authEventPublisher).publishTokenRefreshed(ACCOUNT_ID, TENANT_ID, OLD_JTI, NEW_JTI, CTX);
         verify(bulkInvalidationStore, never()).invalidateAll(anyString(), anyLong());
         assertThat(metrics.tokenReuse()).isZero();
+        // TASK-BE-668
+        metrics.assertOnlyRefresh("success");
     }
 
     @Test
@@ -139,6 +141,8 @@ class RefreshTokenUseCaseTest {
         verify(authEventPublisher).publishTokenTenantMismatch(
                 eq(ACCOUNT_ID), eq("wms"), eq(TENANT_ID), eq(OLD_JTI),
                 eq(CTX.ipMasked()), eq(CTX.deviceFingerprint()));
+        // TASK-BE-668: a cross-tenant refusal is none of the spec's four results — not counted.
+        metrics.assertNoRefresh();
     }
 
     @Test
@@ -157,6 +161,7 @@ class RefreshTokenUseCaseTest {
         assertThatThrownBy(() -> refreshTokenUseCase.execute(
                 new RefreshTokenCommand(refreshTokenStr, CTX)))
                 .isInstanceOf(SessionRevokedException.class);
+        metrics.assertOnlyRefresh("revoked");  // TASK-BE-668
     }
 
     @Test
@@ -171,6 +176,7 @@ class RefreshTokenUseCaseTest {
         assertThatThrownBy(() -> refreshTokenUseCase.execute(
                 new RefreshTokenCommand(refreshTokenStr, CTX)))
                 .isInstanceOf(TokenExpiredException.class);
+        metrics.assertOnlyRefresh("expired");  // TASK-BE-668: answered TOKEN_EXPIRED
     }
 
     @Test
@@ -194,6 +200,7 @@ class RefreshTokenUseCaseTest {
                 .isInstanceOf(SessionRevokedException.class);
         // A revoked token without a reuse chain is not a reuse detection.
         assertThat(metrics.tokenReuse()).isZero();
+        metrics.assertOnlyRefresh("revoked");  // TASK-BE-668
     }
 
     @Test
@@ -250,6 +257,7 @@ class RefreshTokenUseCaseTest {
                 eq(List.of("sibling-jti-2")), any(Instant.class),
                 eq("SYSTEM"), isNull());
         assertThat(metrics.tokenReuse()).isEqualTo(1.0);
+        metrics.assertOnlyRefresh("reuse_detected");  // TASK-BE-668: both counters, one detection
     }
 
     @Test
@@ -274,6 +282,7 @@ class RefreshTokenUseCaseTest {
                 .isSameAs(outboxDown);
 
         assertThat(metrics.tokenReuse()).isEqualTo(1.0);
+        metrics.assertOnlyRefresh("reuse_detected");  // TASK-BE-668
     }
 
     @Test
@@ -297,6 +306,7 @@ class RefreshTokenUseCaseTest {
         assertThatThrownBy(() -> refreshTokenUseCase.execute(
                 new RefreshTokenCommand(refreshTokenStr, CTX)))
                 .isInstanceOf(SessionRevokedException.class);
+        metrics.assertOnlyRefresh("revoked");  // TASK-BE-668
     }
 
     @Test
@@ -309,6 +319,7 @@ class RefreshTokenUseCaseTest {
         assertThatThrownBy(() -> refreshTokenUseCase.execute(
                 new RefreshTokenCommand(refreshTokenStr, CTX)))
                 .isInstanceOf(TokenExpiredException.class);
+        metrics.assertOnlyRefresh("expired");  // TASK-BE-668: answered TOKEN_EXPIRED
     }
 
     @Test
@@ -331,6 +342,7 @@ class RefreshTokenUseCaseTest {
         assertThatThrownBy(() -> refreshTokenUseCase.execute(
                 new RefreshTokenCommand(refreshTokenStr, CTX)))
                 .isInstanceOf(SessionRevokedException.class);
+        metrics.assertOnlyRefresh("revoked");  // TASK-BE-668
     }
 
     @Test
@@ -362,5 +374,49 @@ class RefreshTokenUseCaseTest {
         verify(deviceSessionRepository, never()).save(any());
         // TASK-BE-664: no event (already-revoked chain), but the detection itself is counted.
         assertThat(metrics.tokenReuse()).isEqualTo(1.0);
+        metrics.assertOnlyRefresh("reuse_detected");  // TASK-BE-668
+    }
+
+    @Test
+    @DisplayName("TASK-BE-668: a row past its expiry is refused TOKEN_EXPIRED and counted result=expired")
+    void refreshFailsExpiredRow() {
+        String refreshTokenStr = "expired-row-token";
+        when(tokenGeneratorPort.extractJti(refreshTokenStr)).thenReturn(OLD_JTI);
+        when(tokenGeneratorPort.extractAccountId(refreshTokenStr)).thenReturn(ACCOUNT_ID);
+        when(tokenGeneratorPort.extractTenantId(refreshTokenStr)).thenReturn(TENANT_ID);
+        when(tokenBlacklist.isBlacklisted(TENANT_ID, OLD_JTI)).thenReturn(false);
+        when(bulkInvalidationStore.getInvalidatedAt(ACCOUNT_ID)).thenReturn(Optional.empty());
+
+        RefreshToken expiredRow = new RefreshToken(1L, OLD_JTI, ACCOUNT_ID, TENANT_ID,
+                Instant.now().minusSeconds(7200), Instant.now().minusSeconds(60),
+                null, false, "fp-123", null);
+        when(refreshTokenRepository.findByJti(OLD_JTI)).thenReturn(Optional.of(expiredRow));
+        when(tokenReuseDetector.isReuse(expiredRow)).thenReturn(false);
+
+        assertThatThrownBy(() -> refreshTokenUseCase.execute(
+                new RefreshTokenCommand(refreshTokenStr, CTX)))
+                .isInstanceOf(TokenExpiredException.class);
+        metrics.assertOnlyRefresh("expired");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-668: a failure after the checks (token mint) is not a refresh result — nothing counted")
+    void refreshInfrastructureFailureNotCounted() {
+        String refreshTokenStr = "old-refresh-token";
+        when(tokenGeneratorPort.extractJti(refreshTokenStr)).thenReturn(OLD_JTI);
+        when(tokenGeneratorPort.extractAccountId(refreshTokenStr)).thenReturn(ACCOUNT_ID);
+        when(tokenGeneratorPort.extractTenantId(refreshTokenStr)).thenReturn(TENANT_ID);
+        when(tokenBlacklist.isBlacklisted(TENANT_ID, OLD_JTI)).thenReturn(false);
+        when(bulkInvalidationStore.getInvalidatedAt(ACCOUNT_ID)).thenReturn(Optional.empty());
+        RefreshToken existingToken = activeToken(OLD_JTI, TENANT_ID);
+        when(refreshTokenRepository.findByJti(OLD_JTI)).thenReturn(Optional.of(existingToken));
+        when(tokenReuseDetector.isReuse(existingToken)).thenReturn(false);
+        IllegalStateException down = new IllegalStateException("account-service down");
+        when(tenantTypePort.resolve(TENANT_ID)).thenThrow(down);
+
+        assertThatThrownBy(() -> refreshTokenUseCase.execute(
+                new RefreshTokenCommand(refreshTokenStr, CTX)))
+                .isSameAs(down);
+        metrics.assertNoRefresh();
     }
 }

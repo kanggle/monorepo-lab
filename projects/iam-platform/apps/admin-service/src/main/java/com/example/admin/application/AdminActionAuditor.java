@@ -2,7 +2,6 @@ package com.example.admin.application;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -36,7 +35,6 @@ import java.util.UUID;
  * SUPER_ADMIN will have {@code tenant_id='*'} and a specific {@code target_tenant_id}.
  */
 @Component
-@RequiredArgsConstructor
 public class AdminActionAuditor {
 
     /** Reason constant for self-enrollment audit rows (admin-api.md §X-Operator-Reason exceptions). */
@@ -82,9 +80,40 @@ public class AdminActionAuditor {
      */
     static final String COMMAND_METRIC_NAME = "admin_command_total";
 
+    /**
+     * TASK-BE-668 — observability.md § 필수 메트릭: counter, tag {@code result} (success/failure),
+     * one per audit-ledger write attempt. Every {@code admin_actions} row is written through this
+     * facade (the two writers have no other caller), so counting here sees every write once:
+     * {@code success} when the write returned, {@code failure} when it threw (the fail-closed
+     * writes — the request fails with {@code AUDIT_FAILURE}) or reported a swallowed failure (the
+     * best-effort deny writes). {@code failure} IS an infrastructure fault by design: it is the
+     * signal {@code AdminAuditWriteFailing} (A10 — every command is blocked) is defined on.
+     */
+    static final String AUDIT_WRITE_METRIC_NAME = "admin_audit_write_total";
+
     private final AdminActionAuditWriter writer;
     private final AdminActionDenyWriter denyWriter;
     private final MeterRegistry meterRegistry;
+    private final Counter auditWriteSuccess;
+    private final Counter auditWriteFailure;
+
+    public AdminActionAuditor(AdminActionAuditWriter writer,
+                              AdminActionDenyWriter denyWriter,
+                              MeterRegistry meterRegistry) {
+        this.writer = writer;
+        this.denyWriter = denyWriter;
+        this.meterRegistry = meterRegistry;
+        // Both series registered up front, so the panel and the alert read a real 0, not no-data.
+        this.auditWriteSuccess = auditWriteCounter(meterRegistry, "success");
+        this.auditWriteFailure = auditWriteCounter(meterRegistry, "failure");
+    }
+
+    private static Counter auditWriteCounter(MeterRegistry registry, String result) {
+        return Counter.builder(AUDIT_WRITE_METRIC_NAME)
+                .description("Admin audit-ledger writes by result")
+                .tag("result", result)
+                .register(registry);
+    }
 
     /** @return a fresh UUID v4 audit id for callers that begin a multi-step audit flow. */
     public String newAuditId() {
@@ -105,7 +134,7 @@ public class AdminActionAuditor {
      * if the row cannot be persisted.
      */
     public void recordStart(StartRecord record) {
-        writer.recordStart(record);
+        writeFailClosed(() -> writer.recordStart(record));
     }
 
     /**
@@ -120,7 +149,7 @@ public class AdminActionAuditor {
 
     /** Finalizes the audit row to SUCCESS/FAILURE and emits the canonical outbox event. */
     public void recordCompletion(CompletionRecord record) {
-        writer.recordCompletion(record);
+        writeFailClosed(() -> writer.recordCompletion(record));
         // Counted only after the (fail-closed) write returned: a write that throws fails
         // the request, so counting first would report a command that left no record.
         countCommand(record.actionCode(), record.outcome());
@@ -128,7 +157,7 @@ public class AdminActionAuditor {
 
     /** Single-shot audit write for read paths (meta-audit, etc.); see {@link AdminActionAuditWriter#recordWithPermission}. */
     public void record(AuditRecord record) {
-        writer.recordWithPermission(record, null);
+        writeFailClosed(() -> writer.recordWithPermission(record, null));
         countCommand(record.actionCode(), record.outcome());
     }
 
@@ -145,7 +174,7 @@ public class AdminActionAuditor {
      * column and the outbox envelope.
      */
     public void recordWithPermission(AuditRecord record, String permissionOverride) {
-        writer.recordWithPermission(record, permissionOverride);
+        writeFailClosed(() -> writer.recordWithPermission(record, permissionOverride));
         countCommand(record.actionCode(), record.outcome());
     }
 
@@ -161,7 +190,7 @@ public class AdminActionAuditor {
                              String endpoint,
                              String method,
                              String targetId) {
-        denyWriter.recordDenied(actionCode, permissionUsed, endpoint, method, targetId);
+        writeFailClosed(() -> denyWriter.recordDenied(actionCode, permissionUsed, endpoint, method, targetId));
         countCommand(actionCode, Outcome.DENIED);
     }
 
@@ -178,7 +207,8 @@ public class AdminActionAuditor {
                                         String permissionUsed,
                                         String attemptedTenantId) {
         try {
-            denyWriter.recordCrossTenantDenied(operator, operatorTenantId, actionCode, permissionUsed, attemptedTenantId);
+            writeBestEffort(() -> denyWriter.recordCrossTenantDenied(
+                    operator, operatorTenantId, actionCode, permissionUsed, attemptedTenantId));
         } finally {
             countCommand(actionCode, Outcome.DENIED);
         }
@@ -189,7 +219,7 @@ public class AdminActionAuditor {
                                          ActionCode actionCode,
                                          String orgNodeId) {
         try {
-            denyWriter.recordOrgNodeScopeDenied(operator, actionCode, orgNodeId);
+            writeBestEffort(() -> denyWriter.recordOrgNodeScopeDenied(operator, actionCode, orgNodeId));
         } finally {
             countCommand(actionCode, Outcome.DENIED);
         }
@@ -203,7 +233,8 @@ public class AdminActionAuditor {
                                             String fromOrgNodeId,
                                             String toOrgNodeId) {
         try {
-            denyWriter.recordTenantPlacementDenied(operator, actionCode, tenantId, side, fromOrgNodeId, toOrgNodeId);
+            writeBestEffort(() -> denyWriter.recordTenantPlacementDenied(
+                    operator, actionCode, tenantId, side, fromOrgNodeId, toOrgNodeId));
         } finally {
             countCommand(actionCode, Outcome.DENIED);
         }
@@ -214,7 +245,7 @@ public class AdminActionAuditor {
                                          ActionCode actionCode,
                                          String attemptedRole) {
         try {
-            denyWriter.recordRoleGrantForbidden(operator, actionCode, attemptedRole);
+            writeBestEffort(() -> denyWriter.recordRoleGrantForbidden(operator, actionCode, attemptedRole));
         } finally {
             countCommand(actionCode, Outcome.DENIED);
         }
@@ -222,7 +253,38 @@ public class AdminActionAuditor {
 
     /** Login-path single-shot write (TASK-BE-029-3); stamps {@code twofa_used}. Not an admin command — not counted. */
     public void recordLogin(LoginAuditRecord record) {
-        writer.recordLogin(record);
+        // An admin_actions row all the same — counted in admin_audit_write_total (not in admin_command_total).
+        writeFailClosed(() -> writer.recordLogin(record));
+    }
+
+    /**
+     * TASK-BE-668 — runs a fail-closed audit write and counts its {@code admin_audit_write_total}
+     * result: {@code failure} (and rethrow) when it threw — including a REQUIRES_NEW commit failure,
+     * which surfaces here, outside the writer's transactional proxy — otherwise {@code success}.
+     */
+    private void writeFailClosed(Runnable write) {
+        try {
+            write.run();
+        } catch (RuntimeException e) {
+            auditWriteFailure.increment();
+            throw e;
+        }
+        auditWriteSuccess.increment();
+    }
+
+    /**
+     * TASK-BE-668 — runs a best-effort deny write: it reports a swallowed failure as {@code false};
+     * a failure it could not swallow (thrown out of its transactional proxy) is counted and rethrown.
+     */
+    private void writeBestEffort(java.util.function.BooleanSupplier write) {
+        boolean written;
+        try {
+            written = write.getAsBoolean();
+        } catch (RuntimeException e) {
+            auditWriteFailure.increment();
+            throw e;
+        }
+        (written ? auditWriteSuccess : auditWriteFailure).increment();
     }
 
     /**

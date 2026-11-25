@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-668-implement-dashboard-d1-metrics.md` — **iam 837 D1 5개 구현**(`account_signup_total` · `admin_audit_write_total` · `admin_audit_query_total` · `auth_token_issued_total` · `auth_token_refresh_total`) + 대기 목록에서 삭제 (READY, 2026-11-25 UTC). 분석=Opus 5.5 / 구현 권장=Opus 5.5.
+(empty)
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
@@ -121,7 +121,7 @@ Cross-project (root `tasks/done/`): TASK-MONO-019 APPROVED 2026-05-02. TASK-MONO
 
 ## review
 
-(empty)
+- `TASK-BE-668-implement-dashboard-d1-metrics.md` — **iam 837 D1 5개 구현**(`account_signup_total` · `admin_audit_write_total` · `admin_audit_query_total` · `auth_token_issued_total` · `auth_token_refresh_total`) + 대기 목록에서 삭제 (REVIEW, 2026-11-25 UTC). 분석=Opus 5.5 / 구현 권장=Opus 5.5.
 
 ## done
 - ✅ `TASK-BE-665-auth-account-service-down-alert.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4685 머지, 실패 0 · SUCCESS 22) · 기안 #4684. 스펙의 `AuthAccountServiceDown` 이 규칙에 없었고 `accountService` 차단기가 `CircuitBreaker.of` 독립 인스턴스라 지표도 없었다 → Spring `CircuitBreakerRegistry` 로(설정 동일) + 알림 + runbook. 대조군 테스트(독립 인스턴스는 scrape 에 없음) · open 이어도 health DOWN 아님 · bite.

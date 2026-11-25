@@ -241,6 +241,8 @@ class SasRefreshTokenAuthenticationProviderTest {
                 .isInstanceOf(OAuth2AuthenticationException.class)
                 .extracting(e -> ((OAuth2AuthenticationException) e).getError().getErrorCode())
                 .isEqualTo(OAuth2ErrorCodes.INVALID_GRANT);
+        // TASK-BE-668: an unknown token is none of the spec's four results - not counted.
+        metrics.assertNoRefresh();
     }
 
     // -----------------------------------------------------------------------
@@ -301,6 +303,7 @@ class SasRefreshTokenAuthenticationProviderTest {
                 any(), any(), any(), any(), eq(true), eq(1));
         // TASK-BE-664: in-flow race path — counted once (the pre-check found no child, so it did not count).
         assertThat(metrics.tokenReuse()).isEqualTo(1.0);
+        metrics.assertOnlyRefresh("reuse_detected");  // TASK-BE-668: same detection, both counters
     }
 
     // -----------------------------------------------------------------------
@@ -399,6 +402,7 @@ class SasRefreshTokenAuthenticationProviderTest {
         assertThat(ctxDetails)
                 .as("the account identity that drives sub=account_id + roles must survive rotation")
                 .containsEntry("account_id", accountId);
+        metrics.assertOnlyRefresh("success");  // TASK-BE-668
     }
 
     // -----------------------------------------------------------------------
@@ -545,6 +549,7 @@ class SasRefreshTokenAuthenticationProviderTest {
                 eq(accountId), eq("fan-platform"), eq(tokenValue), eq("new-refresh-opaque"), any());
         verify(authEventPublisher, never()).publishTokenTenantMismatch(
                 any(), any(), any(), any(), any(), any());
+        metrics.assertOnlyRefresh("success");  // TASK-BE-668
     }
 
     @Test
@@ -578,6 +583,7 @@ class SasRefreshTokenAuthenticationProviderTest {
                 eq(accountId), eq("iam"), eq("fan-platform"), eq(tokenValue), any(), any());
         verifyNoInteractions(tokenGenerator);
         verify(authorizationService, never()).save(any());
+        metrics.assertNoRefresh();  // TASK-BE-668: a tenant mismatch is not one of the four results
     }
 
     // -----------------------------------------------------------------------
@@ -717,6 +723,7 @@ class SasRefreshTokenAuthenticationProviderTest {
         verify(refreshTokenRepository, never()).save(any());
         // TASK-BE-664: a revoked (non-reused) row is not a reuse detection.
         assertThat(metrics.tokenReuse()).isZero();
+        metrics.assertOnlyRefresh("revoked");  // TASK-BE-668
     }
 
     @Test
@@ -788,6 +795,7 @@ class SasRefreshTokenAuthenticationProviderTest {
         verify(authorizationService, never()).save(any());
         // TASK-BE-664: pre-check path — counted once.
         assertThat(metrics.tokenReuse()).isEqualTo(1.0);
+        metrics.assertOnlyRefresh("reuse_detected");  // TASK-BE-668
     }
 
     @Test
@@ -814,6 +822,7 @@ class SasRefreshTokenAuthenticationProviderTest {
                 deviceSessionRepository, tokenGenerator, authorizationService);
         // TASK-BE-664: a grace-window replay is a client race, not a reuse — not counted.
         assertThat(metrics.tokenReuse()).isZero();
+        metrics.assertNoRefresh();  // TASK-BE-668: a grace-window race is not one of the four results
     }
 
     @Test
@@ -929,6 +938,7 @@ class SasRefreshTokenAuthenticationProviderTest {
         verify(refreshTokenRepository, never()).revokeAllByAccountId(any());
         verifyNoInteractions(authorizationRevocationPort, authEventPublisher, tokenGenerator);
         assertThat(metrics.tokenReuse()).isZero();
+        metrics.assertNoRefresh();  // TASK-BE-668
     }
 
     @Test
@@ -951,6 +961,115 @@ class SasRefreshTokenAuthenticationProviderTest {
         verify(authEventPublisher).publishTokenReuseDetected(
                 eq(accountId), eq("fan-platform"), eq(SasRefreshTokenAuthenticationProvider.reuseTokenDigest(tokenA)),
                 any(), any(), any(), any(), eq(true), eq(1));
+    }
+
+    // -----------------------------------------------------------------------
+    // TASK-BE-668 — auth_token_refresh_total{result}: the expired branches, SAS's own token
+    // state, and a rotation whose transaction fails (not a successful refresh).
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("TASK-BE-668: expired mirror row → INVALID_GRANT, counted result=expired")
+    void expiredMirrorRow_countedExpired() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient registeredClient = buildDemoSpaClient();
+        String tokenValue = "rt-" + UUID.randomUUID();
+        OAuth2Authorization authorization = buildLoginAuthorization(registeredClient,
+                "user@example.com", accountId, Set.of("profile"), activeRefreshToken(tokenValue));
+        RefreshToken expiredRow = RefreshToken.create(tokenValue, accountId, "fan-platform",
+                Instant.now().minusSeconds(7200), Instant.now().minusSeconds(60), null, null, null);
+
+        OAuth2RefreshTokenAuthenticationToken auth =
+                refreshRequest(buildAuthenticatedClient(registeredClient), tokenValue);
+        when(authorizationService.findByToken(tokenValue, OAuth2TokenType.REFRESH_TOKEN))
+                .thenReturn(authorization);
+        when(refreshTokenRepository.findByJti(tokenValue)).thenReturn(Optional.of(expiredRow));
+        when(tokenReuseDetector.isReuse(expiredRow)).thenReturn(false);
+
+        assertThatThrownBy(() -> provider.authenticate(auth))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        verifyNoInteractions(tokenGenerator);
+        metrics.assertOnlyRefresh("expired");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-668: SAS token already invalidated → INVALID_GRANT, counted result=revoked")
+    void sasInvalidatedToken_countedRevoked() {
+        RegisteredClient registeredClient = buildDemoSpaClient();
+        String tokenValue = "rt-" + UUID.randomUUID();
+        OAuth2Authorization active = buildLoginAuthorization(registeredClient,
+                "user@example.com", UUID.randomUUID().toString(), Set.of("profile"), activeRefreshToken(tokenValue));
+        OAuth2Authorization invalidated = OAuth2Authorization.from(active)
+                .token(activeRefreshToken(tokenValue),
+                        md -> md.put(OAuth2Authorization.Token.INVALIDATED_METADATA_NAME, true))
+                .build();
+
+        OAuth2RefreshTokenAuthenticationToken auth =
+                refreshRequest(buildAuthenticatedClient(registeredClient), tokenValue);
+        when(authorizationService.findByToken(tokenValue, OAuth2TokenType.REFRESH_TOKEN))
+                .thenReturn(invalidated);
+
+        assertThatThrownBy(() -> provider.authenticate(auth))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        metrics.assertOnlyRefresh("revoked");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-668: SAS token past its expiry → INVALID_GRANT, counted result=expired")
+    void sasExpiredToken_countedExpired() {
+        RegisteredClient registeredClient = buildDemoSpaClient();
+        String tokenValue = "rt-" + UUID.randomUUID();
+        OAuth2RefreshToken expired = new OAuth2RefreshToken(tokenValue,
+                Instant.now().minusSeconds(7200), Instant.now().minusSeconds(60));
+        OAuth2Authorization authorization = buildLoginAuthorization(registeredClient,
+                "user@example.com", UUID.randomUUID().toString(), Set.of("profile"), expired);
+
+        OAuth2RefreshTokenAuthenticationToken auth =
+                refreshRequest(buildAuthenticatedClient(registeredClient), tokenValue);
+        when(authorizationService.findByToken(tokenValue, OAuth2TokenType.REFRESH_TOKEN))
+                .thenReturn(authorization);
+
+        assertThatThrownBy(() -> provider.authenticate(auth))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        metrics.assertOnlyRefresh("expired");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-668: the rotation write fails (infrastructure) → the request fails, nothing counted")
+    void rotationWriteFails_notCounted() {
+        String accountId = UUID.randomUUID().toString();
+        RegisteredClient registeredClient = buildDemoSpaClient();
+        String tokenValue = "rt-" + UUID.randomUUID();
+        OAuth2Authorization authorization = buildLoginAuthorization(registeredClient,
+                "user@example.com", accountId, Set.of("profile"), activeRefreshToken(tokenValue));
+        RefreshToken row = mirrorRow(tokenValue, accountId, "fan-platform");
+
+        OAuth2RefreshTokenAuthenticationToken auth =
+                refreshRequest(buildAuthenticatedClient(registeredClient), tokenValue);
+        when(authorizationService.findByToken(tokenValue, OAuth2TokenType.REFRESH_TOKEN))
+                .thenReturn(authorization);
+        when(refreshTokenRepository.findByJti(tokenValue)).thenReturn(Optional.of(row));
+        when(tokenReuseDetector.isReuse(row)).thenReturn(false);
+        Instant now = Instant.now();
+        OAuth2Token generatedAccess = mock(OAuth2Token.class);
+        when(generatedAccess.getTokenValue()).thenReturn("new-access-jwt");
+        when(generatedAccess.getIssuedAt()).thenReturn(now);
+        when(generatedAccess.getExpiresAt()).thenReturn(now.plusSeconds(300));
+        OAuth2Token generatedRefresh = mock(OAuth2Token.class);
+        when(generatedRefresh.getTokenValue()).thenReturn("new-refresh-opaque");
+        when(generatedRefresh.getIssuedAt()).thenReturn(now);
+        when(generatedRefresh.getExpiresAt()).thenReturn(now.plusSeconds(3600));
+        doReturn(generatedAccess, generatedRefresh).when(tokenGenerator).generate(any());
+        IllegalStateException dbDown = new IllegalStateException("db down");
+        org.mockito.Mockito.doThrow(dbDown).when(authorizationService).save(any());
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            assertThatThrownBy(() -> provider.authenticate(auth)).isSameAs(dbDown);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+        metrics.assertNoRefresh();
     }
 
     /** A mirror row rotated from {@code parent}, issued at {@code issuedAt} (tenant fan-platform). */

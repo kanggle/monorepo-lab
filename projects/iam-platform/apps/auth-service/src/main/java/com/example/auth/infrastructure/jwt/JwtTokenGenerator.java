@@ -1,6 +1,7 @@
 package com.example.auth.infrastructure.jwt;
 
 import com.example.auth.application.exception.TokenParseException;
+import com.example.auth.application.port.AuthMetricsPort;
 import com.example.auth.application.port.TokenGeneratorPort;
 import com.example.auth.domain.tenant.TenantContext;
 import com.example.auth.domain.token.TokenPair;
@@ -44,13 +45,22 @@ public class JwtTokenGenerator implements TokenGeneratorPort {
     private final String issuer;
     private final long accessTokenTtlSeconds;
     private final long refreshTokenTtlSeconds;
+    /**
+     * TASK-BE-668 — {@code auth_token_issued_total{type}}. This class is one of the two token
+     * mints in auth-service (the other is SAS's {@code OAuth2TokenGenerator}, counted by
+     * {@link com.example.auth.infrastructure.oauth2.CountingOAuth2TokenGenerator}); every
+     * {@code TokenGeneratorPort} caller (login, {@code /api/auth/refresh}) is counted here once.
+     */
+    private final AuthMetricsPort authMetrics;
 
     public JwtTokenGenerator(
             JwtSigner jwtSigner,
             PublicKey publicKey,
             @Value("${auth.jwt.issuer}") String issuer,
             @Value("${auth.jwt.access-token-ttl-seconds}") long accessTokenTtlSeconds,
-            @Value("${auth.jwt.refresh-token-ttl-seconds}") long refreshTokenTtlSeconds) {
+            @Value("${auth.jwt.refresh-token-ttl-seconds}") long refreshTokenTtlSeconds,
+            AuthMetricsPort authMetrics) {
+        this.authMetrics = authMetrics;
         this.jwtSigner = jwtSigner;
         this.publicKey = publicKey;
         this.issuer = issuer;
@@ -111,6 +121,11 @@ public class JwtTokenGenerator implements TokenGeneratorPort {
         refreshClaims.put("tenant_id", tenantContext.tenantId());
 
         String refreshToken = jwtSigner.sign(refreshClaims);
+
+        // TASK-BE-668: both tokens are minted only once both signatures succeeded — a signing
+        // failure above throws and mints nothing.
+        authMetrics.tokenIssued(AuthMetricsPort.IssuedTokenType.ACCESS);
+        authMetrics.tokenIssued(AuthMetricsPort.IssuedTokenType.REFRESH);
 
         return new TokenPair(accessToken, refreshToken, accessTokenTtlSeconds);
     }
