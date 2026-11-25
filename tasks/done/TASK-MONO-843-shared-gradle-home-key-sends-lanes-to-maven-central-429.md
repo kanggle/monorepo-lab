@@ -8,7 +8,7 @@ TASK-MONO-843
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -65,12 +65,12 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] AC-0: In Scope 1 의 (a)~(d) 를 실측해 Implementation Evidence 에 적는다(인용 · 숫자 · 명령). (a) 가 «레인별 키를 가를 방법이 없다» 로 나오면 구현하지 말고 그 근거와 함께 멈춘다.
-- [ ] AC-1: 서로 다른 프로젝트의 `_integration.yml` 레인 둘(예: iam B · ecommerce B)이 **서로 다른** gradle-home 키를 저장 · 복원한다 — PR CI 로그의 `Restored cache entry with key …` / `Cache saved …` 줄로 보인다. `_platform-e2e.yml` 레인도 같은 방법으로.
-- [ ] AC-2: 키 분리가 실제로 효과가 있다 — 같은 레인을 **두 번째로** 돌렸을 때(캐시가 그 레인 자신의 것으로 채워진 뒤) Maven Central 다운로드 수가 AC-0 (b) 기준값보다 줄어든다. 숫자 두 개를 적는다.
-- [ ] AC-3: 재시도 래퍼를 바꿨다면 — 429 를 주입한 로그(또는 고정 fixture)로 «재시도 1회 · warning» 이, 429 가 아닌 실패로 «재시도 없음 · 원래 종료코드» 가 각각 증명된다(bite 는 주입이 실제로 들어갔는지 먼저 확인).
-- [ ] AC-4: PR CI 실패 0 · 가드 전부(스테이지 뒤) rc=0 · `scripts/` 에 파일을 더하거나 뺐다면 **모든** 가드를 돌린다(`check-ls-files-guard-count.sh` 포함).
-- [ ] AC-5: 머지 뒤 `main` 에서 7일 동안 429 실패 잡 수를 다시 센다(이 티켓 기준 사흘 11). 0 이 아니면 그 수치를 Out of Scope 의 미러 결정 근거로 소유자에게 넘긴다.
+- [x] AC-0: In Scope 1 의 (a)~(d) 를 실측해 Implementation Evidence 에 적는다(인용 · 숫자 · 명령). (a) 가 «레인별 키를 가를 방법이 없다» 로 나오면 구현하지 말고 그 근거와 함께 멈춘다.
+- [x] AC-1: 서로 다른 프로젝트의 `_integration.yml` 레인 둘(예: iam B · ecommerce B)이 **서로 다른** gradle-home 키를 저장 · 복원한다 — PR CI 로그의 `Restored cache entry with key …` / `Cache saved …` 줄로 보인다. `_platform-e2e.yml` 레인도 같은 방법으로.
+- [x] AC-2: 키 분리가 실제로 효과가 있다 — 같은 레인을 **두 번째로** 돌렸을 때(캐시가 그 레인 자신의 것으로 채워진 뒤) Maven Central 다운로드 수가 AC-0 (b) 기준값보다 줄어든다. 숫자 두 개를 적는다.
+- [x] ⚪ AC-3 (해당 없음 — 래퍼를 바꾸지 않았다, In Scope 3 판단): 재시도 래퍼를 바꿨다면 — 429 를 주입한 로그(또는 고정 fixture)로 «재시도 1회 · warning» 이, 429 가 아닌 실패로 «재시도 없음 · 원래 종료코드» 가 각각 증명된다(bite 는 주입이 실제로 들어갔는지 먼저 확인).
+- [x] AC-4: PR CI 실패 0 · 가드 전부(스테이지 뒤) rc=0 · `scripts/` 에 파일을 더하거나 뺐다면 **모든** 가드를 돌린다(`check-ls-files-guard-count.sh` 포함).
+- [x] ➡️ AC-5 (`TASK-MONO-844` 로 이관 — ⏳ 2026-12-02 UTC 이후, DoD 가 허용한 후속 티켓): 머지 뒤 `main` 에서 7일 동안 429 실패 잡 수를 다시 센다(이 티켓 기준 사흘 11). 0 이 아니면 그 수치를 Out of Scope 의 미러 결정 근거로 소유자에게 넘긴다.
 
 # Related Specs
 
@@ -129,6 +129,15 @@ monorepo
 ## 로컬 가드 (스테이지 뒤)
 
 - `scripts/check-*.sh` · `*.mjs` 51개: 49 rc=0, 비0 둘 = 환경 전제 — `check-erp-single-tenant-ratchet.sh`(데모 스택 미기동 — «안 떠 있으면 실패») · `check-prerendered-demo-verdict.sh`(환경 변수 필요). 둘 다 `main` 에서도 rc=1(같은 사유, 842 때와 같음). YAML 두 파일 `yaml.safe_load` 통과.
+
+# Closure Evidence (2026-11-25 UTC)
+
+- impl PR #4716 → `4c93b21e1`(머지 2026-11-25T14:13:19Z) · 머지 전 체크 실패 0 · SUCCESS 36 · SKIPPED 41. 기안 #4715.
+- **AC-1** — 머지 커밋 `4c93b21e1` 의 CI 실행 `45631689699`(attempt 1) · Nightly 실행이 `main` 캐시에 재사용 레인 **17개**를 각자의 키로 저장: `integration[<artifact-name>]` 11(ecommerce A/B/C · iam A/B · erp · fan · finance · scm · wms-inventory-inbound · integration-test-reports) · `e2e[<report-artifact>]` CI 3 + nightly 3(11~18 MB). PR 실행 `45629895414` 로그에도 iam B `integration[iam-integration-test-reports-B]` · ecommerce B `integration[ecommerce-integration-test-reports-B]` 를 찾고 형제 항목(`integration[b8a35c2f…]`)으로 fallback 한 것이 보인다(PR 은 read-only).
+- **AC-2** — 같은 실행 재실행(attempt 2, 같은 sha — 각 레인이 자기 항목을 정확 키로 복원). 단위 = 복원한 것과 **다른** `gradle-dependencies-v1-*` 항목을 저장한 레인 수(AC-0 (b) 단위 정정 참고): **attempt 1 = 14/14 → attempt 2 = 0/14.** attempt 2 에서 각 레인이 복원한 의존성 항목 = attempt 1 에서 자기가 저장한 항목(fan `…1fbd036e` · iam B `…9226b83d` · ecommerce B `…2083c313` 등 14개 모두 일치). 429 = 0. 🔵 정확 키 복원으로 잰 값이다 — 다음 커밋부터는 `integration[<lane>]` 접두어 복원(같은 레인의 최신 항목)이고, 그것은 AC-5 재측정이 본다.
+- **AC-3** — ⚪ 해당 없음(위 «In Scope 3 판단»).
+- **AC-4** — PR CI 실패 0 · 로컬 가드 51 중 49 rc=0, 비0 둘 환경 전제(`main` 에서도 rc=1). `scripts/` 파일 증감 없음.
+- **AC-5** — `TASK-MONO-844`(⏳ SCHEDULED, 2026-12-02 UTC 이후)로 이관. 기준: 2026-11-23~25 사흘 429 실패 잡 11.
 
 # Definition of Done
 
