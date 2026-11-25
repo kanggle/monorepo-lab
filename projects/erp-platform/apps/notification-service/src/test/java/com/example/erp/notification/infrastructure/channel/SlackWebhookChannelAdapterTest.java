@@ -1,5 +1,6 @@
 package com.example.erp.notification.infrastructure.channel;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.erp.notification.application.port.outbound.NotificationChannelPort.DeliveryOutcome;
 import com.example.erp.notification.config.ExternalNotificationProperties;
 import com.example.erp.notification.domain.delivery.DeliveryChannel;
@@ -43,7 +44,7 @@ class SlackWebhookChannelAdapterTest {
         props.getSlack().setWebhookUrl(url);
         props.getSlack().setConnectTimeoutMs(1000);
         props.getSlack().setReadTimeoutMs(1000);
-        return new SlackWebhookChannelAdapter(props);
+        return new SlackWebhookChannelAdapter(props, ObservationRegistry.NOOP);
     }
 
     private Notification notification() {

@@ -3,6 +3,7 @@ package com.example.search.adapter.outbound.http;
 import com.example.common.resilience.ResilienceClientFactory;
 import com.example.search.application.port.out.ProductCatalogPort;
 import com.example.search.domain.model.SearchDocument;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -48,9 +49,10 @@ public class ProductCatalogHttpAdapter implements ProductCatalogPort {
     public ProductCatalogHttpAdapter(
             @Value("${catalog.product-service-url:http://product-service:8082}") String productServiceUrl,
             @Value("${catalog.connect-timeout-ms:3000}") int connectTimeoutMs,
-            @Value("${catalog.read-timeout-ms:5000}") int readTimeoutMs
+            @Value("${catalog.read-timeout-ms:5000}") int readTimeoutMs,
+            ObservationRegistry observationRegistry
     ) {
-        this.restClient = ResilienceClientFactory.buildRestClient(productServiceUrl, connectTimeoutMs, readTimeoutMs);
+        this.restClient = ResilienceClientFactory.buildRestClient(productServiceUrl, connectTimeoutMs, readTimeoutMs, observationRegistry);
     }
 
     @Override

@@ -67,13 +67,33 @@ Each service must define its own business metrics in `specs/services/<service>/o
 
 ## Tool
 
-- OpenTelemetry → Jaeger (or compatible backend)
+- OpenTelemetry (OTLP export) → Jaeger or a compatible backend (the local stack uses
+  VictoriaTraces — `docs/adr/ADR-MONO-007a-trace-layer.md`).
+- A service exports traces in one of two ways: Micrometer Tracing with the OTel bridge
+  (`micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp`), or the OpenTelemetry
+  Java agent attached in its container image. No repository code creates spans by hand.
 
 ## Rules
 
-- All HTTP requests must propagate trace headers (`traceparent`, `tracestate`).
-- Services must inject trace IDs into log MDC for correlation.
-- Spans must be created for: HTTP handler, DB query, Redis operation, external service call.
+These bind a service that exports traces. A service with neither mechanism exports none, so
+there is nothing for it to propagate.
+
+- Every HTTP request it sends must carry the W3C trace headers (`traceparent`, `tracestate`).
+  With Micrometer Tracing that only happens when the client is **observed**: build it from
+  Spring Boot's injected `RestClient.Builder` / `WebClient.Builder`, or pass the
+  application's `ObservationRegistry` (`.observationRegistry(registry)`, or
+  `ResilienceClientFactory.buildRestClient(…, registry)` — the registry is a required
+  argument). A client built with `RestClient.builder()` / `RestClient.create()` alone uses
+  `ObservationRegistry.NOOP`: no client span, no header, and the receiving service starts a
+  new trace. Guard: `scripts/check-outbound-client-observation.mjs`.
+- When a trace context exists, its trace ID goes into the log MDC under `traceId`.
+- Required spans: **HTTP server** (every handled request) and **HTTP client** (every outbound
+  call). Spring Boot creates both from observations; nothing else is required.
+- **Not required — and not produced by Micrometer Tracing here:** DB query, Redis operation
+  and messaging (Kafka) spans. Spring Boot has no JDBC or Lettuce observation
+  auto-configuration, and Kafka observation is off unless `observation-enabled` is set. The
+  Java agent instruments these too, so services using it do emit them. Adding them elsewhere
+  is a new tracing requirement — document it here first (§ Change Rule).
 
 ---
 

@@ -8,6 +8,7 @@ import com.example.product.domain.exception.SellerMemberAccountNotEligibleExcept
 import com.example.product.domain.exception.SellerRoleServiceUnavailableException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
@@ -52,8 +53,9 @@ public class AccountServiceSellerSiteRoleClient implements SellerSiteRoleGateway
             @Value("${iam.account-service.base-url:http://localhost:8081}") String baseUrl,
             @Value("${iam.downstream.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${iam.downstream.read-timeout-ms:10000}") int readTimeoutMs,
-            TenantScopedIamTokenProvider tenantTokenProvider) {
-        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
+            TenantScopedIamTokenProvider tenantTokenProvider,
+            ObservationRegistry observationRegistry) {
+        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs, observationRegistry);
         this.tenantTokenProvider = tenantTokenProvider;
     }
 

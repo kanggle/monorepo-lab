@@ -3,6 +3,7 @@ package com.example.shipping.infrastructure.carrier;
 import com.example.common.resilience.ResilienceClientFactory;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
@@ -56,10 +57,11 @@ public class DeliveryTrackerTokenProvider {
                                  int connectTimeoutMs,
                                  int readTimeoutMs,
                                  MeterRegistry meterRegistry,
-                                 Clock clock) {
+                                 Clock clock,
+                                 ObservationRegistry observationRegistry) {
         this.properties = properties;
         this.tokenClient = ResilienceClientFactory.buildRestClient(
-                properties.authUrl(), connectTimeoutMs, readTimeoutMs);
+                properties.authUrl(), connectTimeoutMs, readTimeoutMs, observationRegistry);
         this.meterRegistry = meterRegistry;
         this.clock = clock;
     }

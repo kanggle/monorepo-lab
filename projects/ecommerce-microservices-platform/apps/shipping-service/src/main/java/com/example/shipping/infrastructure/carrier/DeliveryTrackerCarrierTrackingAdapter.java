@@ -4,6 +4,7 @@ import com.example.common.resilience.ResilienceClientFactory;
 import com.example.shipping.application.port.CarrierTrackingPort;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
@@ -52,10 +53,11 @@ public class DeliveryTrackerCarrierTrackingAdapter implements CarrierTrackingPor
                                           DeliveryTrackerTokenProvider tokenProvider,
                                           int connectTimeoutMs,
                                           int readTimeoutMs,
-                                          MeterRegistry meterRegistry) {
+                                          MeterRegistry meterRegistry,
+                                          ObservationRegistry observationRegistry) {
         this.tokenProvider = tokenProvider;
         this.graphqlClient = ResilienceClientFactory.buildRestClient(
-                properties.graphqlUrl(), connectTimeoutMs, readTimeoutMs);
+                properties.graphqlUrl(), connectTimeoutMs, readTimeoutMs, observationRegistry);
         this.meterRegistry = meterRegistry;
     }
 

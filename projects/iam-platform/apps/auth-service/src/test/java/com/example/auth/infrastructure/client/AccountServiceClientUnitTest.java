@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.auth.application.exception.AccountServiceUnavailableException;
 import com.example.auth.application.result.AccountProfileResult;
 import com.example.auth.application.result.AccountStatusLookupResult;
@@ -53,7 +54,7 @@ class AccountServiceClientUnitTest {
         // the cachedRestClient reflection-replacement below.
         IamClientCredentialsTokenProvider tokenProvider = mock(IamClientCredentialsTokenProvider.class);
         when(tokenProvider.currentBearer()).thenReturn("test-jwt");
-        client = new AccountServiceClient(wireMockServer.baseUrl(), 3000, 5000, tokenProvider);
+        client = new AccountServiceClient(wireMockServer.baseUrl(), 3000, 5000, tokenProvider, ObservationRegistry.NOOP);
         // JDK HttpClient defaults to HTTP/2 (H2C) which causes RST_STREAM with WireMock.
         // Replace with an HTTP/1.1-only client so stubs are served predictably.
         HttpClient jdkHttp11 = HttpClient.newBuilder()

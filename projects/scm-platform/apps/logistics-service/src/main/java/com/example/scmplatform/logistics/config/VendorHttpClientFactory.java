@@ -7,6 +7,7 @@ import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
 import org.apache.hc.core5.util.Timeout;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
@@ -38,10 +39,13 @@ final class VendorHttpClientFactory {
      *                          EasyPost's HTTP Basic default header. A vendor authenticating
      *                          per-request (굿스플로's API-key header) passes a no-op so the key is
      *                          not baked into the client.
+     * @param observationRegistry the application's registry, so the client propagates the W3C
+     *                          {@code traceparent} header downstream
      * @return a fresh {@link RestClient} over a fresh, vendor-private connection pool
      */
     static RestClient pooledRestClient(AbstractVendorClientProperties props,
-                                       Consumer<RestClient.Builder> builderCustomizer) {
+                                       Consumer<RestClient.Builder> builderCustomizer,
+                                       ObservationRegistry observationRegistry) {
         ConnectionConfig connectionConfig = ConnectionConfig.custom()
                 .setConnectTimeout(Timeout.ofSeconds(props.getConnectTimeoutSeconds()))
                 .setSocketTimeout(Timeout.ofSeconds(props.getReadTimeoutSeconds()))
@@ -74,6 +78,7 @@ final class VendorHttpClientFactory {
                 new HttpComponentsClientHttpRequestFactory(httpClient);
 
         RestClient.Builder builder = RestClient.builder()
+                .observationRegistry(observationRegistry)
                 .baseUrl(props.getBaseUrl());
         builderCustomizer.accept(builder);
         return builder

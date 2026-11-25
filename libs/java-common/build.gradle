@@ -5,6 +5,10 @@ plugins {
 dependencies {
     // Spring Web (for RestClient, JdkClientHttpRequestFactory, HttpClientErrorException in ResilienceClientFactory)
     implementation 'org.springframework:spring-web'
+    // ObservationRegistry in ResilienceClientFactory.buildRestClient's signature — a factory-built
+    // RestClient without one never propagates traceparent (TASK-MONO-845). Declared, not inherited
+    // through spring-web, because it is part of this library's public API.
+    implementation 'io.micrometer:micrometer-observation'
 
     // Resilience4j (CircuitBreaker + Retry — used by ResilienceClientFactory)
     implementation "io.github.resilience4j:resilience4j-circuitbreaker:${resilience4jVersion}"
@@ -16,6 +20,10 @@ dependencies {
     // Reads platform/contracts/fixtures/performance-metrics-windows.json and checks that
     // PerformanceMetrics serialises to the contract shape (TASK-MONO-806) — test only.
     testImplementation 'com.fasterxml.jackson.core:jackson-databind'
+    // TASK-MONO-845 AC-2 — a real OTel-bridged tracer so the test reads the traceparent header the
+    // receiving server actually got, not merely that an observation started.
+    testImplementation 'io.micrometer:micrometer-tracing-bridge-otel'
+    testImplementation 'io.opentelemetry:opentelemetry-sdk'
 }
 
 dependencyManagement {

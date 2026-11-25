@@ -1,5 +1,6 @@
 package com.example.order.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.common.resilience.ResilienceClientFactory;
 import com.example.order.application.exception.CouponRejectedException;
 import com.example.order.application.exception.CouponServiceUnavailableException;
@@ -33,7 +34,7 @@ class PromotionServiceCouponClientTest {
         server.start();
         String baseUrl = server.url("/").toString().replaceAll("/$", "");
         client = new PromotionServiceCouponClient(
-                ResilienceClientFactory.buildRestClient(baseUrl, 1000, 2000),
+                ResilienceClientFactory.buildRestClient(baseUrl, 1000, 2000, ObservationRegistry.NOOP),
                 ResilienceClientFactory.buildCircuitBreaker("promotion-service-test"),
                 ResilienceClientFactory.buildRetry("promotion-service-test", builder -> builder
                         .maxAttempts(2)

@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.auth.application.port.OperatorInvitationAcceptancePort.AcceptOutcome;
 import com.example.auth.application.port.OperatorInvitationAcceptancePort.AcceptResult;
 import com.example.auth.application.port.OperatorInvitationAcceptancePort.PreviewOutcome;
@@ -49,7 +50,7 @@ class AdminOperatorInvitationClientUnitTest {
         when(tokenProvider.currentBearer()).thenReturn("test-jwt");
         MockEnvironment environment = new MockEnvironment()
                 .withProperty(AdminAssignmentClient.BASE_URL_PROPERTY, wireMockServer.baseUrl());
-        client = new AdminOperatorInvitationClient(environment, 3000, 5000, tokenProvider);
+        client = new AdminOperatorInvitationClient(environment, 3000, 5000, tokenProvider, ObservationRegistry.NOOP);
     }
 
     @AfterEach

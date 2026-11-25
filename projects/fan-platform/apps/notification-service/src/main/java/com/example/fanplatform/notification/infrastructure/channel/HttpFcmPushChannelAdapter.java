@@ -5,6 +5,7 @@ import com.example.fanplatform.notification.domain.channel.NotificationChannelPo
 import com.example.fanplatform.notification.domain.notification.Notification;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -65,13 +66,14 @@ public class HttpFcmPushChannelAdapter implements NotificationChannelPort {
             @Value("${fanplatform.notification.push.api-key:}") String apiKey,
             @Value("${fanplatform.notification.push.topic-prefix:fan_}") String topicPrefix,
             @Value("${fanplatform.notification.push.connect-timeout-ms:2000}") int connectTimeoutMs,
-            @Value("${fanplatform.notification.push.read-timeout-ms:5000}") int readTimeoutMs) {
+            @Value("${fanplatform.notification.push.read-timeout-ms:5000}") int readTimeoutMs,
+            ObservationRegistry observationRegistry) {
         this.meterRegistry = meterRegistry;
         this.apiKey = apiKey;
         this.topicPrefix = topicPrefix;
         this.sendPath = "/v1/projects/" + projectId + "/messages:send";
         this.restClient = ResilienceClientFactory.buildRestClient(
-                fcmBaseUrl, connectTimeoutMs, readTimeoutMs);
+                fcmBaseUrl, connectTimeoutMs, readTimeoutMs, observationRegistry);
     }
 
     @Override

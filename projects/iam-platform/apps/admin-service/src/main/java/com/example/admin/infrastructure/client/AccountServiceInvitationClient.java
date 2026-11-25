@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
@@ -57,8 +58,9 @@ public class AccountServiceInvitationClient implements VerifiedEmailMatchPort, O
             @Value("${admin.account-service.base-url}") String baseUrl,
             @Value("${admin.downstream.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${admin.downstream.read-timeout-ms:10000}") int readTimeoutMs,
-            IamClientCredentialsTokenProvider tokenProvider) {
-        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
+            IamClientCredentialsTokenProvider tokenProvider,
+            ObservationRegistry observationRegistry) {
+        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs, observationRegistry);
         this.tokenProvider = tokenProvider;
     }
 

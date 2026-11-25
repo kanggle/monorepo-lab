@@ -5,6 +5,7 @@ import com.example.security.servlet.actor.CallerTokenPropagation;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
@@ -56,11 +57,13 @@ public class MasterDataCallerEmployeeAdapter implements CallerEmployeePort {
             String baseUrl,
             @Value("${erpplatform.notification.masterdata.connect-timeout-ms:2000}") long connectMs,
             @Value("${erpplatform.notification.masterdata.read-timeout-ms:3000}") long readMs,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            ObservationRegistry observationRegistry) {
         ClientHttpRequestFactorySettings settings = ClientHttpRequestFactorySettings.defaults()
                 .withConnectTimeout(Duration.ofMillis(connectMs))
                 .withReadTimeout(Duration.ofMillis(readMs));
         this.restClient = RestClient.builder()
+                .observationRegistry(observationRegistry)
                 .baseUrl(baseUrl)
                 .requestFactory(ClientHttpRequestFactoryBuilder.detect().build(settings))
                 .build();

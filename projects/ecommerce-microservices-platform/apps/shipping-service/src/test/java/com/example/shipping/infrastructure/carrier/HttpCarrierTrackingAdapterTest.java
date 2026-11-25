@@ -1,5 +1,6 @@
 package com.example.shipping.infrastructure.carrier;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.shipping.application.port.CarrierTrackingPort.CarrierTrackingSnapshot;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -44,7 +45,7 @@ class HttpCarrierTrackingAdapterTest {
     }
 
     private HttpCarrierTrackingAdapter adapter(String baseUrl) {
-        return new HttpCarrierTrackingAdapter(baseUrl, "test-key", 2000, 5000);
+        return new HttpCarrierTrackingAdapter(baseUrl, "test-key", 2000, 5000, ObservationRegistry.NOOP);
     }
 
     @Test

@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.retry.Retry;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
@@ -66,6 +67,7 @@ public class AdminOperatorInvitationClient implements OperatorInvitationAcceptan
     private final Environment environment;
     private final int connectTimeoutMs;
     private final int readTimeoutMs;
+    private final ObservationRegistry observationRegistry;
     private final CircuitBreaker circuitBreaker;
     private final Retry retry;
     private final IamClientCredentialsTokenProvider tokenProvider;
@@ -77,8 +79,10 @@ public class AdminOperatorInvitationClient implements OperatorInvitationAcceptan
             Environment environment,
             @Value("${auth.admin-service.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${auth.admin-service.read-timeout-ms:5000}") int readTimeoutMs,
-            IamClientCredentialsTokenProvider tokenProvider) {
+            IamClientCredentialsTokenProvider tokenProvider,
+            ObservationRegistry observationRegistry) {
         this.environment = environment;
+        this.observationRegistry = observationRegistry;
         this.connectTimeoutMs = connectTimeoutMs;
         this.readTimeoutMs = readTimeoutMs;
         this.circuitBreaker = ResilienceClientFactory.buildCircuitBreaker("adminOperatorInvitation");
@@ -101,7 +105,8 @@ public class AdminOperatorInvitationClient implements OperatorInvitationAcceptan
             if (this.cachedRestClient != null && baseUrl.equals(this.cachedBaseUrl)) {
                 return this.cachedRestClient;
             }
-            RestClient fresh = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
+            RestClient fresh = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs,
+                    observationRegistry);
             this.cachedBaseUrl = baseUrl;
             this.cachedRestClient = fresh;
             return fresh;

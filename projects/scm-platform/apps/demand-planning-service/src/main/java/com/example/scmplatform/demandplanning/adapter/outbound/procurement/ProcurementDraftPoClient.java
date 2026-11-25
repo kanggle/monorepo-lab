@@ -4,6 +4,7 @@ import com.example.common.resilience.ResilienceClientFactory;
 import com.example.scmplatform.demandplanning.application.port.outbound.ProcurementDraftPoPort;
 import com.example.scmplatform.demandplanning.domain.error.ProcurementUnavailableException;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -49,8 +50,9 @@ public class ProcurementDraftPoClient implements ProcurementDraftPoPort {
     public ProcurementDraftPoClient(
             @Value("${scmplatform.demand-planning.procurement.base-url}") String baseUrl,
             @Value("${scmplatform.demand-planning.procurement.connect-timeout-ms:2000}") int connectMs,
-            @Value("${scmplatform.demand-planning.procurement.read-timeout-ms:10000}") int readMs) {
-        this.client = ResilienceClientFactory.buildRestClient(baseUrl, connectMs, readMs);
+            @Value("${scmplatform.demand-planning.procurement.read-timeout-ms:10000}") int readMs,
+            ObservationRegistry observationRegistry) {
+        this.client = ResilienceClientFactory.buildRestClient(baseUrl, connectMs, readMs, observationRegistry);
     }
 
     @Override

@@ -3,6 +3,7 @@ package com.example.fanplatform.artist.config;
 import com.example.fanplatform.artist.adapter.out.store.HttpStoreSellerDirectory;
 import com.example.fanplatform.artist.application.exception.StoreSellerLookupUnavailableException;
 import com.example.fanplatform.artist.application.port.out.StoreSellerDirectory;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
@@ -34,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class StoreSellerDirectoryConfigTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
+            .withBean(ObservationRegistry.class, () -> ObservationRegistry.NOOP)
             .withUserConfiguration(StoreSellerDirectoryConfig.class);
 
     @Test

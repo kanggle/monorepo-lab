@@ -1,5 +1,6 @@
 package com.example.shipping.infrastructure.carrier;
 
+import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -51,7 +52,7 @@ class DeliveryTrackerTokenProviderTest {
     }
 
     private DeliveryTrackerTokenProvider provider(DeliveryTrackerProperties props, Clock clock) {
-        return new DeliveryTrackerTokenProvider(props, 2000, 5000, new SimpleMeterRegistry(), clock);
+        return new DeliveryTrackerTokenProvider(props, 2000, 5000, new SimpleMeterRegistry(), clock, ObservationRegistry.NOOP);
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.example.batch.infrastructure.client;
 
 import com.example.common.resilience.ResilienceClientFactory;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -28,8 +29,9 @@ public class PromotionServiceClient {
 
     private final RestClient restClient;
 
-    public PromotionServiceClient(@Value("${promotion-service.base-url}") String baseUrl) {
-        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, 5_000, 10_000);
+    public PromotionServiceClient(@Value("${promotion-service.base-url}") String baseUrl,
+                                  ObservationRegistry observationRegistry) {
+        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, 5_000, 10_000, observationRegistry);
     }
 
     /**

@@ -6,6 +6,7 @@ import com.example.common.resilience.ResilienceClientFactory;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
@@ -41,12 +42,13 @@ public class SecurityServiceClient {
             @Value("${admin.security-service.base-url}") String baseUrl,
             @Value("${admin.downstream.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${admin.downstream.read-timeout-ms:10000}") int readTimeoutMs,
-            IamClientCredentialsTokenProvider tokenProvider) {
+            IamClientCredentialsTokenProvider tokenProvider,
+            ObservationRegistry observationRegistry) {
         // Pin HTTP/1.1 like the other admin downstream clients (Account/AccountTenant/Auth):
         // internal IAM service-to-service calls are cleartext HTTP/1.1, and pinning avoids the
         // JDK HttpClient's opportunistic h2c upgrade attempt against the (HTTP/1.1-only) target.
         // (ResilienceClientFactory.buildRestClient pins HTTP/1.1 for this identical reason.)
-        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
+        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs, observationRegistry);
         this.tokenProvider = tokenProvider;
     }
 

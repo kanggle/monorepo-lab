@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.auth.application.exception.AccountServiceUnavailableException;
 import com.example.auth.application.exception.SocialSignupEmailRegisteredException;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
@@ -45,7 +46,7 @@ class AccountServiceClientSocialSignupConflictTest {
         wireMockServer.start();
         IamClientCredentialsTokenProvider tokenProvider = mock(IamClientCredentialsTokenProvider.class);
         when(tokenProvider.currentBearer()).thenReturn("test-jwt");
-        client = new AccountServiceClient(wireMockServer.baseUrl(), 3000, 5000, tokenProvider);
+        client = new AccountServiceClient(wireMockServer.baseUrl(), 3000, 5000, tokenProvider, ObservationRegistry.NOOP);
         // HTTP/1.1 pin — JDK HttpClient's H2C default produces RST_STREAM against WireMock.
         HttpClient jdkHttp11 = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
         RestClient http11RestClient = RestClient.builder()

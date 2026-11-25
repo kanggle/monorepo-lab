@@ -1,5 +1,6 @@
 package com.example.scmplatform.logistics.config;
 
+import io.micrometer.observation.ObservationRegistry;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,9 +26,9 @@ import org.springframework.web.client.RestClient;
 public class GoodsflowDispatchClientConfig {
 
     @Bean
-    RestClient goodsflowRestClient(GoodsflowClientProperties props) {
+    RestClient goodsflowRestClient(GoodsflowClientProperties props, ObservationRegistry observationRegistry) {
         // No client-level auth customisation — the API-key header is per-request (§2.2).
         return VendorHttpClientFactory.pooledRestClient(props, builder -> {
-        });
+        }, observationRegistry);
     }
 }

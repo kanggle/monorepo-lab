@@ -1,5 +1,6 @@
 package com.example.finance.ledger.infrastructure.fxrate;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.finance.ledger.application.port.outbound.ClockPort;
 import com.example.finance.ledger.application.port.outbound.FxRateProviderPort.RateQuote;
 import com.example.finance.common.money.Currency;
@@ -43,7 +44,7 @@ class RealFxRateProviderAdapterTest {
         props.getReal().setBaseUrl(baseUrl);
         props.getReal().setConnectTimeoutMs(1_000);
         props.getReal().setReadTimeoutMs(2_000);
-        return new RealFxRateProviderAdapter(props, clock);
+        return new RealFxRateProviderAdapter(props, clock, ObservationRegistry.NOOP);
     }
 
     @Test

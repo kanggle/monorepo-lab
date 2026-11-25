@@ -1,5 +1,6 @@
 package com.example.shipping.infrastructure.carrier;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.shipping.application.port.CarrierTrackingPort.CarrierTrackingSnapshot;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import okhttp3.mockwebserver.MockResponse;
@@ -62,8 +63,8 @@ class DeliveryTrackerCarrierTrackingAdapterTest {
     private DeliveryTrackerCarrierTrackingAdapter adapter(DeliveryTrackerProperties props) {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         DeliveryTrackerTokenProvider tokenProvider =
-                new DeliveryTrackerTokenProvider(props, 2000, 5000, registry, Clock.systemUTC());
-        return new DeliveryTrackerCarrierTrackingAdapter(props, tokenProvider, 2000, 5000, registry);
+                new DeliveryTrackerTokenProvider(props, 2000, 5000, registry, Clock.systemUTC(), ObservationRegistry.NOOP);
+        return new DeliveryTrackerCarrierTrackingAdapter(props, tokenProvider, 2000, 5000, registry, ObservationRegistry.NOOP);
     }
 
     private void enqueueToken() {

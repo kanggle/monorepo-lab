@@ -2,6 +2,7 @@ package com.example.fanplatform.community.infrastructure.membership;
 
 import com.example.fanplatform.community.domain.membership.MembershipChecker;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -47,6 +48,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MembershipCheckerAutoConfigTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
+            .withBean(ObservationRegistry.class, () -> ObservationRegistry.NOOP)
             .withUserConfiguration(MembershipCheckerAutoConfig.class);
 
     @Test

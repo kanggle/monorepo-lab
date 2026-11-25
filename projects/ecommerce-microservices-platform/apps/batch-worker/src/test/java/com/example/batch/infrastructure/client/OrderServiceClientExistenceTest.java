@@ -1,5 +1,6 @@
 package com.example.batch.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -35,7 +36,7 @@ class OrderServiceClientExistenceTest {
         IamClientCredentialsTokenProvider tokenProvider = mock(IamClientCredentialsTokenProvider.class);
         when(tokenProvider.currentBearer()).thenReturn("test-jwt");
         client = new OrderServiceClient(
-                "http://" + orderService.getHostName() + ":" + orderService.getPort(), 30, 200, tokenProvider);
+                "http://" + orderService.getHostName() + ":" + orderService.getPort(), 30, 200, tokenProvider, ObservationRegistry.NOOP);
     }
 
     @AfterEach

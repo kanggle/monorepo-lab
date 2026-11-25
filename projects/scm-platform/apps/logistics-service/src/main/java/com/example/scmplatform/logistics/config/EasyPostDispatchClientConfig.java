@@ -1,5 +1,6 @@
 package com.example.scmplatform.logistics.config;
 
+import io.micrometer.observation.ObservationRegistry;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,10 +26,11 @@ import org.springframework.web.client.RestClient;
 public class EasyPostDispatchClientConfig {
 
     @Bean
-    RestClient easyPostRestClient(EasyPostClientProperties props) {
+    RestClient easyPostRestClient(EasyPostClientProperties props, ObservationRegistry observationRegistry) {
         return VendorHttpClientFactory.pooledRestClient(props,
                 // HTTP Basic: API key as username, empty password (§1.2). Applied as a client
                 // default header — EasyPost's alone; no other vendor's client sees it.
-                builder -> builder.defaultHeaders(headers -> headers.setBasicAuth(props.getApiKey(), "")));
+                builder -> builder.defaultHeaders(headers -> headers.setBasicAuth(props.getApiKey(), "")),
+                observationRegistry);
     }
 }

@@ -2,6 +2,7 @@ package com.example.shipping.infrastructure.carrier;
 
 import com.example.shipping.application.port.CarrierTrackingPort;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -34,8 +35,10 @@ class DeliveryTrackerConfig {
             @Value("${shipping.carrier.connect-timeout-ms:2000}") int connectTimeoutMs,
             @Value("${shipping.carrier.read-timeout-ms:5000}") int readTimeoutMs,
             MeterRegistry meterRegistry,
-            Clock clock) {
-        return new DeliveryTrackerTokenProvider(properties, connectTimeoutMs, readTimeoutMs, meterRegistry, clock);
+            Clock clock,
+            ObservationRegistry observationRegistry) {
+        return new DeliveryTrackerTokenProvider(properties, connectTimeoutMs, readTimeoutMs, meterRegistry, clock,
+                observationRegistry);
     }
 
     @Bean
@@ -44,8 +47,9 @@ class DeliveryTrackerConfig {
             DeliveryTrackerTokenProvider tokenProvider,
             @Value("${shipping.carrier.connect-timeout-ms:2000}") int connectTimeoutMs,
             @Value("${shipping.carrier.read-timeout-ms:5000}") int readTimeoutMs,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            ObservationRegistry observationRegistry) {
         return new DeliveryTrackerCarrierTrackingAdapter(
-                properties, tokenProvider, connectTimeoutMs, readTimeoutMs, meterRegistry);
+                properties, tokenProvider, connectTimeoutMs, readTimeoutMs, meterRegistry, observationRegistry);
     }
 }

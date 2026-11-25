@@ -1,5 +1,6 @@
 package com.example.review.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,7 +31,7 @@ class OrderServiceClientUnitTest {
         mockServer = MockRestServiceServer.bindTo(builder).build();
         RestClient testRestClient = builder.build();
 
-        orderServiceClient = new OrderServiceClient(BASE_URL, 3000, 5000);
+        orderServiceClient = new OrderServiceClient(BASE_URL, 3000, 5000, ObservationRegistry.NOOP);
 
         Field field = OrderServiceClient.class.getDeclaredField("restClient");
         field.setAccessible(true);

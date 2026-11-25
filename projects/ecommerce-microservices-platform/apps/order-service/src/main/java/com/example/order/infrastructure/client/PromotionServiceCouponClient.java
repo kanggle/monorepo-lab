@@ -9,6 +9,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.retry.Retry;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -56,8 +57,9 @@ public class PromotionServiceCouponClient implements CouponDiscountPort {
     public PromotionServiceCouponClient(
             @Value("${order.promotion-service.base-url:http://localhost:8092}") String baseUrl,
             @Value("${order.promotion-service.connect-timeout-ms:2000}") int connectTimeoutMs,
-            @Value("${order.promotion-service.read-timeout-ms:3000}") int readTimeoutMs) {
-        this(ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs),
+            @Value("${order.promotion-service.read-timeout-ms:3000}") int readTimeoutMs,
+            ObservationRegistry observationRegistry) {
+        this(ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs, observationRegistry),
                 ResilienceClientFactory.buildCircuitBreaker("promotion-service"),
                 ResilienceClientFactory.buildRetry("promotion-service", builder -> builder.maxAttempts(2)));
     }

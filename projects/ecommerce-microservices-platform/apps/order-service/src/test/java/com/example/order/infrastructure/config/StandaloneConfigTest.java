@@ -1,5 +1,6 @@
 package com.example.order.infrastructure.config;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.order.application.event.OrderPlacedEvent;
 import com.example.order.application.port.OrderEventPublisher;
 import okhttp3.mockwebserver.MockResponse;
@@ -63,7 +64,7 @@ class StandaloneConfigTest {
     void hungPaymentService_failsFastWithinConfiguredReadTimeout() {
         // No response enqueued: MockWebServer accepts the connection but never writes a
         // response body, simulating a hung downstream call.
-        OrderEventPublisher publisher = config.standaloneOrderEventPublisher(baseUrl(), 2000, 300);
+        OrderEventPublisher publisher = config.standaloneOrderEventPublisher(baseUrl(), 2000, 300, ObservationRegistry.NOOP);
 
         long start = System.nanoTime();
         assertThatThrownBy(() -> publisher.publishOrderPlaced(samplePlacedEvent()))
@@ -80,7 +81,7 @@ class StandaloneConfigTest {
     void respondingPaymentService_stillWorks() {
         paymentService.enqueue(new MockResponse().setResponseCode(201));
 
-        OrderEventPublisher publisher = config.standaloneOrderEventPublisher(baseUrl(), 2000, 5000);
+        OrderEventPublisher publisher = config.standaloneOrderEventPublisher(baseUrl(), 2000, 5000, ObservationRegistry.NOOP);
 
         publisher.publishOrderPlaced(samplePlacedEvent());
     }

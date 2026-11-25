@@ -3,6 +3,7 @@ package com.example.order.infrastructure.config;
 import com.example.common.resilience.ResilienceClientFactory;
 import com.example.order.application.port.OrderEventPublisher;
 import com.example.order.infrastructure.event.StandaloneOrderEventPublisher;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,9 +25,10 @@ public class StandaloneConfig {
     OrderEventPublisher standaloneOrderEventPublisher(
             @Value("${services.payment-service.url:http://localhost:8087}") String paymentServiceUrl,
             @Value("${services.payment-service.connect-timeout-ms:3000}") int connectTimeoutMs,
-            @Value("${services.payment-service.read-timeout-ms:5000}") int readTimeoutMs
+            @Value("${services.payment-service.read-timeout-ms:5000}") int readTimeoutMs,
+            ObservationRegistry observationRegistry
     ) {
-        RestClient restClient = ResilienceClientFactory.buildRestClient(paymentServiceUrl, connectTimeoutMs, readTimeoutMs);
+        RestClient restClient = ResilienceClientFactory.buildRestClient(paymentServiceUrl, connectTimeoutMs, readTimeoutMs, observationRegistry);
         return new StandaloneOrderEventPublisher(restClient);
     }
 }

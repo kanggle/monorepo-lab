@@ -5,6 +5,7 @@ import com.example.finance.ledger.application.port.outbound.FxRateProviderPort;
 import com.example.finance.common.money.Currency;
 import com.example.common.resilience.ResilienceClientFactory;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -22,7 +23,7 @@ import java.util.Optional;
  * {@code financeplatform.ledger.fxrate.mode=real}. Unlike {@link HttpFxRateProviderAdapter} (which
  * expects a bespoke {@code {"rate","asOf"}} shape no real provider emits), this adapter speaks
  * Frankfurter's actual response so the feed can run against a live source. The {@link RestClient} is
- * built ONCE in the constructor via {@link ResilienceClientFactory#buildRestClient(String, int, int)}
+ * built ONCE in the constructor via {@link ResilienceClientFactory#buildRestClient(String, int, int, ObservationRegistry)}
  * (libs/java-common — never {@code new RestTemplate()}).
  *
  * <p><b>Rate direction (CRUX):</b> the port's {@link RateQuote#rate()} is
@@ -47,7 +48,8 @@ public class RealFxRateProviderAdapter implements FxRateProviderPort {
     private final String sourceTag;
     private final ClockPort clock;
 
-    public RealFxRateProviderAdapter(FxRateFeedProperties properties, ClockPort clock) {
+    public RealFxRateProviderAdapter(FxRateFeedProperties properties, ClockPort clock,
+                                   ObservationRegistry observationRegistry) {
         this.clock = clock;
         String baseUrl = properties.getReal().getBaseUrl();
         if (baseUrl == null || baseUrl.isBlank()) {
@@ -62,7 +64,8 @@ public class RealFxRateProviderAdapter implements FxRateProviderPort {
         this.restClient = ResilienceClientFactory.buildRestClient(
                 baseUrl,
                 properties.getReal().getConnectTimeoutMs(),
-                properties.getReal().getReadTimeoutMs());
+                properties.getReal().getReadTimeoutMs(),
+                observationRegistry);
         this.sourceTag = "real:" + hostOf(baseUrl);
     }
 

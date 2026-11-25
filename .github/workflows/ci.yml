@@ -290,6 +290,7 @@ jobs:
       stage-contexts: ${{ steps.filter.outputs.stage-contexts }}
       grafana-datasource-uid: ${{ steps.filter.outputs.grafana-datasource-uid }}
       spec-metrics-implemented: ${{ steps.filter.outputs.spec-metrics-implemented }}
+      outbound-client-observation: ${{ steps.filter.outputs.outbound-client-observation }}
       # 🔴 TASK-MONO-767 도 MONO-619/640 과 같은 함정을 밟았다 — 이 한 줄 없이 PR 을 올렸고
       #    필터 스텝 자체는 `no-next-font-google = true` 를 맞게 계산했는데(raw 로그 확인)
       #    `needs.changes.outputs.no-next-font-google` 는 빈 값이라 잡이 통째로 skipped 였다.
@@ -998,6 +999,12 @@ jobs:
               - 'libs/*/src/main/**/*.java'
               - 'scripts/check-spec-metrics-implemented.mjs'
               - 'scripts/check-alert-rule-metrics.sh'
+            # TASK-MONO-845: a hand-built HTTP client in a trace-exporting service must be
+            # observed. Population = the build files (which services trace) + their main code.
+            outbound-client-observation:
+              - 'projects/*/apps/*/build.gradle'
+              - 'projects/*/apps/*/src/main/**/*.java'
+              - 'scripts/check-outbound-client-observation.mjs'
             # TASK-MONO-767: `next/font`'s `google` loader 는 빌드 시점에 Google
             # Fonts 호스트를 불러 CSS 를 내려받는다 — 응답이 예상과 다르면
             # `next build` 가 간헐적으로 죽는다(재현/원인은 티켓 본문).
@@ -2227,6 +2234,33 @@ jobs:
 
       - name: Guard — every dashboard datasource uid is provisioned by its project
         run: node scripts/check-grafana-datasource-uid.mjs
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-845 — trace 를 내보내는 서비스에서 손으로 만든 HTTP 클라이언트는 관측돼야 한다.
+  #
+  # 🔴 2026-11-25 실측: main 코드의 `ObservationRegistry` 참조 0 — `RestClient.builder()` 의
+  # 기본값 NOOP 이라 client span 도 `traceparent` 도 없었고, 받는 서비스는 새 trace 를 시작했다.
+  # 공통 팩토리는 컴파일러가 강제한다(레지스트리 필수); 이 잡은 빌더를 직접 부르는 곳을 문다.
+  # ---------------------------------------------------------------------------
+  outbound-client-observation:
+    name: Outbound client observation (hand-built HTTP clients carry an ObservationRegistry)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      needs.changes.outputs.outbound-client-observation == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax (node --check)
+        run: node --check scripts/check-outbound-client-observation.mjs
+
+      - name: Self-test the predicate (bites, and stays silent where it must)
+        run: node scripts/check-outbound-client-observation.mjs --self-test
+
+      - name: Guard — every hand-built client in a tracing service is observed
+        run: node scripts/check-outbound-client-observation.mjs
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-841 — 스펙 metric · span 표의 이름은 «계획» 표시가 없으면 코드가 내보내야 한다.

@@ -1,5 +1,6 @@
 package com.example.review.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.AfterEach;
@@ -50,7 +51,7 @@ class OrderServiceClientTimeoutTest {
     void hungOrderService_failsFastWithinConfiguredReadTimeout() {
         // No response enqueued: MockWebServer accepts the connection but never writes a
         // response body, simulating a hung downstream call.
-        OrderServiceClient client = new OrderServiceClient(baseUrl(), 2000, 300);
+        OrderServiceClient client = new OrderServiceClient(baseUrl(), 2000, 300, ObservationRegistry.NOOP);
 
         long start = System.nanoTime();
         assertThatThrownBy(() -> client.hasUserPurchasedProduct(UUID.randomUUID(), UUID.randomUUID()))
@@ -71,7 +72,7 @@ class OrderServiceClientTimeoutTest {
                 .setHeader("Content-Type", "application/json")
                 .setBody("{\"purchased\":true}"));
 
-        OrderServiceClient client = new OrderServiceClient(baseUrl(), 2000, 5000);
+        OrderServiceClient client = new OrderServiceClient(baseUrl(), 2000, 5000, ObservationRegistry.NOOP);
 
         boolean result = client.hasUserPurchasedProduct(UUID.randomUUID(), UUID.randomUUID());
 

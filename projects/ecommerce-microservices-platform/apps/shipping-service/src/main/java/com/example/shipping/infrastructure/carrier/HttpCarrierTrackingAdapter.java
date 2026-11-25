@@ -3,6 +3,7 @@ package com.example.shipping.infrastructure.carrier;
 import com.example.common.resilience.ResilienceClientFactory;
 import com.example.shipping.application.port.CarrierTrackingPort;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -36,9 +37,10 @@ public class HttpCarrierTrackingAdapter implements CarrierTrackingPort {
             @Value("${shipping.carrier.base-url:}") String baseUrl,
             @Value("${shipping.carrier.api-key:}") String apiKey,
             @Value("${shipping.carrier.connect-timeout-ms:2000}") int connectTimeoutMs,
-            @Value("${shipping.carrier.read-timeout-ms:5000}") int readTimeoutMs) {
+            @Value("${shipping.carrier.read-timeout-ms:5000}") int readTimeoutMs,
+            ObservationRegistry observationRegistry) {
         this.apiKey = apiKey;
-        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
+        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs, observationRegistry);
     }
 
     @Override

@@ -5,6 +5,7 @@ import com.example.finance.ledger.application.port.outbound.FxRateProviderPort;
 import com.example.finance.common.money.Currency;
 import com.example.common.resilience.ResilienceClientFactory;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -17,7 +18,7 @@ import java.util.Optional;
 /**
  * HTTP FX rate adapter (23rd increment — TASK-FIN-BE-031, ADR-002 D1/D5). Wired when
  * {@code financeplatform.ledger.fxrate.mode=http}. The {@link RestClient} is built ONCE in the
- * constructor via {@link ResilienceClientFactory#buildRestClient(String, int, int)}
+ * constructor via {@link ResilienceClientFactory#buildRestClient(String, int, int, ObservationRegistry)}
  * (libs/java-common — never {@code new RestTemplate()}), carrying the shared connect/read timeouts.
  *
  * <p><b>Best-effort, never-throw</b> (AC-4): {@link #latestQuote} does a {@code GET
@@ -36,7 +37,8 @@ public class HttpFxRateProviderAdapter implements FxRateProviderPort {
     private final String sourceTag;
     private final ClockPort clock;
 
-    public HttpFxRateProviderAdapter(FxRateFeedProperties properties, ClockPort clock) {
+    public HttpFxRateProviderAdapter(FxRateFeedProperties properties, ClockPort clock,
+                                   ObservationRegistry observationRegistry) {
         this.clock = clock;
         String baseUrl = properties.getHttp().getBaseUrl();
         if (baseUrl == null || baseUrl.isBlank()) {
@@ -51,7 +53,8 @@ public class HttpFxRateProviderAdapter implements FxRateProviderPort {
         this.restClient = ResilienceClientFactory.buildRestClient(
                 baseUrl,
                 properties.getHttp().getConnectTimeoutMs(),
-                properties.getHttp().getReadTimeoutMs());
+                properties.getHttp().getReadTimeoutMs(),
+                observationRegistry);
         this.sourceTag = "http:" + hostOf(baseUrl);
     }
 

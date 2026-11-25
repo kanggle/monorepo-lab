@@ -1,6 +1,7 @@
 package com.example.fanplatform.community.infrastructure.artist;
 
 import com.example.fanplatform.community.domain.follow.ArtistAccountChecker;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -37,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ArtistAccountCheckerConfigTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
+            .withBean(ObservationRegistry.class, () -> ObservationRegistry.NOOP)
             .withUserConfiguration(ArtistAccountCheckerConfig.class);
 
     @Test

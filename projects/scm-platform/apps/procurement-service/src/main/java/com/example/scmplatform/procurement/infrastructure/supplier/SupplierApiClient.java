@@ -1,6 +1,7 @@
 package com.example.scmplatform.procurement.infrastructure.supplier;
 
 import com.example.common.resilience.ResilienceClientFactory;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
@@ -26,8 +27,9 @@ public class SupplierApiClient {
     public SupplierApiClient(
             @Value("${scmplatform.procurement.supplier.mock.base-url}") String baseUrl,
             @Value("${scmplatform.procurement.supplier.mock.connect-timeout-ms:2000}") int connectMs,
-            @Value("${scmplatform.procurement.supplier.mock.read-timeout-ms:10000}") int readMs) {
-        this.client = ResilienceClientFactory.buildRestClient(baseUrl, connectMs, readMs);
+            @Value("${scmplatform.procurement.supplier.mock.read-timeout-ms:10000}") int readMs,
+            ObservationRegistry observationRegistry) {
+        this.client = ResilienceClientFactory.buildRestClient(baseUrl, connectMs, readMs, observationRegistry);
     }
 
     /**

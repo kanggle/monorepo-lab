@@ -1,5 +1,6 @@
 package com.example.admin.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.admin.application.exception.DownstreamFailureException;
 import com.example.admin.application.exception.NonRetryableDownstreamException;
 import com.example.admin.application.port.OperatorInvitationMailPort;
@@ -47,7 +48,7 @@ class AccountServiceInvitationClientTest {
         wireMock.start();
         IamClientCredentialsTokenProvider tokenProvider = mock(IamClientCredentialsTokenProvider.class);
         when(tokenProvider.currentBearer()).thenReturn("test-jwt");
-        client = new AccountServiceInvitationClient(wireMock.baseUrl(), 3000, 5000, tokenProvider);
+        client = new AccountServiceInvitationClient(wireMock.baseUrl(), 3000, 5000, tokenProvider, ObservationRegistry.NOOP);
     }
 
     @AfterEach

@@ -1,5 +1,6 @@
 package com.example.scmplatform.demandplanning.adapter.outbound.visibility;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.scmplatform.demandplanning.application.port.outbound.InventoryVisibilityPort.SkuWarehouseQty;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -30,7 +31,7 @@ class InventoryVisibilityRestAdapterTest {
         ivs = new MockWebServer();
         ivs.start();
         String baseUrl = "http://" + ivs.getHostName() + ":" + ivs.getPort();
-        adapter = new InventoryVisibilityRestAdapter(baseUrl, 2000, 5000);
+        adapter = new InventoryVisibilityRestAdapter(baseUrl, 2000, 5000, ObservationRegistry.NOOP);
     }
 
     @AfterEach
