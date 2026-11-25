@@ -208,7 +208,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## in-progress
 
-- `TASK-MONO-845-hand-built-restclient-drops-trace-propagation.md` — **손으로 만든 `RestClient` 는 관측되지 않아 client span · `traceparent` 가 없다** (IN-PROGRESS, 2026-11-25 UTC · 소유자 결정 «끊긴 전파만 고치고 문장도 맞추기»). 공통 팩토리 `ResilienceClientFactory.buildRestClient` 에 필수 `ObservationRegistry`(옛 오버로드 삭제 · 호출 파일 34) + 팩토리 밖 6 파일 + 재발 가드 + `platform/observability.md` § Tracing 을 실제 계측에 맞춤(DB · Redis · 메시징 span = 요구 안 함). AC-0 = 재집계 · gateway 전달 경로 전파(jar) · `http.client.requests` 부수효과. iam tracer · DB span 구현은 범위 밖. 분석=Opus 5.5 / 구현 권장=Opus 5.5.
+_(없음)_
 
 
 
@@ -223,6 +223,7 @@ lifecycle itself — see `done/TASK-MONO-001-introduce-root-task-lifecycle.md`.
 
 ## done
 
+- ✅ `TASK-MONO-845-hand-built-restclient-drops-trace-propagation.md` — **손으로 만든 `RestClient` 는 관측되지 않아 client span · `traceparent` 가 없다** (DONE, 2026-11-25 UTC · #4718 기안 · #4719 `c896c19f6` · 소유자 결정 «끊긴 전파만 고치고 문장도 맞추기»). 공통 팩토리 `ResilienceClientFactory.buildRestClient` 에 필수 `ObservationRegistry`(옛 오버로드 삭제 · 호출 파일 34) + 팩토리 밖 6 파일 + 재발 가드 + `platform/observability.md` § Tracing 을 실제 계측에 맞춤(DB · Redis · 메시징 span = 요구 안 함). AC-0 = 재집계 · gateway 전달 경로 전파(jar) · `http.client.requests` 부수효과. iam tracer · DB span 구현은 범위 밖. 분석=Opus 5.5 / 구현 권장=Opus 5.5.
 - ✅ `TASK-MONO-843-shared-gradle-home-key-sends-lanes-to-maven-central-429.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4716 머지, `4c93b21e1`, 실패 0 · SUCCESS 36) · 기안 #4715. 재사용 레인 17개가 gradle-home 키 하나를 공유 → 형제 캐시 복원 → 자기 의존성 매번 재다운로드 → Maven Central 429(11-23~25 실패 잡 11 · `main` 빨강 6). `GRADLE_BUILD_ACTION_CACHE_KEY_JOB_INSTANCE` = 호출자 고정 artifact 이름. AC-1 레인별 저장 17 · AC-2 같은 sha 재실행 «새 의존성 항목 저장 레인» 14/14 → 0/14 · AC-3 ⚪ 429 래퍼 안 함(Gradle 이 이미 3회) · AC-5 → `TASK-MONO-844`(⏳ 12-02).
 
 - ✅ `TASK-MONO-842-platform-observability-doc-real-names-and-guards.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4713 머지, `7d5ce56f1`, 실패 0) · 기안 #4712. `platform/observability.md` 필수 metric 표의 없는 이름 3개 → 실제 이름 + 출처 · 새 절 «Spec ↔ Code ↔ Consumers»(세 방향 가드 · «계획» 표시 형식 · 대기 목록 · 이름 변환 실측).
