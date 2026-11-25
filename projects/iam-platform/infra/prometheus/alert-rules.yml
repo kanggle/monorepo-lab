@@ -90,6 +90,23 @@ groups:
           description: "Potential token theft. Investigate immediately."
           runbook: "knowledge/runbooks/auth-refresh-token-reuse.md"
 
+      # TASK-BE-665 (spec auth-service/observability.md § Alerts). account-service down →
+      # AccountServiceClient fails closed → login is impossible. These failures are deliberately
+      # NOT counted in auth_login_total{result="failure"} (TASK-BE-664 — that would fire the
+      # credential-stuffing alert), so this is the alert that owns them. The series exists only
+      # because the breaker lives in Spring's CircuitBreakerRegistry (resilience4j-micrometer);
+      # label shape taken from a real scrape in AccountServiceCircuitBreakerMetricsTest.
+      - alert: AuthAccountServiceDown
+        expr: max(resilience4j_circuitbreaker_state{service="auth-service",name="accountService",state=~"open|forced_open"}) == 1
+        for: 1m
+        labels:
+          severity: critical
+          service: auth-service
+        annotations:
+          summary: "auth-service circuit breaker to account-service is open"
+          description: "Logins fail closed while account-service is unreachable. Check account-service health."
+          runbook: "knowledge/runbooks/auth-account-service-down.md"
+
       - alert: AuthOutboxLagHigh
         expr: auth_outbox_lag_seconds > 60
         for: 5m
