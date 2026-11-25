@@ -8,7 +8,7 @@ TASK-MONO-837
 
 # Status
 
-review
+done
 
 # Owner
 
