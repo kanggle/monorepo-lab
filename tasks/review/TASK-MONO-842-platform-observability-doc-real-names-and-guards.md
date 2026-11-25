@@ -8,7 +8,7 @@ TASK-MONO-842
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -49,8 +49,8 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] AC-1: 표의 이름이 전부 실제로 내보내지는 이름이다(대시보드 · 알림이 이미 묻는 이름과 같은 철자).
-- [ ] AC-2: 새 절의 가드 이름 4개(`check-metric-name-registry.sh` · `check-alert-rule-metrics.sh` · `check-spec-metrics-implemented.mjs` · `check-grafana-datasource-uid.mjs`)가 `scripts/` 에 실제로 있고, «계획» 표시 문자열이 `check-spec-metrics-implemented.mjs` 가 찾는 문자열과 같다.
+- [x] AC-1: 표의 이름이 전부 실제로 내보내지는 이름이다(대시보드 · 알림이 이미 묻는 이름과 같은 철자).
+- [x] AC-2: 새 절의 가드 이름 4개(`check-metric-name-registry.sh` · `check-alert-rule-metrics.sh` · `check-spec-metrics-implemented.mjs` · `check-grafana-datasource-uid.mjs`)가 `scripts/` 에 실제로 있고, «계획» 표시 문자열이 `check-spec-metrics-implemented.mjs` 가 찾는 문자열과 같다.
 - [ ] AC-3: 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께) · PR CI 실패 0.
 
 # Related Specs
@@ -72,6 +72,14 @@ monorepo
 # Test Requirements
 
 - 문자열 대조 · 가드 · CI.
+
+# Implementation Evidence (2026-11-25 UTC)
+
+- **§ Required Metrics** — 표를 실제로 내보내지는 이름 + 출처 칸으로: `http_server_requests_seconds_count` · `http_server_requests_seconds_bucket`(버킷은 `libs/java-observability` — 836, 그 라이브러리를 안 쓰는 서비스는 속성) · `jvm_memory_used_bytes`(그대로) · `hikaricp_connections_active`. 옛 이름 셋(`http_requests_total` · `http_request_duration_seconds` · `db_connection_pool_active`)은 저장소에서 이 표에만 있었다 — 새 이름은 대시보드 · 알림 · 스펙이 이미 묻는 철자(`http_server_requests_seconds_count` 37곳 · `hikaricp_connections_active` 8곳).
+- **새 절 «Spec ↔ Code ↔ Consumers»** — 세 방향 표(가드 · 실패 조건) · datasource uid 가드 · «계획» 표시 형식(복사 가능한 문자열 + 범례 줄) · 파생 표기 · span 은 표시로만 통과 · 대시보드 대기 목록 규칙 · 이름 변환 실측(Counter/Gauge/Timer · `-` · 강한 참조 gauge). 🔴 처음 쓴 «세 방향이 모두 한 술어» 는 틀렸다(코드 → 스펙 가드는 다른 술어) — «코드가 내보내나» 를 묻는 두 방향만 공유한다고 고쳐 적었다.
+- **AC-1** — 위.
+- **AC-2** — 가드 4개 `scripts/` 에 존재(파일 확인) · 문서의 표시 문자열 `🔵 *계획 · 미구현` 이 `check-spec-metrics-implemented.mjs:48` `PLANNED` 와 같다 · 공유 문서에 프로젝트 · 서비스 이름 0(grep — HARDSTOP-03).
+- **AC-3** — 스테이지 뒤 `check-*.sh` 43: 41 rc=0, 비0 둘 = 환경 전제(erp 래칫 · prerendered verdict). `.mjs` 8/8. PR CI: 대기.
 
 # Definition of Done
 
