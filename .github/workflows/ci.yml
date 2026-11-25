@@ -289,6 +289,7 @@ jobs:
       capture-route-staleness: ${{ steps.filter.outputs.capture-route-staleness }}
       stage-contexts: ${{ steps.filter.outputs.stage-contexts }}
       grafana-datasource-uid: ${{ steps.filter.outputs.grafana-datasource-uid }}
+      spec-metrics-implemented: ${{ steps.filter.outputs.spec-metrics-implemented }}
       # 🔴 TASK-MONO-767 도 MONO-619/640 과 같은 함정을 밟았다 — 이 한 줄 없이 PR 을 올렸고
       #    필터 스텝 자체는 `no-next-font-google = true` 를 맞게 계산했는데(raw 로그 확인)
       #    `needs.changes.outputs.no-next-font-google` 는 빈 값이라 잡이 통째로 skipped 였다.
@@ -990,6 +991,13 @@ jobs:
             grafana-datasource-uid:
               - 'projects/*/infra/grafana/**'
               - 'scripts/check-grafana-datasource-uid.mjs'
+            # TASK-MONO-841: spec → code. The specs, the code that exports, and both judges.
+            spec-metrics-implemented:
+              - 'projects/*/specs/**'
+              - 'projects/*/apps/*/src/main/**/*.java'
+              - 'libs/*/src/main/**/*.java'
+              - 'scripts/check-spec-metrics-implemented.mjs'
+              - 'scripts/check-alert-rule-metrics.sh'
             # TASK-MONO-767: `next/font`'s `google` loader 는 빌드 시점에 Google
             # Fonts 호스트를 불러 CSS 를 내려받는다 — 응답이 예상과 다르면
             # `next build` 가 간헐적으로 죽는다(재현/원인은 티켓 본문).
@@ -2219,6 +2227,33 @@ jobs:
 
       - name: Guard — every dashboard datasource uid is provisioned by its project
         run: node scripts/check-grafana-datasource-uid.mjs
+
+  # ---------------------------------------------------------------------------
+  # TASK-MONO-841 — 스펙 metric · span 표의 이름은 «계획» 표시가 없으면 코드가 내보내야 한다.
+  #
+  # 🔴 셋째 방향(스펙 → 코드). 837 실측: 스펙이 선언한 251개 중 74개만 있었고, iam
+  # «필수 메트릭» 52행 중 32행이 없었다. 판정은 check-alert-rule-metrics.sh --unexported
+  # (같은 술어 — 두 벌 두지 않는다).
+  # ---------------------------------------------------------------------------
+  spec-metrics-implemented:
+    name: Spec metrics implemented (spec tables vs exported metrics)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: changes
+    if: >-
+      github.repository == 'kanggle/monorepo-lab' &&
+      needs.changes.outputs.spec-metrics-implemented == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax (node --check)
+        run: node --check scripts/check-spec-metrics-implemented.mjs
+
+      - name: Self-test the predicate (bites, and stays silent where it must)
+        run: node scripts/check-spec-metrics-implemented.mjs --self-test
+
+      - name: Guard — every unmarked spec metric is exported
+        run: node scripts/check-spec-metrics-implemented.mjs
 
   # ---------------------------------------------------------------------------
   # TASK-MONO-650 — README 스크린샷 배선.
