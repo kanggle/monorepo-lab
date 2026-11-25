@@ -8,7 +8,7 @@ wms Grafana 대시보드 9개가 iam 것의 복사본이다 — wms 에 없는 �
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -58,9 +58,9 @@ backend
 
 # Acceptance Criteria
 
-- [ ] AC-1: wms 대시보드의 모든 `expr` 에서 뽑은 지표 이름이 (a) wms 코드 · `libs` 가 등록한 meter 의 실제 Prometheus 이름 또는 (b) 프레임워크 시리즈(`http_server_requests_*` · `jvm_*` · `process_*` · `system_*` · `hikaricp_*` · `kafka_consumer_*` · `up` · `ALERTS`) 중 하나다 — 이름 목록과 대조 결과를 증거에.
-- [ ] AC-2: 모든 패널의 datasource uid 가 wms 프로비저닝 uid 와 같다.
-- [ ] AC-3: `grafana/grafana:11.2.0` 컨테이너에 wms `provisioning` · `dashboards` 를 마운트해 띄우면 대시보드 7개가 오류 없이 프로비저닝된다(`/api/search` 목록 + 로그에 provisioning 오류 0).
+- [x] AC-1: wms 대시보드의 모든 `expr` 에서 뽑은 지표 이름이 (a) wms 코드 · `libs` 가 등록한 meter 의 실제 Prometheus 이름 또는 (b) 프레임워크 시리즈(`http_server_requests_*` · `jvm_*` · `process_*` · `system_*` · `hikaricp_*` · `kafka_consumer_*` · `up` · `ALERTS`) 중 하나다 — 이름 목록과 대조 결과를 증거에.
+- [x] AC-2: 모든 패널의 datasource uid 가 wms 프로비저닝 uid 와 같다.
+- [x] AC-3: `grafana/grafana:11.2.0` 컨테이너에 wms `provisioning` · `dashboards` 를 마운트해 띄우면 대시보드 7개가 오류 없이 프로비저닝된다(`/api/search` 목록 + 로그에 provisioning 오류 0).
 - [ ] AC-4: 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께) · PR CI 실패 0.
 
 # Related Specs
@@ -86,6 +86,16 @@ backend
 # Test Requirements
 
 - 실제 scrape 이름 대조 · Grafana 프로비저닝 기동 · 가드 · CI.
+
+# Implementation Evidence (2026-11-25 UTC)
+
+- **변경**: 삭제 3(`account-overview` · `auth-overview` · `security-overview`) · 다시 쓰기 2(`admin-overview` — uid 유지, 제목 «wms admin-service Overview», 패널 11 · `gateway-overview` — 패널 6) · 신설 1(`wms-operations`, 패널 13) · `alerts.json` datasource uid 11곳 `"prometheus"` → `"PBFA97CFB590B2093"`. `jvm` · `service-overview` · `system-overview` 는 프레임워크 지표만 묻고 `$job` 변수(`label_values(…, job)`)를 써 그대로 둠. 코드 변경 없음.
+- **이름 확정**: 실제 `PrometheusMeterRegistry` 에 wms 가 쓰는 모양(Gauge · Counter · Timer, 이름 그대로)을 등록해 scrape — 일회용 테스트, 커밋 안 함(실행 뒤 삭제). 확인된 변환: Counter `x.count` → `x_count_total`(`admin_projection_error_count_total` · `inventory_mutation_count_total` · `outbound_saga_sweeper_run_count_total`) · Gauge `x.count` → `x_count`(`*_outbox_pending_count` · `inventory_reservation_active_count`) · Timer `admin.query.latency.p95` → `admin_query_latency_p95_seconds_{count,sum,max}` · Timer `admin.projection.lag.seconds` → `admin_projection_lag_seconds_{count,sum,max}`(`_seconds` 가 두 번 붙지 않음) · Counter `inventory.optimistic-lock.retry.count` → `inventory_optimistic_lock_retry_count_total`. 이 Timer 들은 히스토그램이 없어 `_bucket` 이 없다 → 평균(`_sum/_count`)과 `_max` 로 그렸다.
+- **AC-1** — wms 대시보드 7개의 `expr` 83개에서 지표 이름 56개 추출(문자열 · `{…}` · `[…]` · `by (…)` · 함수 제거) → **알 수 없는 이름 0**. 기준 = 위 scrape 이름 + 같은 모양으로 wms 코드에 등록된 형제 9개(`notification/inbound/inventory/master/outbound_outbox_pending_count` · `notification_outbox_publish_failure_total` · `outbound_idempotency_lookup_count_total` · `outbound_idempotency_store_failure_total` · `gateway_ratelimit_unexpected_error_total`) + 프레임워크 접두사(`http_server_requests_` · `jvm_` · `process_` · `system_` · `hikaricp_` · `kafka_consumer_`) · `up` · `ALERTS`. **bite**: 같은 검사를 `origin/main` 의 옛 wms 대시보드 9개에 돌리면 알 수 없는 이름 **36**(account 6 · admin 8 · auth 7 · gateway 5 · security 10). gateway 지표는 wms gateway 가 `libs:java-gateway`(`FailOpenRateLimiter`) · `libs:java-security`(`AllowedAudiencesValidator`, 태그 `gateway` · `outcome`)를 쓰는 것을 `build.gradle:59,62` 로 확인.
+- **AC-2** — 7개 파일의 datasource uid 참조가 전부 `PBFA97CFB590B2093`(`"prometheus"` 0). 실측: 임시 Grafana 에서 `GET /api/datasources/uid/prometheus` → **404 «Data source not found»**, 같은 `POST /api/ds/query` 도 404 — 옛 `alerts.json` 패널 11개는 **실제로 깨져 있었다**. 새 uid 는 200(질의가 datasource 까지 감 — Prometheus 가 없어 `no such host`, 예상대로).
+- **AC-3** — `grafana/grafana:11.2.0` 에 wms `provisioning` · `dashboards` 를 읽기 전용 마운트: `/api/search` = 대시보드 **7개**(alert-overview · jvm-dashboard · service-overview · system-overview · admin-overview · gateway-overview · wms-operations), datasource 3개. 로그의 error/warn 4줄은 없는 선택 디렉터리(`provisioning/plugins` · `provisioning/alerting`)와 DB 마이그레이션 안내 — 대시보드 · datasource 프로비저닝 오류 0. 컨테이너 · 이미지 삭제.
+- **AC-4** — 스테이지 뒤 `check-*.sh` 43: 41 rc=0, 비0 둘 = 환경 전제(erp 래칫 · prerendered verdict). `.mjs` 6/6. 지운 세 파일을 가리키는 참조 0(`projects/wms-platform`, tasks 제외). PR CI: 대기.
+- 🆕 **기록만 (이 티켓 밖)**: ① `admin.query.cache.hit.rate` 는 `ProjectionMetrics.java:61` `meterRegistry.gauge(CACHE_HIT_RATE_METRIC, 0.0d)` — 박싱된 상수를 물어 값이 갱신될 수 없다 → 대시보드에 넣지 않음. ② iam · ecommerce 의 `alerts.json` 도 uid `"prometheus"` 11곳 — 위 404 로 같은 결함. ③ iam 대시보드는 스펙 · 코드 어디에도 없는 이름을 묻는다(예: `account_profile_reads_total` · `security_rules_triggered_total` · `gateway_jwks_cache_hits_total`) — `TASK-MONO-837` 은 스펙이 선언한 이름만 셌으므로 이것을 못 봤다.
 
 # Definition of Done
 

@@ -1,56 +1,403 @@
 {
   "uid": "admin-overview",
-  "title": "Admin Service Overview",
-  "tags": ["admin"],
+  "title": "wms admin-service Overview",
+  "tags": [
+    "wms",
+    "admin"
+  ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 1,
   "refresh": "30s",
-  "time": { "from": "now-1h", "to": "now" },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "editable": true,
   "panels": [
-    { "id": 1, "title": "Operator Commands", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "sum(rate(admin_command_total[5m])) by (action_code)", "legendFormat": "{{action_code}}", "refId": "A" }]
-    },
-    { "id": 2, "title": "Lock / Unlock Count", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 8, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+    {
+      "id": 1,
+      "title": "Projection lag — mean by topic",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
-        { "expr": "rate(admin_command_total{action_code=\"LOCK\"}[5m])", "refId": "A", "legendFormat": "lock" },
-        { "expr": "rate(admin_command_total{action_code=\"UNLOCK\"}[5m])", "refId": "B", "legendFormat": "unlock" }
-      ]
+        {
+          "expr": "sum by (topic) (rate(admin_projection_lag_seconds_sum[5m])) / sum by (topic) (rate(admin_projection_lag_seconds_count[5m]))",
+          "legendFormat": "{{topic}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
     },
-    { "id": 3, "title": "Audit Queries", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 16, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "rate(admin_audit_query_total[5m])", "refId": "A" }]
-    },
-    { "id": 4, "title": "Downstream Duration p99", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 0, "y": 6 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "histogram_quantile(0.99, sum(rate(admin_downstream_duration_seconds_bucket[5m])) by (le, target_service))", "legendFormat": "{{target_service}}", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "s" } }
-    },
-    { "id": 5, "title": "Audit Write Rate", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 8, "y": 6 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "sum(rate(admin_audit_write_total[5m])) by (result)", "legendFormat": "{{result}}", "refId": "A" }]
-    },
-    { "id": 6, "title": "Command Outcome Breakdown", "type": "piechart", "gridPos": { "h": 6, "w": 8, "x": 16, "y": 6 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "sum(rate(admin_command_total[5m])) by (outcome)", "legendFormat": "{{outcome}}", "refId": "A" }]
-    },
-    { "id": 7, "title": "Failed Commands", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 0, "y": 12 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "sum(rate(admin_command_total{outcome=\"failure\"}[5m])) by (action_code)", "legendFormat": "{{action_code}}", "refId": "A" }]
-    },
-    { "id": 8, "title": "4xx / 5xx", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 8, "y": 12 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+    {
+      "id": 2,
+      "title": "Projection lag — max by source",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
       "targets": [
-        { "expr": "sum(rate(http_server_requests_seconds_count{service=\"admin-service\",status=~\"4..\"}[5m]))", "refId": "A", "legendFormat": "4xx" },
-        { "expr": "sum(rate(http_server_requests_seconds_count{service=\"admin-service\",status=~\"5..\"}[5m]))", "refId": "B", "legendFormat": "5xx" }
-      ]
+        {
+          "expr": "max by (source_service) (admin_projection_lag_seconds_max)",
+          "legendFormat": "{{source_service}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
     },
-    { "id": 9, "title": "Latency p99", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 16, "y": 12 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{service=\"admin-service\"}[5m])) by (le))", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "s" } }
+    {
+      "id": 3,
+      "title": "Projection errors by topic",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "sum by (topic) (rate(admin_projection_error_count_total[5m]))",
+          "legendFormat": "{{topic}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "Projection events dropped by reason",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "sum by (reason) (rate(admin_projection_dropped_count_total[5m]))",
+          "legendFormat": "{{reason}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "Events applied per topic",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "sum by (topic) (rate(admin_projection_lag_seconds_count[5m]))",
+          "legendFormat": "{{topic}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "title": "Query latency — mean by endpoint",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "sum by (endpoint) (rate(admin_query_latency_p95_seconds_sum[5m])) / sum by (endpoint) (rate(admin_query_latency_p95_seconds_count[5m]))",
+          "legendFormat": "{{endpoint}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "title": "Query latency — max by endpoint",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "max by (endpoint) (admin_query_latency_p95_seconds_max)",
+          "legendFormat": "{{endpoint}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "title": "Outbox pending",
+      "type": "stat",
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 0,
+        "y": 21
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "admin_outbox_pending_count",
+          "legendFormat": "pending",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value"
+      }
+    },
+    {
+      "id": 9,
+      "title": "Outbox publish",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 6,
+        "y": 21
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "rate(admin_outbox_publish_success_total[5m])",
+          "legendFormat": "success",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        },
+        {
+          "expr": "rate(admin_outbox_publish_failure_total[5m])",
+          "legendFormat": "failure",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 10,
+      "title": "HTTP 4xx / 5xx",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 12,
+        "y": 21
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{service=\"admin-service\",status=~\"4..\"}[5m]))",
+          "legendFormat": "4xx",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        },
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{service=\"admin-service\",status=~\"5..\"}[5m]))",
+          "legendFormat": "5xx",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 11,
+      "title": "HTTP p99",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 18,
+        "y": 21
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{service=\"admin-service\"}[5m])))",
+          "legendFormat": "p99",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
     }
-  ]
+  ],
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  }
 }

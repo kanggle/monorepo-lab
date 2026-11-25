@@ -71,7 +71,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-- `TASK-BE-666-grafana-dashboards-are-iam-copies.md` — **wms Grafana 대시보드 9개가 iam 복사본** (READY, 2026-11-25 UTC · `TASK-MONO-837` 곁가지). 8개 바이트 동일 · auth/account/security 는 wms 에 없는 서비스 → 삭제, admin · gateway 를 wms 지표로, `wms-operations` 신설, `alerts.json` datasource uid 수정. 이름은 실제 scrape 로 확정. 분석=Opus 5.5 / 구현 권장=Sonnet 5.5.
+(empty)
 
 <details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 done/)</summary>
 
@@ -89,7 +89,7 @@ _(없음)_
 
 ## review
 
-(empty)
+- `TASK-BE-666-grafana-dashboards-are-iam-copies.md` — **wms Grafana 대시보드 9개가 iam 복사본** (REVIEW, 2026-11-25 UTC · `TASK-MONO-837` 곁가지). 8개 바이트 동일 · auth/account/security 는 wms 에 없는 서비스 → 삭제, admin · gateway 를 wms 지표로, `wms-operations` 신설, `alerts.json` datasource uid 수정. 이름은 실제 scrape 로 확정. 분석=Opus 5.5 / 구현 권장=Sonnet 5.5.
 
 ## done
 
