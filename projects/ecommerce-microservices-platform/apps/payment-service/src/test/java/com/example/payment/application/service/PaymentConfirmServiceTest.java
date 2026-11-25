@@ -152,6 +152,22 @@ class PaymentConfirmServiceTest {
 
         verify(paymentMetricRecorder, never()).incrementPaymentCompleted();
         verify(paymentEventPublisher, never()).publishPaymentCompleted(any());
+        // TASK-BE-669: the one definitive-failure branch counts exactly once, reason=pg_rejected
+        verify(paymentMetricRecorder).incrementPaymentFailed("pg_rejected");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-669: PgGatewayUnavailableException(재시도 가능) 은 payment_failed_total 을 세지 않는다")
+    void confirm_pgGatewayUnavailable_doesNotCountFailure() {
+        Payment payment = Payment.create("order-1", "user-1", 30000L);
+        given(paymentRepository.findByOrderId("order-1")).willReturn(Optional.of(payment));
+        given(paymentGateway.verify(req("pk_test_123", 30000L, "order-1")))
+                .willThrow(new PgGatewayUnavailableException("retry exhausted"));
+
+        assertThatThrownBy(() -> paymentConfirmService.confirm("user-1", "pk_test_123", "order-1", 30000L))
+                .isInstanceOf(PgGatewayUnavailableException.class);
+
+        verify(paymentMetricRecorder, never()).incrementPaymentFailed(any());
     }
 
     @Test
