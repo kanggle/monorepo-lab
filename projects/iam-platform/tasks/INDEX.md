@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-665-auth-account-service-down-alert.md` — **스펙의 `AuthAccountServiceDown` 이 배포 규칙에 없고, 물을 차단기 상태 지표도 없다** (READY, 2026-11-25 UTC). `accountService` 차단기가 `CircuitBreaker.of` 독립 인스턴스라 Micrometer 레지스트리 밖 → Spring `CircuitBreakerRegistry` 로 옮기고 알림 + runbook. 대조군 테스트(독립 인스턴스는 지표 없음). 분석=Opus 5.5 / 구현 권장=Sonnet 5.5.
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 
