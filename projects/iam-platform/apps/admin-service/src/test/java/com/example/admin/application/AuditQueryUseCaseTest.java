@@ -4,6 +4,9 @@ import com.example.admin.application.exception.TenantScopeDeniedException;
 import com.example.admin.infrastructure.client.SecurityServiceClient;
 import com.example.admin.infrastructure.persistence.AdminActionJpaEntity;
 import com.example.admin.infrastructure.persistence.AdminActionJpaRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.prometheusmetrics.PrometheusConfig;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,10 +53,14 @@ class AuditQueryUseCaseTest {
     private QueryTenantScopeGate queryTenantScopeGate;
 
     private AuditQueryUseCase useCase;
+    /** TASK-BE-668 — a real admin_audit_query_total. */
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void setUp() {
-        useCase = new AuditQueryUseCase(adminActionRepo, securityServiceClient, auditor, queryTenantScopeGate);
+        meterRegistry = new SimpleMeterRegistry();
+        useCase = new AuditQueryUseCase(adminActionRepo, securityServiceClient, auditor, queryTenantScopeGate,
+                meterRegistry);
 
         // Default: normal operator resolves to its own non-platform tenant "fan-platform".
         when(queryTenantScopeGate.resolve(any(), any(), eq(ActionCode.AUDIT_QUERY), eq("audit.read")))
@@ -90,6 +97,7 @@ class AuditQueryUseCaseTest {
         // TASK-BE-654: a security-source read is recorded under the composite permission key.
         verify(auditor).recordWithPermission(any(), eq("audit.read+security.event.read"));
         verify(auditor, never()).record(any());
+        assertOnlyQuery("all");  // TASK-BE-668: no source requested
     }
 
     @Test
@@ -147,6 +155,7 @@ class AuditQueryUseCaseTest {
                 ArgumentCaptor.forClass(AdminActionAuditor.AuditRecord.class);
         verify(auditor).record(captor.capture());
         assertThat(captor.getValue().actionCode()).isEqualTo(ActionCode.AUDIT_QUERY);
+        assertOnlyQuery("admin");  // TASK-BE-668
     }
 
     // ── TASK-BE-654: 메타-감사 행이 무엇을 읽었는지 남긴다 · 실패해도 남는다 ─────────────
@@ -200,6 +209,7 @@ class AuditQueryUseCaseTest {
         assertThat(row.getValue().downstreamDetail())
                 .contains("requestedSource=login_history")
                 .endsWith("failed=login_history error=IllegalStateException");
+        assertOnlyQuery("login_history");  // TASK-BE-668: the read ran (and failed) - still a query
     }
 
     @Test
@@ -214,6 +224,7 @@ class AuditQueryUseCaseTest {
                 .hasMessage("security-service timeout")
                 .satisfies(t -> assertThat(t.getSuppressed()).extracting(Throwable::getMessage)
                         .containsExactly("audit store down"));
+        assertOnlyQuery("login_history");  // TASK-BE-668: counted before the meta-audit write
     }
 
     // ── finder 분기 (gate 결과에 따른 admin_actions 조회 경로) ────────────────────
@@ -326,6 +337,60 @@ class AuditQueryUseCaseTest {
 
         verify(auditor, never()).record(any());
         verify(auditor, never()).reserveAuditId();
+        assertNoQuery();  // TASK-BE-668: the gate refused - nothing was read
+    }
+
+    // ── TASK-BE-668: admin_audit_query_total{query_type} ──────────────────────
+
+    private double query(String queryType) {
+        return meterRegistry.get("admin_audit_query_total").tag("query_type", queryType).counter().count();
+    }
+
+    private void assertOnlyQuery(String queryType) {
+        for (String t : List.of("all", "admin", "login_history", "suspicious")) {
+            assertThat(query(t)).as("admin_audit_query_total{query_type=%s}", t)
+                    .isEqualTo(t.equals(queryType) ? 1.0 : 0.0);
+        }
+    }
+
+    private void assertNoQuery() {
+        for (String t : List.of("all", "admin", "login_history", "suspicious")) {
+            assertThat(query(t)).as("admin_audit_query_total{query_type=%s}", t).isZero();
+        }
+    }
+
+    @Test
+    @DisplayName("TASK-BE-668: query_type 네 값이 0 으로 미리 등록된다")
+    void queryMetric_fourTypesRegisteredAtZero() {
+        assertThat(meterRegistry.find("admin_audit_query_total").counters())
+                .extracting(c -> c.getId().getTag("query_type"))
+                .containsExactlyInAnyOrder("all", "admin", "login_history", "suspicious");
+        assertNoQuery();
+    }
+
+    @Test
+    @DisplayName("TASK-BE-668: source=suspicious 조회는 query_type=suspicious 로 한 번")
+    void queryMetric_suspiciousSourceCountedOnce() {
+        when(securityServiceClient.querySuspiciousEvents(eq("fan-platform"), eq("acc-1"), any(), any()))
+                .thenReturn(List.of());
+
+        useCase.query(cmd("op-1", "acc-1", "suspicious", 0, 20, null));
+
+        assertOnlyQuery("suspicious");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-668 AC-1: 실제 PrometheusMeterRegistry scrape 에 admin_audit_query_total{query_type=…} 가 그대로 나온다")
+    void queryMetric_prometheusScrapeCarriesTheSpecName() {
+        PrometheusMeterRegistry prometheus = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        AuditQueryUseCase scraped = new AuditQueryUseCase(adminActionRepo, securityServiceClient, auditor,
+                queryTenantScopeGate, prometheus);
+
+        scraped.query(cmd("op-1", "acc-1", "admin", 0, 20, null));
+
+        String scrape = prometheus.scrape();
+        assertThat(scrape).as(scrape).contains("admin_audit_query_total{query_type=\"admin\"} 1.0");
+        assertThat(scrape).contains("admin_audit_query_total{query_type=\"all\"} 0.0");
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

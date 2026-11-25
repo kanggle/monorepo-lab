@@ -4,9 +4,12 @@ import com.example.account.application.command.SignupCommand;
 import com.example.account.application.event.AccountEventPublisher;
 import com.example.account.application.exception.AccountAlreadyExistsException;
 import com.example.account.application.port.AuthServicePort;
+import com.example.account.application.port.SignupMetricsPort;
+import com.example.account.application.port.SignupMetricsPort.SignupOutcome;
 import com.example.account.application.result.SignupResult;
 import com.example.account.domain.account.Account;
 import com.example.account.domain.account.PasswordPolicy;
+import com.example.account.domain.account.PasswordPolicyViolationException;
 import com.example.account.domain.profile.Profile;
 import com.example.account.domain.repository.AccountRepository;
 import com.example.account.domain.repository.ProfileRepository;
@@ -31,9 +34,36 @@ public class SignupUseCase {
     private final ActiveTenantGuard activeTenantGuard;
     /** TASK-BE-614 (ADR-MONO-078 A): consumer-pool rules, all behind iam.consumer-pool.enabled. */
     private final ConsumerAccountPool consumerAccountPool;
+    /** TASK-BE-668 — {@code account_signup_total{result}}. */
+    private final SignupMetricsPort signupMetrics;
 
+    /**
+     * TASK-BE-668: one {@code account_signup_total} count per attempt, decided here by the answer the
+     * attempt gets — every duplicate refusal of {@link #signUp} (the pool coexistence refusal, the
+     * uniqueness check, the credential 409, the concurrent-insert race) surfaces as
+     * {@link AccountAlreadyExistsException}; a password-policy or e-mail-format refusal as
+     * {@link PasswordPolicyViolationException} / {@link IllegalArgumentException} (both answered
+     * {@code VALIDATION_ERROR}). Anything else — a suspended tenant, auth-service unavailable, a DB
+     * error — is none of the spec's three results and is not counted. Request-body validation
+     * ({@code @Valid}) never reaches this method; it is counted in {@code GlobalExceptionHandler}.
+     */
     @Transactional
     public SignupResult execute(SignupCommand command) {
+        SignupResult result;
+        try {
+            result = signUp(command);
+        } catch (AccountAlreadyExistsException e) {
+            signupMetrics.signupAttempt(SignupOutcome.DUPLICATE);
+            throw e;
+        } catch (PasswordPolicyViolationException | IllegalArgumentException e) {
+            signupMetrics.signupAttempt(SignupOutcome.VALIDATION_ERROR);
+            throw e;
+        }
+        signupMetrics.signupAttempt(SignupOutcome.SUCCESS);
+        return result;
+    }
+
+    private SignupResult signUp(SignupCommand command) {
         // TASK-BE-507 (was BE-506's finding): the account is born into the tenant of the OIDC
         // client the user actually registered through — auth-service resolves it from the saved
         // /oauth2/authorize request and sends it as X-Tenant-Id. A header-less caller still pins

@@ -18,6 +18,7 @@ import com.example.account.domain.tenant.Tenant;
 import com.example.account.domain.tenant.TenantId;
 import com.example.account.domain.tenant.TenantStatus;
 import com.example.account.domain.tenant.TenantType;
+import com.example.account.infrastructure.metrics.SignupMetricsProbe;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,6 +57,8 @@ class SignupUseCaseTest {
     @Mock private ConsumerAccountPool consumerAccountPool;
 
     private SignupUseCase signupUseCase;
+    /** TASK-BE-668 — a real account_signup_total on a SimpleMeterRegistry. */
+    private final SignupMetricsProbe metrics = new SignupMetricsProbe();
 
     /**
      * TASK-BE-507: every signup now resolves + validates its tenant first, so each test needs
@@ -68,7 +71,7 @@ class SignupUseCaseTest {
         // pre-extraction test.
         signupUseCase = new SignupUseCase(accountRepository, profileRepository, eventPublisher,
                 authServicePort, accountIdentityProvisioner, new ActiveTenantGuard(tenantRepository),
-                consumerAccountPool);
+                consumerAccountPool, metrics.port());
         // lenient: the two rejection tests below shadow this with a tenant-specific stub, which
         // would otherwise make this one "unused" under STRICT_STUBS.
         lenient().when(tenantRepository.findById(any(TenantId.class)))
@@ -120,6 +123,7 @@ class SignupUseCaseTest {
         verify(eventPublisher).publishAccountCreated(any(Account.class), any(), any());
         // TASK-BE-381: the minted identity is assigned to the new account (born-unified).
         verify(accountRepository).assignIdentityId(any(TenantId.class), eq("acc-1"), eq("idy-1"));
+        metrics.assertOnly("success");  // TASK-BE-668
     }
 
     @Test
@@ -138,6 +142,7 @@ class SignupUseCaseTest {
         verify(authServicePort).createCredential(eq("acc-1"), eq("new@example.com"), eq("password123!"), any(), isNull());
         verify(eventPublisher).publishAccountCreated(any(Account.class), any(), any());
         verify(accountRepository, never()).assignIdentityId(any(), any(), any());
+        metrics.assertOnly("success");  // TASK-BE-668: a fail-soft mint is still a created account
     }
 
     @Test
@@ -152,6 +157,7 @@ class SignupUseCaseTest {
                 .isInstanceOf(AccountAlreadyExistsException.class);
 
         verify(eventPublisher, never()).publishAccountCreated(any(), any(), any());
+        metrics.assertOnly("duplicate");  // TASK-BE-668
     }
 
     @Test
@@ -168,6 +174,8 @@ class SignupUseCaseTest {
         // unit test cannot observe the DB rollback — it verifies the event side-effect is
         // suppressed, which is the observable contract from outside the transaction.
         verify(eventPublisher, never()).publishAccountCreated(any(), any(), any());
+        // TASK-BE-668: an outage is none of the three results - never validation_error.
+        metrics.assertNone();
     }
 
     @Test
@@ -184,6 +192,7 @@ class SignupUseCaseTest {
         verify(accountRepository, never()).save(any(Account.class));
         verify(authServicePort, never()).createCredential(any(), any(), any(), any(), any());
         verify(eventPublisher, never()).publishAccountCreated(any(), any(), any());
+        metrics.assertOnly("validation_error");  // TASK-BE-668
     }
 
     @Test
@@ -195,6 +204,7 @@ class SignupUseCaseTest {
                 .isInstanceOf(AccountAlreadyExistsException.class);
 
         verify(authServicePort, never()).createCredential(any(), any(), any(), any(), any());
+        metrics.assertOnly("duplicate");  // TASK-BE-668
     }
 
     // ── TASK-BE-507 ────────────────────────────────────────────────────────────────────
@@ -247,6 +257,7 @@ class SignupUseCaseTest {
 
         verify(accountRepository, never()).save(any(Account.class));
         verify(authServicePort, never()).createCredential(any(), any(), any(), any(), any());
+        metrics.assertNone();  // TASK-BE-668: not one of the three results
     }
 
     @Test
@@ -261,5 +272,35 @@ class SignupUseCaseTest {
                 .isInstanceOf(TenantSuspendedException.class);
 
         verify(accountRepository, never()).save(any(Account.class));
+        metrics.assertNone();  // TASK-BE-668
+    }
+
+    // ── TASK-BE-668 — account_signup_total: the remaining decided branches ─────────────────
+
+    @Test
+    @DisplayName("TASK-BE-668: 동시 가입 경합(DataIntegrityViolation)은 duplicate 로 센다")
+    void execute_concurrentInsertRace_countedDuplicate() {
+        given(accountRepository.existsByEmail(TenantId.FAN_PLATFORM, "new@example.com")).willReturn(false);
+        willThrow(new org.springframework.dao.DataIntegrityViolationException("uk_email"))
+                .given(accountRepository).save(any(Account.class));
+
+        assertThatThrownBy(() -> signupUseCase.execute(sampleCommand()))
+                .isInstanceOf(AccountAlreadyExistsException.class);
+
+        metrics.assertOnly("duplicate");
+    }
+
+    @Test
+    @DisplayName("TASK-BE-668: Email 값 객체가 거부한 형식(400 VALIDATION_ERROR)은 validation_error 로 센다")
+    void execute_emailRejectedByValueObject_countedValidationError() {
+        given(accountRepository.existsByEmail(TenantId.FAN_PLATFORM, "new@localhost")).willReturn(false);
+        SignupCommand noTld = new SignupCommand(
+                "new@localhost", "password123!", "Jane", "en-US", "UTC", null);
+
+        assertThatThrownBy(() -> signupUseCase.execute(noTld))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verify(authServicePort, never()).createCredential(any(), any(), any(), any(), any());
+        metrics.assertOnly("validation_error");
     }
 }

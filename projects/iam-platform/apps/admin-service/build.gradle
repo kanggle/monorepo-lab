@@ -55,6 +55,9 @@ dependencies {
     // Testcontainers classes stay out of the production classpath.
     testImplementation testFixtures(project(':libs:java-test-support'))
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // TASK-BE-668: scrape a real PrometheusMeterRegistry in tests (runtime already has it via
+    // libs/java-observability, but that is an implementation dep, so not on the test compile path).
+    testImplementation 'io.micrometer:micrometer-registry-prometheus'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:mysql'

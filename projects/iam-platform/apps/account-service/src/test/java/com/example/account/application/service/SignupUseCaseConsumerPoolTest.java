@@ -82,7 +82,8 @@ class SignupUseCaseConsumerPoolTest {
         ConsumerAccountPool pool = new ConsumerAccountPool(
                 flag, tenantRepository, accountRepository, membershipRepository);
         signupUseCase = new SignupUseCase(accountRepository, profileRepository, eventPublisher,
-                authServicePort, accountIdentityProvisioner, new ActiveTenantGuard(tenantRepository), pool);
+                authServicePort, accountIdentityProvisioner, new ActiveTenantGuard(tenantRepository), pool,
+                new com.example.account.infrastructure.metrics.SignupMetricsProbe().port());
         lenient().when(tenantRepository.findById(any(TenantId.class)))
                 .thenAnswer(inv -> Optional.ofNullable(TENANTS.containsKey(inv.<TenantId>getArgument(0))
                         ? tenant(inv.getArgument(0)) : null));

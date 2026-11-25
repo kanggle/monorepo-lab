@@ -109,9 +109,13 @@ public class AdminActionDenyWriter {
      * (A10 override per architecture.md): the 403 denial always succeeds, and
      * audit failures here only bump the {@code admin.audit.cross_tenant_deny_failure}
      * counter for observability.
+     *
+     * <p>TASK-BE-668: this and the three best-effort writers below return whether the row was
+     * written ({@code false} = the failure they swallow), so {@link AdminActionAuditor} can count
+     * {@code admin_audit_write_total{result}} for them too.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordCrossTenantDenied(OperatorContext operator,
+    public boolean recordCrossTenantDenied(OperatorContext operator,
                                         String operatorTenantId,
                                         ActionCode actionCode,
                                         String permissionUsed,
@@ -157,6 +161,7 @@ public class AdminActionDenyWriter {
                     Outcome.DENIED,
                     detail,
                     now));
+            return true;
         } catch (RuntimeException ex) {
             // Best-effort: log + metric, do NOT rethrow. The 403 denial still succeeds.
             log.warn("Failed to write cross-tenant DENIED audit row (best-effort): " +
@@ -173,6 +178,7 @@ public class AdminActionDenyWriter {
                 log.debug("Failed to increment cross_tenant_deny_failure counter", metricEx);
             }
         }
+        return false;
     }
 
     /**
@@ -187,7 +193,7 @@ public class AdminActionDenyWriter {
      * null and the row records {@code "-"} — the denial is still attributable.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordOrgNodeScopeDenied(OperatorContext operator,
+    public boolean recordOrgNodeScopeDenied(OperatorContext operator,
                                          ActionCode actionCode,
                                          String orgNodeId) {
         try {
@@ -231,6 +237,7 @@ public class AdminActionDenyWriter {
                     Outcome.DENIED,
                     detail,
                     now));
+            return true;
         } catch (RuntimeException ex) {
             log.warn("Failed to write org-node-scope DENIED audit row (best-effort): "
                             + "operatorId={} action={} orgNodeId={}",
@@ -246,6 +253,7 @@ public class AdminActionDenyWriter {
                 log.debug("Failed to increment org_node_scope_deny_failure counter", metricEx);
             }
         }
+        return false;
     }
 
     /**
@@ -259,7 +267,7 @@ public class AdminActionDenyWriter {
      * SUCCESS row — and the side that failed plus both nodes ride in {@code detail}.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordTenantPlacementDenied(OperatorContext operator,
+    public boolean recordTenantPlacementDenied(OperatorContext operator,
                                             ActionCode actionCode,
                                             String tenantId,
                                             String side,
@@ -307,6 +315,7 @@ public class AdminActionDenyWriter {
                     Outcome.DENIED,
                     detail,
                     now));
+            return true;
         } catch (RuntimeException ex) {
             log.warn("Failed to write tenant-placement DENIED audit row (best-effort): "
                             + "operatorId={} tenantId={} side={}",
@@ -322,6 +331,7 @@ public class AdminActionDenyWriter {
                 log.debug("Failed to increment tenant_placement_deny_failure counter", metricEx);
             }
         }
+        return false;
     }
 
     /**
@@ -332,7 +342,7 @@ public class AdminActionDenyWriter {
      * {@code admin.audit.role_grant_forbidden_failure} counter.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordRoleGrantForbidden(OperatorContext operator,
+    public boolean recordRoleGrantForbidden(OperatorContext operator,
                                          ActionCode actionCode,
                                          String attemptedRole) {
         try {
@@ -375,6 +385,7 @@ public class AdminActionDenyWriter {
                     Outcome.DENIED,
                     detail,
                     now));
+            return true;
         } catch (RuntimeException ex) {
             log.warn("Failed to write role-grant-forbidden DENIED audit row (best-effort): " +
                             "operatorId={} action={} attemptedRole={}",
@@ -390,5 +401,6 @@ public class AdminActionDenyWriter {
                 log.debug("Failed to increment role_grant_forbidden_failure counter", metricEx);
             }
         }
+        return false;
     }
 }

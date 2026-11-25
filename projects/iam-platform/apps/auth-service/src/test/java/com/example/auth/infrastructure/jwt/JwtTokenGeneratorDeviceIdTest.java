@@ -1,6 +1,7 @@
 package com.example.auth.infrastructure.jwt;
 
 import com.example.auth.domain.token.TokenPair;
+import com.example.auth.infrastructure.metrics.AuthMetricsProbe;
 import com.example.security.jwt.Rs256JwtSigner;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -36,7 +37,8 @@ class JwtTokenGeneratorDeviceIdTest {
 
     private JwtTokenGenerator generator() {
         Rs256JwtSigner signer = new Rs256JwtSigner(privateKey, "test-key");
-        return new JwtTokenGenerator(signer, publicKey, "test-iss", 1800L, 604800L);
+        return new JwtTokenGenerator(signer, publicKey, "test-iss", 1800L, 604800L,
+                new AuthMetricsProbe().port());
     }
 
     @Test

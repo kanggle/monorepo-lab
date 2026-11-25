@@ -4,7 +4,8 @@ import com.example.admin.domain.rbac.AdminOperator;
 import com.example.admin.infrastructure.client.SecurityServiceClient;
 import com.example.admin.infrastructure.persistence.AdminActionJpaEntity;
 import com.example.admin.infrastructure.persistence.AdminActionJpaRepository;
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -12,7 +13,9 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -36,13 +39,44 @@ import java.util.UUID;
  * cannot drift on scope semantics.
  */
 @Service
-@RequiredArgsConstructor
 public class AuditQueryUseCase {
 
     private final AdminActionJpaRepository adminActionRepo;
     private final SecurityServiceClient securityServiceClient;
     private final AdminActionAuditor auditor;
     private final QueryTenantScopeGate queryTenantScopeGate;
+
+    /**
+     * TASK-BE-668 — observability.md § 필수 메트릭: counter {@code admin_audit_query_total}, tag
+     * {@code query_type} = the {@code source} the operator asked for ({@code admin} ·
+     * {@code login_history} · {@code suspicious}, or {@code all} when none — admin-api.md §
+     * GET /api/admin/audit; the controller refuses any other value, so the tag set is closed).
+     * One per query that passed the tenant gate and ran its reads, counted where its meta-audit row
+     * is recorded (the spec calls it «meta-audit 보조») — whether the reads succeeded or failed.
+     * A query the gate refused never read anything and is not counted (it is a {@code denied}
+     * {@code admin_command_total}).
+     */
+    static final String QUERY_METRIC_NAME = "admin_audit_query_total";
+    static final List<String> QUERY_TYPES = List.of("all", "admin", "login_history", "suspicious");
+
+    private final Map<String, Counter> queryCounters = new LinkedHashMap<>();
+
+    public AuditQueryUseCase(AdminActionJpaRepository adminActionRepo,
+                             SecurityServiceClient securityServiceClient,
+                             AdminActionAuditor auditor,
+                             QueryTenantScopeGate queryTenantScopeGate,
+                             MeterRegistry meterRegistry) {
+        this.adminActionRepo = adminActionRepo;
+        this.securityServiceClient = securityServiceClient;
+        this.auditor = auditor;
+        this.queryTenantScopeGate = queryTenantScopeGate;
+        for (String queryType : QUERY_TYPES) {
+            queryCounters.put(queryType, Counter.builder(QUERY_METRIC_NAME)
+                    .description("Audit queries by requested source (meta-audit companion)")
+                    .tag("query_type", queryType)
+                    .register(meterRegistry));
+        }
+    }
 
     /** {@code rbac.md} § Conditional Cross-Permission — the key a security-source read is recorded under. */
     static final String SECURITY_SOURCE_PERMISSION = "audit.read+security.event.read";
@@ -210,6 +244,9 @@ public class AuditQueryUseCase {
      */
     private void recordMetaAudit(QueryAuditCommand cmd, String targetTenantId, Outcome outcome,
                                  List<String> sourcesRead, String detail) {
+        // TASK-BE-668: one per query that ran its reads — before the meta-audit write, so a failed
+        // write (fail-closed, counted in admin_audit_write_total) does not hide that the read happened.
+        countQuery(cmd.source());
         Instant now = Instant.now();
         AdminActionAuditor.AuditRecord row = new AdminActionAuditor.AuditRecord(
                 auditor.newAuditId(),
@@ -230,6 +267,13 @@ public class AuditQueryUseCase {
             auditor.recordWithPermission(row, SECURITY_SOURCE_PERMISSION);
         } else {
             auditor.record(row);
+        }
+    }
+
+    private void countQuery(String source) {
+        Counter counter = queryCounters.get(source == null ? "all" : source);
+        if (counter != null) {  // an out-of-contract source never reaches here (AuditController refuses it)
+            counter.increment();
         }
     }
 

@@ -638,19 +638,26 @@ public class AuthorizationServerConfig {
      *
      * <p>Registered as a {@code @Bean} so SAS picks it up automatically via
      * {@code OAuth2ConfigurerUtils.getTokenGenerator(http)}.
+     *
+     * <p>TASK-BE-668: the composite is wrapped in {@link CountingOAuth2TokenGenerator}, so every
+     * SAS-minted access / refresh token is counted in {@code auth_token_issued_total{type}} at this
+     * one mint (the SAS grants, the refresh provider and the assume-tenant provider all use it).
      */
     @Bean
     public OAuth2TokenGenerator<? extends OAuth2Token> oAuth2TokenGenerator(
             JWKSource<SecurityContext> jwkSource,
-            OAuth2TokenCustomizer<JwtEncodingContext> jwtCustomizer) {
+            OAuth2TokenCustomizer<JwtEncodingContext> jwtCustomizer,
+            AuthMetricsPort tokenMetrics) {
         JwtEncoder jwtEncoder = new NimbusJwtEncoder(jwkSource);
         JwtGenerator jwtGenerator = new JwtGenerator(jwtEncoder);
         jwtGenerator.setJwtCustomizer(jwtCustomizer);
         OAuth2AccessTokenGenerator accessTokenGenerator = new OAuth2AccessTokenGenerator();
         PublicClientRefreshTokenGenerator refreshTokenGenerator = new PublicClientRefreshTokenGenerator();
-        return new DelegatingOAuth2TokenGenerator(
-                jwtGenerator,
-                accessTokenGenerator,
-                refreshTokenGenerator);
+        return new CountingOAuth2TokenGenerator(
+                new DelegatingOAuth2TokenGenerator(
+                        jwtGenerator,
+                        accessTokenGenerator,
+                        refreshTokenGenerator),
+                tokenMetrics);
     }
 }

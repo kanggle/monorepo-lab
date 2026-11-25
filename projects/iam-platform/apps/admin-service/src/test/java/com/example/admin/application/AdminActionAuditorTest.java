@@ -2,6 +2,8 @@ package com.example.admin.application;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.prometheusmetrics.PrometheusConfig;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,6 +19,7 @@ import java.time.Instant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -329,5 +332,120 @@ class AdminActionAuditorTest {
                 "login:audit-login", outcome, null, false, Instant.now(), Instant.now()));
 
         assertNoCommandCounted();
+    }
+
+    // ── TASK-BE-668 — admin_audit_write_total{result}: one per audit-ledger write ─────────
+
+    private double auditWrite(String result) {
+        return meterRegistry.get("admin_audit_write_total").tag("result", result).counter().count();
+    }
+
+    private void assertAuditWrites(double success, double failure) {
+        assertThat(auditWrite("success")).as("admin_audit_write_total{result=success}").isEqualTo(success);
+        assertThat(auditWrite("failure")).as("admin_audit_write_total{result=failure}").isEqualTo(failure);
+    }
+
+    @Test
+    void auditWrite_both_series_registered_at_zero_from_construction() {
+        assertThat(meterRegistry.find("admin_audit_write_total").counters())
+                .extracting(c -> c.getId().getTag("result"))
+                .containsExactlyInAnyOrder("success", "failure");
+        assertAuditWrites(0, 0);
+    }
+
+    @Test
+    void auditWrite_every_fail_closed_write_that_returns_counts_success() {
+        auditor.recordStart(new AdminActionAuditor.StartRecord(
+                "audit-1", ActionCode.ACCOUNT_LOCK, op(),
+                "ACCOUNT", "acc-1", "fraud", null, "idemp", Instant.now()));
+        auditor.recordCompletion(completion(ActionCode.ACCOUNT_LOCK, Outcome.SUCCESS));
+        auditor.record(auditRecord(ActionCode.AUDIT_QUERY, Outcome.SUCCESS));
+        auditor.recordWithPermission(auditRecord(ActionCode.AUDIT_QUERY, Outcome.SUCCESS), "audit.read");
+        auditor.recordDenied(ActionCode.ACCOUNT_LOCK, "account.lock", "/x", "POST", null);
+        auditor.recordLogin(new AdminActionAuditor.LoginAuditRecord(
+                "audit-login", op(), "OPERATOR", "op-1", AdminActionAuditor.REASON_SELF_LOGIN,
+                "login:audit-login", Outcome.SUCCESS, null, false, Instant.now(), Instant.now()));
+
+        assertAuditWrites(6, 0);
+    }
+
+    @Test
+    void auditWrite_fail_closed_write_that_throws_counts_failure_and_rethrows() {
+        AdminActionAuditor.CompletionRecord done = completion(ActionCode.ACCOUNT_LOCK, Outcome.SUCCESS);
+        doThrow(new IllegalStateException("db down")).when(writer).recordCompletion(done);
+
+        assertThatThrownBy(() -> auditor.recordCompletion(done)).isInstanceOf(IllegalStateException.class);
+
+        assertAuditWrites(0, 1);
+    }
+
+    @Test
+    void auditWrite_recordStart_failure_counts_failure() {
+        AdminActionAuditor.StartRecord start = new AdminActionAuditor.StartRecord(
+                "audit-1", ActionCode.ACCOUNT_LOCK, op(),
+                "ACCOUNT", "acc-1", "fraud", null, "idemp", Instant.now());
+        doThrow(new IllegalStateException("db down")).when(writer).recordStart(start);
+
+        assertThatThrownBy(() -> auditor.recordStart(start)).isInstanceOf(IllegalStateException.class);
+
+        assertAuditWrites(0, 1);
+    }
+
+    @Test
+    void auditWrite_best_effort_deny_written_counts_success() {
+        OperatorContext actor = op();
+        when(denyWriter.recordCrossTenantDenied(actor, "fan-platform", ActionCode.AUDIT_QUERY, "audit.read", "other"))
+                .thenReturn(true);
+
+        auditor.recordCrossTenantDenied(actor, "fan-platform", ActionCode.AUDIT_QUERY, "audit.read", "other");
+
+        assertAuditWrites(1, 0);
+    }
+
+    @Test
+    void auditWrite_best_effort_deny_swallowed_failure_counts_failure() {
+        OperatorContext actor = op();
+        when(denyWriter.recordOrgNodeScopeDenied(actor, ActionCode.ACCOUNT_LOCK, "node-1")).thenReturn(false);
+
+        auditor.recordOrgNodeScopeDenied(actor, ActionCode.ACCOUNT_LOCK, "node-1");
+
+        assertAuditWrites(0, 1);
+        assertOnlyCommand("ACCOUNT_LOCK", "denied");  // the refusal itself still stands
+    }
+
+    @Test
+    void auditWrite_best_effort_deny_escaping_failure_counts_failure_once() {
+        OperatorContext actor = op();
+        doThrow(new IllegalStateException("commit failed")).when(denyWriter)
+                .recordTenantPlacementDenied(actor, ActionCode.ACCOUNT_LOCK, "wms", "SOURCE", "n1", "n2");
+
+        assertThatThrownBy(() -> auditor.recordTenantPlacementDenied(
+                actor, ActionCode.ACCOUNT_LOCK, "wms", "SOURCE", "n1", "n2"))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertAuditWrites(0, 1);
+    }
+
+    @Test
+    void auditWrite_role_grant_forbidden_written_counts_success() {
+        OperatorContext actor = op();
+        when(denyWriter.recordRoleGrantForbidden(actor, ActionCode.OPERATOR_ROLE_CHANGE, "SUPER_ADMIN"))
+                .thenReturn(true);
+
+        auditor.recordRoleGrantForbidden(actor, ActionCode.OPERATOR_ROLE_CHANGE, "SUPER_ADMIN");
+
+        assertAuditWrites(1, 0);
+    }
+
+    @Test
+    void auditWrite_prometheus_scrape_carries_the_spec_name() {
+        PrometheusMeterRegistry prometheus = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        AdminActionAuditor scraped = new AdminActionAuditor(writer, denyWriter, prometheus);
+        scraped.record(auditRecord(ActionCode.AUDIT_QUERY, Outcome.SUCCESS));
+
+        String scrape = prometheus.scrape();
+
+        assertThat(scrape).as(scrape).contains("admin_audit_write_total{result=\"success\"} 1.0");
+        assertThat(scrape).contains("admin_audit_write_total{result=\"failure\"} 0.0");
     }
 }

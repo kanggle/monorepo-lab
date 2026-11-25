@@ -2,6 +2,8 @@ package com.example.account.presentation;
 
 import com.example.account.application.exception.AccountAlreadyExistsException;
 import com.example.account.application.port.AuthServicePort;
+import com.example.account.application.port.SignupMetricsPort;
+import com.example.account.application.port.SignupMetricsPort.SignupOutcome;
 import com.example.account.application.result.SignupResult;
 import com.example.account.application.service.SignupUseCase;
 import com.example.account.domain.account.PasswordPolicyViolationException;
@@ -20,6 +22,8 @@ import java.time.Instant;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -34,6 +38,14 @@ class SignupControllerSliceTest {
 
     @MockitoBean
     private SignupUseCase signupUseCase;
+
+    /**
+     * TASK-BE-668 — the bean-validation arm of GlobalExceptionHandler counts
+     * account_signup_total{result=validation_error}; every other outcome is counted in the (mocked) use case,
+     * so the handler must not touch the port for them (no double count).
+     */
+    @MockitoBean
+    private SignupMetricsPort signupMetrics;
 
     @Test
     @DisplayName("유효한 가입 요청 시 201 반환")
@@ -53,6 +65,7 @@ class SignupControllerSliceTest {
                 .andExpect(jsonPath("$.accountId").value("acc-123"))
                 .andExpect(jsonPath("$.email").value("test@example.com"))
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
+        verifyNoInteractions(signupMetrics);  // TASK-BE-668: counted by the use case
     }
 
     @Test
@@ -67,6 +80,8 @@ class SignupControllerSliceTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verify(signupMetrics).signupAttempt(SignupOutcome.VALIDATION_ERROR);  // TASK-BE-668
+        verifyNoInteractions(signupUseCase);
     }
 
     @Test
@@ -82,6 +97,7 @@ class SignupControllerSliceTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verify(signupMetrics).signupAttempt(SignupOutcome.VALIDATION_ERROR);  // TASK-BE-668
     }
 
     // TASK-BE-473: 패스워드 복잡도 미달(길이는 통과, 3종 미만)은 use case 가
@@ -103,6 +119,7 @@ class SignupControllerSliceTest {
                                 """))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verifyNoInteractions(signupMetrics);  // TASK-BE-668: counted by the use case, not the handler
     }
 
     @Test
@@ -121,6 +138,7 @@ class SignupControllerSliceTest {
                                 """))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ACCOUNT_ALREADY_EXISTS"));
+        verifyNoInteractions(signupMetrics);  // TASK-BE-668: counted by the use case, not the handler
     }
 
     @Test
@@ -154,5 +172,6 @@ class SignupControllerSliceTest {
                 .andExpect(jsonPath("$.code").value("AUTH_SERVICE_UNAVAILABLE"))
                 .andExpect(jsonPath("$.message").value("Authentication service is temporarily unavailable"))
                 .andExpect(jsonPath("$.timestamp").exists());
+        verifyNoInteractions(signupMetrics);  // TASK-BE-668: an outage is not a signup result
     }
 }

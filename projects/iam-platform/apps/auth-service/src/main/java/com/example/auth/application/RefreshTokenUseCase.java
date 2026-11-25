@@ -8,6 +8,7 @@ import com.example.auth.application.exception.TokenParseException;
 import com.example.auth.application.exception.TokenReuseDetectedException;
 import com.example.auth.application.exception.TokenTenantMismatchException;
 import com.example.auth.application.port.AuthMetricsPort;
+import com.example.auth.application.port.AuthMetricsPort.RefreshOutcome;
 import com.example.auth.application.port.TenantTypePort;
 import com.example.auth.application.port.TokenGeneratorPort;
 import com.example.auth.application.result.RefreshTokenResult;
@@ -48,7 +49,7 @@ public class RefreshTokenUseCase {
     private final AuthEventPublisher authEventPublisher;
     private final DeviceSessionRepository deviceSessionRepository;
     private final TenantTypePort tenantTypePort;
-    /** TASK-BE-664 — {@code auth_token_reuse_detected_total}. */
+    /** TASK-BE-664 — {@code auth_token_reuse_detected_total}; TASK-BE-668 — {@code auth_token_refresh_total{result}}. */
     private final AuthMetricsPort authMetrics;
 
     @Transactional
@@ -65,6 +66,9 @@ public class RefreshTokenUseCase {
             submittedTenantId = tokenGeneratorPort.extractTenantId(command.refreshToken());
         } catch (TokenParseException e) {
             log.warn("Failed to parse refresh token: {}", e.getMessage());
+            // TASK-BE-668: auth_token_refresh_total{result} follows the answer this endpoint gives —
+            // TOKEN_EXPIRED here (an expired JWT fails this parse, since its exp equals the row's).
+            authMetrics.refreshAttempt(RefreshOutcome.EXPIRED);
             throw new TokenExpiredException();
         }
 
@@ -76,14 +80,20 @@ public class RefreshTokenUseCase {
         // Look up the refresh token in DB. Reuse detection must run BEFORE any revoked/
         // blacklisted/invalidate-all short-circuit so a replay of a rotated token still
         // triggers the incident-response path (TASK-BE-062 §B — security-first ordering).
-        RefreshToken existingToken = refreshTokenRepository.findByJti(jti)
-                .orElseThrow(TokenExpiredException::new);
+        Optional<RefreshToken> existingTokenRow = refreshTokenRepository.findByJti(jti);
+        if (existingTokenRow.isEmpty()) {
+            authMetrics.refreshAttempt(RefreshOutcome.EXPIRED);
+            throw new TokenExpiredException();
+        }
+        RefreshToken existingToken = existingTokenRow.get();
 
         // Check for reuse FIRST (security-first ordering).
         if (tokenReuseDetector.isReuse(existingToken)) {
             // TASK-BE-664: counted at detection, before anything that can fail (the revoke, the
             // event write) — and also when the account was already revoked and no event is emitted.
             authMetrics.tokenReuseDetected();
+            // TASK-BE-668: the same detection, as the refresh attempt's result (the spec asks for both).
+            authMetrics.refreshAttempt(RefreshOutcome.REUSE_DETECTED);
             handleReuseDetected(existingToken, jti, accountId, ctx);
             throw new TokenReuseDetectedException();
         }
@@ -102,6 +112,7 @@ public class RefreshTokenUseCase {
 
         // Check blacklist (tenant-aware key, fail-closed: if Redis is down, deny refresh)
         if (tokenBlacklist.isBlacklisted(dbTenantId, jti)) {
+            authMetrics.refreshAttempt(RefreshOutcome.REVOKED);
             throw new SessionRevokedException();
         }
 
@@ -113,20 +124,24 @@ public class RefreshTokenUseCase {
                 tokenIat = tokenGeneratorPort.extractIssuedAt(command.refreshToken());
             } catch (TokenParseException e) {
                 log.warn("Failed to extract iat for invalidate-all check, fail-closed: {}", e.getMessage());
+                authMetrics.refreshAttempt(RefreshOutcome.REVOKED);
                 throw new SessionRevokedException();
             }
             if (tokenIat.isBefore(invalidatedAt.get())) {
+                authMetrics.refreshAttempt(RefreshOutcome.REVOKED);
                 throw new SessionRevokedException();
             }
         }
 
         // Check if revoked
         if (existingToken.isRevoked()) {
+            authMetrics.refreshAttempt(RefreshOutcome.REVOKED);
             throw new SessionRevokedException();
         }
 
         // Check if expired
         if (existingToken.isExpired()) {
+            authMetrics.refreshAttempt(RefreshOutcome.EXPIRED);
             throw new TokenExpiredException();
         }
 
@@ -171,6 +186,9 @@ public class RefreshTokenUseCase {
         // Publish event with tenantId
         authEventPublisher.publishTokenRefreshed(accountId, dbTenantId, jti, newJti, ctx);
 
+        // TASK-BE-668: rotated — counted after every write above returned (a failure there fails the
+        // request, so it is not a successful refresh).
+        authMetrics.refreshAttempt(RefreshOutcome.SUCCESS);
         return RefreshTokenResult.of(
                 newTokenPair.accessToken(),
                 newTokenPair.refreshToken(),
