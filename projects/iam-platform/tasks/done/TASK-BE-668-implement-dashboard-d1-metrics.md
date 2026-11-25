@@ -8,7 +8,7 @@ iam 스펙 필수 metric 중 대시보드가 묻는데 없는 5개(837 D1)를 �
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -62,7 +62,7 @@ backend
 - [x] AC-1: 다섯 metric 이 실제 `PrometheusMeterRegistry` scrape 에 스펙 이름 · 라벨로 나온다(테스트로 — 이름 변환을 추측하지 않는다).
 - [x] AC-2: 결과별 세는 지점이 증거에 파일:줄로 있고, 각 지점에 테스트가 있다.
 - [x] AC-3: `check-alert-rule-metrics.sh` rc=0 — 대기 목록 iam 6 · ecommerce 1(또는 669 가 먼저 머지됐으면 0) · `check-metric-name-registry.sh` rc=0.
-- [ ] AC-4: account · admin · auth `test` 통과 · 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께) · PR CI 실패 0.
+- [x] AC-4: account · admin · auth `test` 통과 · 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께) · PR CI 실패 0.
 
 # Related Specs
 
@@ -126,6 +126,8 @@ backend
   - 🔵 bite: 대기 목록만 HEAD 로 되돌려 다시 돌리면 rc=1 — `account_signup_total` · `admin_audit_query_total` · `admin_audit_write_total` · `auth_token_issued_total` · `auth_token_refresh_total` 다섯 모두 `now EXPORTED: delete the entry` → 가드가 다섯 이름을 내보냄으로 본다는 것을 확인하고 원복.
   - `bash scripts/check-metric-name-registry.sh` → rc=0: `check-metric-name-registry: OK — 112 literal metric name(s) across 31 service(s), each documented in its project's specs/.`(새 이름은 상수로 등록되어 이 가드의 리터럴 집합에는 안 잡힌다 — 664 와 같은 방식; 다섯 이름 모두 스펙에 이미 있다.)
 - **AC-4** — 서비스 `test`: `./gradlew :projects:iam-platform:apps:account-service:test :projects:iam-platform:apps:admin-service:test :projects:iam-platform:apps:auth-service:test --continue` **rc=0**(26분 33초) — JUnit XML 합계: account 804 · admin 1468 · auth 1359, 실패 0 · 오류 0 · skip 0 · PR CI 대기.
+
+- **AC-4 (close, 2026-11-25 UTC)** — 세 서비스 `test` 는 에이전트가 실행(account 804 · admin 1468 · auth 1359, 실패 0). 오케스트레이터가 main 위로 rebase 한 뒤 전 가드(스테이지 뒤) sh 41/43(환경 전제 2) · mjs 7/7 · `check-alert-rule-metrics.sh` «except 6 listed as pending». PR CI(#4705): 실패 0 · SUCCESS 23 — `Integration (iam A/B)` · `E2E smoke (iam docker-compose)` · `Build & Test` **실행되어** SUCCESS. 리뷰 메모: `CountingOAuth2TokenGenerator` 는 delegate 결과를 그대로 돌려주는 통과형 · `AdminActionDenyWriter` 는 삼킴 동작 보존(`void`→`boolean`) · `success` 는 «쓰기 호출 반환» 이라 바깥 트랜잭션 롤백 시에도 success 로 남는다.
 
 # Definition of Done
 

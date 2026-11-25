@@ -86,9 +86,10 @@ _(없음)_
 
 ## review
 
-- `TASK-BE-669-implement-payment-failed-total.md` — **payment-service `payment_failed_total{reason}` 구현**(837 D1, 비즈니스 대시보드 패널이 빔) + 대기 목록에서 삭제 (REVIEW, 2026-11-25 UTC). 분석=Opus 5.5 / 구현 권장=Sonnet 5.5.
+(empty)
 
 ## done
+- ✅ `TASK-BE-669-implement-payment-failed-total.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4704 머지, `853235da7`, 실패 0 · SUCCESS 24) · 기안 #4703. 837 D1: `payment_failed_total{reason}` — `Payment.fail()` 의 유일한 호출처(PG 4xx 확정 거부)에서 1회, `reason=pg_rejected`. 비즈니스 대시보드 패널이 처음으로 값을 갖는다. 대기 목록 파일 삭제. 구현 Sonnet 에이전트.
 - ✅ `TASK-FE-106-store-session-lost-under-concurrent-refresh-on-serverless.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4183(`240b5b35e`, 실패 0) · AC-0 ⚪ 소유자 결정(10-26) · AC-2 · AC-3 36차 창 라이브 ✅
 - ✅ `TASK-BE-624-profile-email-name-still-null-despite-be-575-be-577.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4184(`3eb21c693`, 실패 0) · AC-4 36차 창 라이브 ✅ (rollup CANCELLED 15건 = 대체된 첫 런 14:32Z, 최신 런 전부 SUCCESS/SKIPPED)
 - ✅ `TASK-FE-109-store-post-login-405-in-logs.md` — **DONE 2026-10-27 UTC (4-dim verified)** — impl PR #4328(`1ead6ea72`, 실패 0) · AC-0 · AC-1 닫음 — 스토어 `POST /login 405` 쌍 = `/api/vitals` 307→`/login`(미들웨어 공개 경로 누락). AC-1 라이브 칸 ⚪ 소유자 결정: Vercel 로그(CLI 런타임 · 대시보드)는 주입한 405 대조군을 못 봐 판정 불가(CDN 요청 로그 = Observability Plus) → 운영 비로그인 실측 `POST /login` 0 · `POST /api/vitals` 204 · web-vitals 함수 로그 28. 기록 = 티켓 끝 `## CORRECTION`.

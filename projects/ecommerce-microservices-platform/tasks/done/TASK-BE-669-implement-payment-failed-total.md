@@ -8,7 +8,7 @@ payment-service 스펙의 `payment_failed_total`(by reason) 이 구현되지 않
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -50,7 +50,7 @@ backend
 - [x] AC-1: 실제 `PrometheusMeterRegistry` scrape 에 `payment_failed_total{reason=…}` 로 나온다(테스트).
 - [x] AC-2: 실패 확정 지점이 증거에 파일:줄로, 각 `reason` 에 테스트.
 - [x] AC-3: `check-alert-rule-metrics.sh` rc=0 · `check-metric-name-registry.sh` rc=0.
-- [ ] AC-4: payment-service `test` 통과 · 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께) · PR CI 실패 0.
+- [x] AC-4: payment-service `test` 통과 · 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께) · PR CI 실패 0.
 
 # Related Specs
 
@@ -83,6 +83,8 @@ backend
 - **payment-service `test`**: tests=211 skipped=0 failures=0 errors=0, gradle rc=0.
 - **가드(스테이지 뒤)**: `check-alert-rule-metrics.sh` rc=0 (`55 metric reference(s) in 3 rules file(s) … 239 reference(s) in 20 dashboard(s), all exported except 11 listed as pending`) · `check-metric-name-registry.sh` rc=0 (`113 literal metric name(s) across 31 service(s), each documented`).
 - AC-4(PR CI)는 CI 몫으로 남김.
+
+- **AC-4 (close, 2026-11-25 UTC)** — 에이전트가 디버그 출력을 지운 뒤 재실행하지 않아 오케스트레이터가 최종 코드로 재실행: payment-service `test` **211 · 실패 0**. `Payment.fail()` 호출처가 main 전체에서 `PaymentConfirmService.java:68` 하나뿐임을 `git grep` 으로 확인. 전 가드(스테이지 뒤) sh 41/43(환경 전제 2) · mjs 7/7. PR CI(#4704): 실패 0 · SUCCESS 24 — `Integration (ecommerce A/B/C)` **실행되어** SUCCESS.
 
 # Definition of Done
 
