@@ -71,7 +71,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-667-cache-hit-rate-gauge-turns-nan-after-gc.md` — **`admin.query.cache.hit.rate` 가 GC 뒤 NaN** (READY, 2026-11-25 UTC · 666 기록 ① 정정). «v1 항상 0» 은 BE-048 설계(유지) — 결함은 `registry.gauge(name, 0.0d)` 의 약한 참조. 강한 참조 등록 + GC 확인 테스트. 분석=Opus 5.5 / 구현 권장=Haiku·Sonnet.
 
 <details><summary>직전 점유 (2026-08-13~14, `TASK-BE-583` — 지금 done/)</summary>
 
