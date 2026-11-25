@@ -180,13 +180,15 @@ Category C.
 
 Metrics (Micrometer):
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Metric | Tags | Meaning |
 |---|---|---|
-| `wms.notification.dedupe.outcome` | `outcome={hit,fresh-queued,fresh-filtered}`, `source_topic` | Inbound dedupe classification at consumer entry |
-| `wms.notification.delivery.attempt` | `channel`, `outcome={success,retry,terminal}` | Per dispatch attempt result |
-| `wms.notification.delivery.terminal` | `channel`, `reason={SUCCEEDED,FAILED_RETRY_EXHAUSTED,FAILED_4XX}` | Counted when row reaches terminal state |
-| `wms.notification.dedupe.constraint.violation` | `source_topic` | Race-loss count (informational, expected at low rate) |
-| `wms.notification.delivery.retry.queue.depth` | — | Gauge: count of rows where `status=PENDING AND attempt_count > 0` |
+| `wms.notification.dedupe.outcome` | `outcome={hit,fresh-queued,fresh-filtered}`, `source_topic` | Inbound dedupe classification at consumer entry — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `notification.delivery.attempts` | `channel`, `status={SUCCEEDED,RETRIED,FAILED}` | Per dispatch attempt result (`DeliveryDispatchPerRow`; same metric as `external-integrations.md`) |
+| `wms.notification.delivery.terminal` | `channel`, `reason={SUCCEEDED,FAILED_RETRY_EXHAUSTED,FAILED_4XX}` | Counted when row reaches terminal state — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `wms.notification.dedupe.constraint.violation` | `source_topic` | Race-loss count (informational, expected at low rate) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `wms.notification.delivery.retry.queue.depth` | — | Gauge: count of rows where `status=PENDING AND attempt_count > 0` — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 
 Logs:
 

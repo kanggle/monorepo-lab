@@ -6,26 +6,30 @@
 
 ## Metrics (Prometheus)
 
-### 필수 메트릭
+### 핵심 메트릭
+
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
 
 | 이름 | 타입 | 라벨 | 설명 |
 |---|---|---|---|
 | `account_signup_total` | counter | `result` (success/duplicate/validation_error) | 가입 시도 결과 |
-| `account_signup_duration_seconds` | histogram | — | 가입 처리 시간 |
-| `account_status_transition_total` | counter | `from`, `to`, `reason` | 상태 전이 횟수 |
-| `account_status_transition_rejected_total` | counter | `from`, `to` | 불허 전이 시도 |
-| `account_profile_update_total` | counter | `result` (success/not_found/conflict) | 프로필 변경 |
-| `account_deletion_requested_total` | counter | `reason` (user_request/admin/regulated) | 삭제 요청 수 |
-| `account_anonymization_total` | counter | `result` (success/failure) | 유예 만료 후 익명화 실행 |
+| `account_signup_duration_seconds` | histogram | — | 가입 처리 시간 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `account_status_transition_total` | counter | `from`, `to`, `reason` | 상태 전이 횟수 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `account_status_transition_rejected_total` | counter | `from`, `to` | 불허 전이 시도 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `account_profile_update_total` | counter | `result` (success/not_found/conflict) | 프로필 변경 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `account_deletion_requested_total` | counter | `reason` (user_request/admin/regulated) | 삭제 요청 수 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `account_anonymization_total` | counter | `result` (success/failure) | 유예 만료 후 익명화 실행 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `account_outbox_lag_seconds` | gauge | — | 미발행 outbox 이벤트 최대 나이 |
-| `account_internal_api_duration_seconds` | histogram | `caller`, `endpoint` | 내부 HTTP 요청 처리 시간 |
+| `account_internal_api_duration_seconds` | histogram | `caller`, `endpoint` | 내부 HTTP 요청 처리 시간 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 
 ### 비즈니스 메트릭
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | 이름 | 타입 | 설명 |
 |---|---|---|
-| `account_total_by_status` | gauge | 상태별 계정 수 (ACTIVE/LOCKED/DORMANT/DELETED) |
-| `account_dormant_candidates` | gauge | 휴면 전이 대상 계정 수 (365일 미접속) |
+| `account_total_by_status` | gauge | 상태별 계정 수 (ACTIVE/LOCKED/DORMANT/DELETED) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `account_dormant_candidates` | gauge | 휴면 전이 대상 계정 수 (365일 미접속) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 
 ---
 
@@ -52,16 +56,18 @@
 
 ## Traces (OTel)
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Span 이름 | 설명 |
 |---|---|
-| `account.signup` | 전체 가입 흐름 |
-| `account.profile.update` | 프로필 변경 |
-| `account.status.change` | 상태 전이 (state machine 경유) |
-| `account.delete.request` | 삭제 요청 (유예 진입) |
-| `account.anonymize` | PII 익명화 실행 |
+| `account.signup` | 전체 가입 흐름 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `account.profile.update` | 프로필 변경 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `account.status.change` | 상태 전이 (state machine 경유) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `account.delete.request` | 삭제 요청 (유예 진입) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `account.anonymize` | PII 익명화 실행 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `account.internal.credential-lookup` | auth-service 요청 처리 |
-| `account.internal.lock` | security/admin 잠금 요청 처리 |
-| `account.outbox.write` | Outbox 이벤트 저장 |
+| `account.internal.lock` | security/admin 잠금 요청 처리 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `account.outbox.write` | Outbox 이벤트 저장 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 
 ---
 

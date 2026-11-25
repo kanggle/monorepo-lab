@@ -472,14 +472,16 @@ For ops scripts (e.g., bulk user import):
 
 ## 5. Observability
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Metric | Description |
 |---|---|
-| `admin.idempotency.hit.rate` | % of mutating REST requests served from Redis cache |
-| `admin.idempotency.mismatch.count` | `DUPLICATE_REQUEST` body mismatches (usually a caller bug) |
-| `admin.idempotency.pending.count` | PENDING-state hits (rare; concurrent duplicate races) |
-| `admin.event.dedupe.hit.count` | Events skipped by `eventId` conflict |
-| `admin.event.dedupe.late.count` | Events skipped by last_event_at guard |
-| `admin.event.dedupe.table.size` | Current row count (alert if unexpectedly large or shrinking outside the cron window) |
+| `admin.idempotency.hit.rate` | % of mutating REST requests served from Redis cache — 파생(계측 아님) · 재료 카운터 미구현 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `admin.idempotency.mismatch.count` | `DUPLICATE_REQUEST` body mismatches (usually a caller bug) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `admin.idempotency.pending.count` | PENDING-state hits (rare; concurrent duplicate races) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `admin.event.dedupe.hit.count` | Events skipped by `eventId` conflict — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `admin.event.dedupe.late.count` | Events skipped by last_event_at guard — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `admin.event.dedupe.table.size` | Current row count (alert if unexpectedly large or shrinking outside the cron window) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `admin.projection.lag.seconds{source_service,topic}` | Event time → applied time |
 | `admin.projection.dropped.count{reason=stale\|duplicate}` | Late-event drops + dedupe hits |
 | `admin.projection.error.count{topic}` | Exception rate per consumer |

@@ -385,20 +385,22 @@ across vendors.
 
 Per `rules/traits/integration-heavy.md` § Interaction with Common Rules:
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Metric | Vendor | Description |
 |---|---|---|
-| `outbound.webhook.received.total{result}` | ERP-in | Counter of webhook outcomes |
-| `outbound.webhook.processing.lag.seconds` | ERP-in | Histogram of inbox-receipt-to-applied lag |
-| `outbound.webhook.processing.failure.total{reason}` | ERP-in | Counter by domain failure code |
-| `outbound.webhook.inbox.pending.count` | ERP-in | Gauge of PENDING inbox rows |
-| `outbound.webhook.dedupe.hit.rate` | ERP-in | Computed metric |
+| `outbound.webhook.received.total{result}` | ERP-in | Counter of webhook outcomes — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.webhook.processing.lag.seconds` | ERP-in | Histogram of inbox-receipt-to-applied lag — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.webhook.processing.failure.total{reason}` | ERP-in | Counter by domain failure code — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.webhook.inbox.pending.count` | ERP-in | Gauge of PENDING inbox rows — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.webhook.dedupe.hit.rate` | ERP-in | Computed metric — 파생(계측 아님) · 재료 카운터 미구현 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `outbound.outbox.pending.count` | Kafka-out | Gauge of unpublished outbox rows |
-| `outbound.outbox.lag.seconds` | Kafka-out | Histogram of oldest unpublished row age |
-| `outbound.outbox.publish.failure.total` | Kafka-out | Counter of publish failures |
-| `outbound.consumer.received.total{topic, outcome}` | Kafka-in | Counter by topic + applied/duplicate/failed |
-| `outbound.consumer.dlt.records.total{topic}` | Kafka-in | Counter; alerts at >0 |
-| `outbound.event.dedupe.hit.rate` | Kafka-in | Computed metric |
-| `outbound.event.dedupe.table.size` | Kafka-in | Gauge of dedupe row count |
+| `outbound.outbox.lag.seconds` | Kafka-out | Histogram of oldest unpublished row age — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.outbox.publish.failure.total` | Kafka-out | Counter of publish failures — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.consumer.received.total{topic, outcome}` | Kafka-in | Counter by topic + applied/duplicate/failed — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.consumer.dlt.records.total{topic}` | Kafka-in | Counter; alerts at >0 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.event.dedupe.hit.rate` | Kafka-in | Computed metric — 파생(계측 아님) · 재료 카운터 미구현 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.event.dedupe.table.size` | Kafka-in | Gauge of dedupe row count — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 
 Logs (structured JSON, INFO level — see
 [`idempotency.md`](idempotency.md) § Observability for the precise event

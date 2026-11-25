@@ -10,7 +10,7 @@ import java.util.Map;
 
 /**
  * TASK-BE-664 — Micrometer implementation of {@link AuthMetricsPort}
- * (auth-service observability.md § 필수 메트릭 :13 · :17; TASK-BE-668 adds :15 · :16).
+ * (auth-service observability.md § 핵심 메트릭 :13 · :17; TASK-BE-668 adds :15 · :16).
  *
  * <p>Every counter is registered up front, so each {@code result} / {@code type} series is scraped as
  * {@code 0} from start-up instead of appearing only after its first occurrence — the alert rules

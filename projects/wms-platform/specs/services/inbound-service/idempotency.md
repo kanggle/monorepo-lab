@@ -438,15 +438,17 @@ short enough to keep the dedupe table small.
 
 ## 6. Observability
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Metric | Description |
 |---|---|
-| `inbound.idempotency.hit.rate` | % of REST POST requests served from Redis cache |
-| `inbound.idempotency.mismatch.count` | `DUPLICATE_REQUEST` body mismatches (usually a bug) |
-| `inbound.webhook.dedupe.hit.rate` | % of ERP webhooks served as `ignored_duplicate` |
-| `inbound.webhook.inbox.pending.count` | Gauge: PENDING inbox rows; alerts at >100 |
-| `inbound.webhook.inbox.failed.count` | Gauge: FAILED inbox rows; alerts at >0 |
-| `inbound.event.dedupe.hit.rate` | % of consumed master events skipped as duplicate |
-| `inbound.event.dedupe.table.size` | Current row count (alert if unexpectedly large) |
+| `inbound.idempotency.hit.rate` | % of REST POST requests served from Redis cache — 파생(계측 아님) · 재료 카운터 미구현 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `inbound.idempotency.mismatch.count` | `DUPLICATE_REQUEST` body mismatches (usually a bug) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `inbound.webhook.dedupe.hit.rate` | % of ERP webhooks served as `ignored_duplicate` — 파생(계측 아님) · 재료 카운터 미구현 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `inbound.webhook.inbox.pending.count` | Gauge: PENDING inbox rows; alerts at >100 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `inbound.webhook.inbox.failed.count` | Gauge: FAILED inbox rows; alerts at >0 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `inbound.event.dedupe.hit.rate` | % of consumed master events skipped as duplicate — 파생(계측 아님) · 재료 카운터 미구현 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `inbound.event.dedupe.table.size` | Current row count (alert if unexpectedly large) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 
 Log events (structured JSON, INFO level, exclude raw body and signature
 value):

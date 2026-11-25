@@ -72,11 +72,13 @@ Authenticated endpoints (`/actuator/{env,beans,...}`) are NOT exposed — only
 
 ## Alerts (recommended)
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Condition | Severity | Action |
 |---|---|---|
 | `artist_outbox_publish_failures_total` rate > 0 for 5 min | page | Investigate Kafka health; outbox will drain when broker recovers, but alert immediately. |
-| `outbox_pending_count` > 1000 | warn | Outbox backlog growing — Kafka or the relay is throttled. |
-| `outbox_lag_seconds` > 60 | warn | Events older than 60s still pending — downstream consumers will lag. |
+| `artist_outbox_pending_count` > 1000 | warn | Outbox backlog growing — Kafka or the relay is throttled. |
+| `outbox_lag_seconds` > 60 | warn | Events older than 60s still pending — downstream consumers will lag. — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `artist_directory_cache_unavailable_total` rate > 0 for 15 min | warn | Redis unhealthy; directory queries hitting DB directly. |
 | HTTP 5xx rate > 1% over 5 min | page | Application-level failure. |
 | `/actuator/health/readiness` flapping | warn | Dependent service issue (DB/Redis/Kafka). |

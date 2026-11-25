@@ -10,7 +10,7 @@ import java.util.Map;
 
 /**
  * TASK-BE-668 — Micrometer implementation of {@link SignupMetricsPort}
- * (account-service observability.md § 필수 메트릭 :13).
+ * (account-service observability.md § 핵심 메트릭 :13).
  *
  * <p>All three {@code result} series are registered up front, so the «Signup Rate» panel and the
  * {@code AccountSignupFailureHigh} ratio read a real {@code 0} from start-up, not no-data.

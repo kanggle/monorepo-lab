@@ -403,13 +403,15 @@ Ops re-triggers via:
 
 ## Observability
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Metric | Description |
 |---|---|
-| `outbound.webhook.received.total{result}` | Counter; result ∈ `accepted \| signature_invalid \| timestamp_invalid \| duplicate \| schema_invalid` |
-| `outbound.webhook.processing.lag.seconds` | Histogram; from inbox `received_at` to `processed_at` |
-| `outbound.webhook.processing.failure.total{reason}` | Counter; reason ∈ domain error codes |
-| `outbound.webhook.inbox.pending.count` | Gauge; alerts at > 100 |
-| `outbound.webhook.dedupe.hit.rate` | Computed from `received.total{result=duplicate}` / total |
+| `outbound.webhook.received.total{result}` | Counter; result ∈ `accepted \| signature_invalid \| timestamp_invalid \| duplicate \| schema_invalid` — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.webhook.processing.lag.seconds` | Histogram; from inbox `received_at` to `processed_at` — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.webhook.processing.failure.total{reason}` | Counter; reason ∈ domain error codes — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.webhook.inbox.pending.count` | Gauge; alerts at > 100 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.webhook.dedupe.hit.rate` | Computed from `received.total{result=duplicate}` / total — 파생(계측 아님) · 재료 카운터 미구현 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 
 Logs (structured JSON, INFO level, exclude raw body and signature value):
 

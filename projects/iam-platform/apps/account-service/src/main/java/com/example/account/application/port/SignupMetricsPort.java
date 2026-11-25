@@ -1,7 +1,7 @@
 package com.example.account.application.port;
 
 /**
- * TASK-BE-668 — {@code account_signup_total{result}} (account-service observability.md § 필수 메트릭 :13).
+ * TASK-BE-668 — {@code account_signup_total{result}} (account-service observability.md § 핵심 메트릭 :13).
  *
  * <p>A port so the application layer ({@code SignupUseCase}) and the presentation layer (the
  * bean-validation arm of {@code GlobalExceptionHandler}) do not import Micrometer; the implementation

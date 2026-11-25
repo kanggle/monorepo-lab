@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Exposes the {@code account_outbox_lag_seconds} gauge (account-service observability.md
- * § 필수 메트릭, TASK-BE-662): the age in seconds of the oldest unpublished row in the v2
+ * § 핵심 메트릭, TASK-BE-662): the age in seconds of the oldest unpublished row in the v2
  * {@code account_outbox} table ({@code published_at IS NULL}); 0 when nothing is pending.
  *
  * <p>Same shape as auth-service's {@code infrastructure.messaging.OutboxLagMetric}, but

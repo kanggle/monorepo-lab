@@ -225,13 +225,15 @@ No pool is shared across vendors (`integration-heavy` I9): the Delivery Tracker
 
 ## 7. Observability (Cross-Vendor)
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Metric | Vendor | Description |
 |---|---|---|
 | `carrier_tracking_fetch{result=advanced\|no_event\|auth_failed\|transport_failed\|graphql_error}` | DT-pull | counter of pull outcomes |
 | `carrier_status_unmapped{code}` | DT-pull | non-blank unmapped status (BE-362 F1) |
 | `carrier_auto_collect_processed{outcome}` | DT-pull | per-tick scheduler counts (BE-360) |
 | `delivery_tracker_token_failed` | DT-pull | OAuth2 token fetch failures |
-| `shipping.webhook.received{result}` | webhook | HMAC webhook outcomes (BE-294/359) |
+| `shipping.webhook.received{result}` | webhook | HMAC webhook outcomes (BE-294/359) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `shipping.outbox.pending.count` | Kafka-out | unpublished outbox rows |
 
 Logs (structured): `delivery_tracker_track_*` (started/succeeded/failed),

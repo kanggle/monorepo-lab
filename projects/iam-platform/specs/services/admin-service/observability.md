@@ -6,29 +6,33 @@
 
 ## Metrics (Prometheus)
 
-### 필수 메트릭
+### 핵심 메트릭
+
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
 
 | 이름 | 타입 | 라벨 | 설명 |
 |---|---|---|---|
 | `admin_command_total` | counter | `action_code`, `outcome` (success/failure/denied) | 운영자 명령 수 |
-| `admin_command_duration_seconds` | histogram | `action_code` | 명령 처리 시간 (downstream 호출 포함) |
-| `admin_downstream_duration_seconds` | histogram | `target_service`, `endpoint` | downstream 내부 HTTP 호출 시간 |
-| `admin_circuit_breaker_state` | gauge | `target_service` | 0=closed, 1=half_open, 2=open |
+| `admin_command_duration_seconds` | histogram | `action_code` | 명령 처리 시간 (downstream 호출 포함) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `admin_downstream_duration_seconds` | histogram | `target_service`, `endpoint` | downstream 내부 HTTP 호출 시간 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `resilience4j_circuitbreaker_state` | gauge | `name` (`accountService`), `state` | Resilience4j 가 낸다 — 현재 state 줄이 1, 나머지 0 (`@CircuitBreaker(name = "accountService")`) |
 | `admin_audit_write_total` | counter | `result` (success/failure) | 감사 원장 기록 |
 | `admin_audit_query_total` | counter | `query_type` | 감사 조회 횟수 (meta-audit 보조) |
-| `admin_outbox_lag_seconds` | gauge | — | 미발행 outbox 이벤트 최대 나이 |
-| `admin_auth_failure_total` | counter | `reason` (expired/invalid/insufficient_role) | 운영자 인증 실패 |
+| `admin_outbox_lag_seconds` | gauge | — | 미발행 outbox 이벤트 최대 나이 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `admin_auth_failure_total` | counter | `reason` (expired/invalid/insufficient_role) | 운영자 인증 실패 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `admin.audit.org_node_scope_deny_failure` | counter | `action` (ActionCode 이름, 없으면 `UNKNOWN`) | org-node 범위 위반 DENIED 감사 행(`AdminActionDenyWriter.recordOrgNodeScopeDenied`) 기록 실패 횟수. 감사 기록은 best-effort(A10 override)라 요청 응답은 그대로 성공하고 이 카운터만 증가 — 증가하면 거부 감사 누락이므로 조사 |
 | `admin.audit.tenant_placement_deny_failure` | counter | `side` (거부된 쪽 SOURCE/DESTINATION, 없으면 `UNKNOWN`) | tenant 배치 거부 DENIED 감사 행(`AdminActionDenyWriter.recordTenantPlacementDenied`) 기록 실패 횟수. best-effort 이므로 응답은 영향 없고 이 카운터만 증가 — 증가하면 거부 감사 누락이므로 조사 |
 
 ### 비즈니스 메트릭
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | 이름 | 타입 | 설명 |
 |---|---|---|
-| `admin_lock_unlock_ratio` | gauge | 최근 1시간 lock / unlock 비율 (운영 건강 지표) |
-| `admin_active_operators` | gauge | 최근 15분 내 활동한 unique operator 수 |
-| `admin_active_partnerships` | gauge | 현재 ACTIVE cross-org 파트너십 수 (TASK-BE-476 / ADR-MONO-045) |
-| `admin_partnership_cascade_participants` | histogram | 파트너십 종료/중단 시 한 번에 무효화된 participant 수(`participantCountAtTermination`) — cascade 규모 |
+| `admin_lock_unlock_ratio` | gauge | 최근 1시간 lock / unlock 비율 (운영 건강 지표) — 파생 — PromQL: `sum(rate(admin_command_total{action_code="LOCK"}[1h])) / sum(rate(admin_command_total{action_code="UNLOCK"}[1h]))` |
+| `admin_active_operators` | gauge | 최근 15분 내 활동한 unique operator 수 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `admin_active_partnerships` | gauge | 현재 ACTIVE cross-org 파트너십 수 (TASK-BE-476 / ADR-MONO-045) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `admin_partnership_cascade_participants` | histogram | 파트너십 종료/중단 시 한 번에 무효화된 participant 수(`participantCountAtTermination`) — cascade 규모 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 
 > **파트너십 관측 (TASK-BE-476)**: `PARTNERSHIP_INVITE`/`ACCEPT`/`SUSPEND`/`REACTIVATE`/`TERMINATE`/`PARTICIPANT_ADD`/`PARTICIPANT_REMOVE` 전이는 별도 메트릭 없이 기존 `admin_command_total{action_code,outcome}` 으로 계수된다(deny 는 `outcome=denied`, `403 PARTNERSHIP_SCOPE_DENIED` 포함). cross-org confinement 거부 감사 실패는 D2 와 동일한 `admin.audit.cross_tenant_deny_failure` best-effort 카운터를 공유한다([rbac.md](./rbac.md)). 위 두 비즈니스 메트릭만 파트너십 전용.
 
@@ -59,14 +63,16 @@
 
 ## Traces (OTel)
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Span 이름 | 설명 |
 |---|---|
 | `admin.command.{action_code}` | 전체 명령 흐름 (root) |
-| `admin.auth.verify` | 운영자 JWT 검증 |
-| `admin.audit.begin` | 감사 기록 시작 (트랜잭션 내) |
+| `admin.auth.verify` | 운영자 JWT 검증 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `admin.audit.begin` | 감사 기록 시작 (트랜잭션 내) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `admin.downstream.{target_service}` | 내부 HTTP 호출 |
-| `admin.audit.complete` | 감사 기록 완료 |
-| `admin.outbox.write` | Outbox 이벤트 저장 |
+| `admin.audit.complete` | 감사 기록 완료 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `admin.outbox.write` | Outbox 이벤트 저장 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `admin.query.{query_type}` | 감사 조회 (meta-audit span) |
 
 ---

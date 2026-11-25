@@ -649,20 +649,22 @@ short enough to keep the dedupe table small.
 
 ## 7. Observability
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Metric | Description |
 |---|---|
 | `outbound.idempotency.lookup.count{result=hit\|miss\|conflict}` | Counter, one increment per request that reached the lookup step (added by TASK-BE-051) |
 | `outbound.idempotency.lookup.duration{result=hit\|miss\|conflict}` | Timer covering the store lookup + lock-attempt phase, with p50/p95/p99 percentiles published |
 | `outbound.idempotency.store.failure` | Counter incremented when lookup, lock-acquire, put, or release throws — fail-open path |
-| `outbound.idempotency.hit.rate` | (derivable) % of REST mutating requests served from Redis cache (`hit / (hit + miss + conflict)`) |
-| `outbound.idempotency.mismatch.count` | (alias) `outbound.idempotency.lookup.count{result=conflict}` |
-| `outbound.webhook.dedupe.hit.rate` | % of ERP webhooks served as `ignored_duplicate` |
-| `outbound.webhook.inbox.pending.count` | Gauge: PENDING inbox rows; alerts at >100 |
-| `outbound.webhook.inbox.failed.count` | Gauge: FAILED inbox rows; alerts at >0 |
-| `outbound.event.dedupe.hit.rate` | % of consumed events skipped as duplicate |
-| `outbound.event.dedupe.table.size` | Current row count (alert if unexpectedly large) |
-| `outbound.saga.event.already_applied.count{saga_state, event_kind}` | Saga-level no-op count (4th-layer hits) |
-| `outbound.saga.event.invalid_transition.count{saga_state, event_kind}` | Genuinely impossible transitions (anomaly — investigate) |
+| `outbound.idempotency.hit.rate` | (derivable) % of REST mutating requests served from Redis cache (`hit / (hit + miss + conflict)`) — 파생 — PromQL: `sum(rate(outbound_idempotency_lookup_count_total{result="hit"}[5m])) / sum(rate(outbound_idempotency_lookup_count_total[5m]))` |
+| `outbound.idempotency.mismatch.count` | (alias) `outbound.idempotency.lookup.count{result=conflict}` — 파생 — PromQL: `outbound_idempotency_lookup_count_total{result="conflict"}` (`conflict` 는 lock-held 503 도 포함 — `InventoryIdempotencyErrorWriter.java:20` 참조) |
+| `outbound.webhook.dedupe.hit.rate` | % of ERP webhooks served as `ignored_duplicate` — 파생(계측 아님) · 재료 카운터 미구현 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.webhook.inbox.pending.count` | Gauge: PENDING inbox rows; alerts at >100 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.webhook.inbox.failed.count` | Gauge: FAILED inbox rows; alerts at >0 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.event.dedupe.hit.rate` | % of consumed events skipped as duplicate — 파생(계측 아님) · 재료 카운터 미구현 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.event.dedupe.table.size` | Current row count (alert if unexpectedly large) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.saga.event.already_applied.count{saga_state, event_kind}` | Saga-level no-op count (4th-layer hits) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.saga.event.invalid_transition.count{saga_state, event_kind}` | Genuinely impossible transitions (anomaly — investigate) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 
 Log events (structured JSON, INFO level, exclude raw body and signature
 value):

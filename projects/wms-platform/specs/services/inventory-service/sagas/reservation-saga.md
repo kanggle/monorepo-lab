@@ -255,12 +255,14 @@ coordination is **only** via Kafka events on owned topics.
 
 ## 7. Observability
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Signal | Type | Notes |
 |---|---|---|
-| `inventory.reservation.reserved.total{warehouse}` | Counter | Per-warehouse reserve count |
-| `inventory.reservation.released.total{reason}` | Counter | Tagged by reason (`CANCELLED` / `EXPIRED` / `MANUAL`) |
-| `inventory.reservation.confirmed.total{warehouse}` | Counter | |
-| `inventory.reservation.reserve.rejected.total{reason}` | Counter | `INSUFFICIENT_STOCK` / `LOCATION_INACTIVE` / etc |
+| `inventory.reservation.reserved.total{warehouse}` | Counter | Per-warehouse reserve count — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `inventory.reservation.released.total{reason}` | Counter | Tagged by reason (`CANCELLED` / `EXPIRED` / `MANUAL`) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `inventory.reservation.confirmed.total{warehouse}` | Counter | — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `inventory.reservation.reserve.rejected.total{reason}` | Counter | `INSUFFICIENT_STOCK` / `LOCATION_INACTIVE` / etc — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `inventory.reservation.expiry.swept.total` | Counter | Category D mandated (ADR-MONO-005 § D5); incremented by released-count per tick |
 | `inventory.reservation.event-dedupe.outcome{outcome}` | Counter | `APPLIED` / `IGNORED_DUPLICATE` |
 

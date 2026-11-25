@@ -220,13 +220,15 @@ MUST ignore it.
 
 Metrics (via Micrometer):
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Metric | Tags | Meaning |
 |---|---|---|
-| `master.idempotency.check.count` | `outcome={first, replay, conflict, lock-timeout}` | Request classification at entry |
-| `master.idempotency.replay.latency.ms` | | Time to return a cached response |
-| `master.idempotency.lock.wait.ms` | | Time spent waiting for a competing lock |
-| `master.idempotency.store.failure.count` | `phase={read, write}` | Redis interaction failures |
-| `master.idempotency.entry.ttl.remaining.seconds` | — | Histogram of observed TTLs on replays. Useful to tune TTL |
+| `master.idempotency.check.count` | `outcome={first, replay, conflict, lock-timeout}` | Request classification at entry — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `master.idempotency.replay.latency.ms` | | Time to return a cached response — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `master.idempotency.lock.wait.ms` | | Time spent waiting for a competing lock — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `master.idempotency.store.failure.count` | `phase={read, write}` | Redis interaction failures — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `master.idempotency.entry.ttl.remaining.seconds` | — | Histogram of observed TTLs on replays. Useful to tune TTL — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 
 Logs:
 

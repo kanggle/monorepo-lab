@@ -8,13 +8,15 @@ Platform-wide observability rules are defined in `platform/observability.md`.
 
 # Business Metrics
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Metric | Type | Description |
 |---|---|---|
 | `notification_sent_total` | Counter | Total notifications sent, labelled `channel` (`email`/`sms`/`push`). **Emitted** by `MicrometerNotificationMetrics#recordSent`, called from `NotificationSendService#renderAndSend` on the success branch (TASK-BE-533). |
 | `notification_failed_total` | Counter | Total notification delivery failures, labelled `channel` and `reason`. **Emitted** by `MicrometerNotificationMetrics#recordFailed` from the same method's `catch` branch (TASK-BE-533). |
-| `notification_retry_total` | Counter | Total notification delivery retries |
-| `event_consumed_total` | Counter | Total domain events consumed by event type |
-| `event_duplicate_total` | Counter | Total duplicate events detected (idempotency) |
+| `notification_retry_total` | Counter | Total notification delivery retries — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `event_consumed_total` | Counter | Total domain events consumed by event type — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `event_duplicate_total` | Counter | Total duplicate events detected (idempotency) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 
 ---
 
