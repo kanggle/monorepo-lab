@@ -8,7 +8,7 @@ admin-service `admin.query.cache.hit.rate` 는 «v1 에선 항상 0» 이 설계
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -56,7 +56,7 @@ Micrometer 의 `MeterRegistry.gauge(String, T)` 는 관측 대상(여기선 박�
 
 - [x] AC-1: 새 테스트 PASS. **bite**: 등록을 원래 한 줄로 되돌리면 같은 테스트가 실패(`NaN`).
 - [x] AC-2: admin-service `test` 통과.
-- [ ] AC-3: 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께) · PR CI 실패 0.
+- [x] AC-3: 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께) · PR CI 실패 0.
 
 # Related Specs
 
@@ -83,7 +83,7 @@ Micrometer 의 `MeterRegistry.gauge(String, T)` 는 관측 대상(여기선 박�
 - **변경**: `ProjectionMetrics` 생성자의 `meterRegistry.gauge(CACHE_HIT_RATE_METRIC, 0.0d)` → `Gauge.builder(CACHE_HIT_RATE_METRIC, () -> 0.0d).description(…).register(meterRegistry)` + 왜 앞의 형태가 아닌지 주석. «v1 항상 0»(TASK-BE-048 #8) 은 그대로. 새 테스트 `ProjectionMetricsTest`.
 - **AC-1** — 새 테스트: `WeakReference` 감시 객체가 비워질 때까지 `System.gc()`(상한 50) → 비워지지 않으면 assumption 으로 건너뜀 → gauge 값 `0.0`. 고친 코드 1/1 PASS(skipped 0 — GC 가 실제로 일어났다). **bite**: 등록을 원래 한 줄로 되돌리면 같은 테스트 실패 — `[value after GC] expected: 0.0 but was: NaN` → 복원. 🔴 첫 bite 시도는 치환 정규식이 `description(...)` 안의 괄호에 걸려 **되돌리기가 안 된 채** 통과했다(되돌린 줄이 없음을 `grep` 으로 확인 후 줄 번호로 다시 되돌려 진짜 bite 를 얻었다) — «bite 가 통과했다» 는 그 자체로는 아무 증거도 아니다.
 - **AC-2** — admin-service 전체 `test` rc=0 — **377 tests, 실패 0 · skip 0**.
-- **AC-3** — 스테이지 뒤 `check-*.sh` 43: 41 rc=0, 비0 둘 = 환경 전제(erp 래칫 · prerendered verdict). `.mjs` 7/7. PR CI: 대기.
+- **AC-3** — 스테이지 뒤 `check-*.sh` 43: 41 rc=0, 비0 둘 = 환경 전제(erp 래칫 · prerendered verdict). `.mjs` 7/7. PR CI(#4701): 실패 0 · SUCCESS 18 · SKIPPED 55 — `Build & Test (JDK 21, Linux)` **실행되어** SUCCESS.
 
 # Definition of Done
 
