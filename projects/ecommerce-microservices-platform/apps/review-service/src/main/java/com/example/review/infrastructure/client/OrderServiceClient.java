@@ -2,6 +2,7 @@ package com.example.review.infrastructure.client;
 
 import com.example.common.resilience.ResilienceClientFactory;
 import com.example.review.application.port.PurchaseVerificationPort;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -25,8 +26,9 @@ public class OrderServiceClient implements PurchaseVerificationPort {
     public OrderServiceClient(
             @Value("${order-service.base-url}") String baseUrl,
             @Value("${order-service.connect-timeout-ms:3000}") int connectTimeoutMs,
-            @Value("${order-service.read-timeout-ms:5000}") int readTimeoutMs) {
-        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
+            @Value("${order-service.read-timeout-ms:5000}") int readTimeoutMs,
+            ObservationRegistry observationRegistry) {
+        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs, observationRegistry);
     }
 
     @Override

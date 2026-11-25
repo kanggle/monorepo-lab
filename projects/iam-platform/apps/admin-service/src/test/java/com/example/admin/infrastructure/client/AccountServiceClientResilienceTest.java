@@ -1,5 +1,6 @@
 package com.example.admin.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.admin.application.exception.DownstreamFailureException;
 import com.example.admin.application.exception.NonRetryableDownstreamException;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
@@ -54,7 +55,7 @@ class AccountServiceClientResilienceTest {
                 "http://localhost:" + wireMock.port(),
                 1000,
                 2000,
-                tokenProvider);
+                tokenProvider, ObservationRegistry.NOOP);
 
         // Mirror application.yml: maxAttempts=3, ignore NonRetryableDownstreamException
         RetryConfig retryConfig = RetryConfig.custom()

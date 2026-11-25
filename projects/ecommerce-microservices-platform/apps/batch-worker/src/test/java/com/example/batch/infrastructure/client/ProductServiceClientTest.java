@@ -1,5 +1,6 @@
 package com.example.batch.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.common.resilience.ResilienceClientFactory;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -54,7 +55,7 @@ class ProductServiceClientTest {
                 .setBody("""
                         {"content":[],"page":0,"size":50,"totalElements":0}"""));
 
-        ProductServiceClient client = new ProductServiceClient(baseUrl());
+        ProductServiceClient client = new ProductServiceClient(baseUrl(), ObservationRegistry.NOOP);
 
         ProductServiceClient.ProductPageResponse result = client.listOnSale(0, 50);
 
@@ -69,9 +70,9 @@ class ProductServiceClientTest {
         // restClient field to a much shorter read timeout than the shipped 10s production
         // default (same ResilienceClientFactory mechanism), so this test does not have to wait
         // out 10s to prove the bound is genuinely honored.
-        ProductServiceClient client = new ProductServiceClient(baseUrl());
+        ProductServiceClient client = new ProductServiceClient(baseUrl(), ObservationRegistry.NOOP);
         RestClient shortTimeoutClient = ResilienceClientFactory.buildRestClient(
-                baseUrl(), 2_000, 300);
+                baseUrl(), 2_000, 300, ObservationRegistry.NOOP);
         Field field = ProductServiceClient.class.getDeclaredField("restClient");
         field.setAccessible(true);
         field.set(client, shortTimeoutClient);

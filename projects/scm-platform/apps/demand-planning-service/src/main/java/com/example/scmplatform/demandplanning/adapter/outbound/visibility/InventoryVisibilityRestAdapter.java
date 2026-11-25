@@ -3,6 +3,7 @@ package com.example.scmplatform.demandplanning.adapter.outbound.visibility;
 import com.example.common.resilience.ResilienceClientFactory;
 import com.example.scmplatform.demandplanning.application.port.outbound.InventoryVisibilityPort;
 import com.fasterxml.jackson.databind.JsonNode;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -40,8 +41,9 @@ public class InventoryVisibilityRestAdapter implements InventoryVisibilityPort {
     public InventoryVisibilityRestAdapter(
             @Value("${scmplatform.demand-planning.inventory-visibility.base-url}") String baseUrl,
             @Value("${scmplatform.demand-planning.inventory-visibility.connect-timeout-ms:2000}") int connectMs,
-            @Value("${scmplatform.demand-planning.inventory-visibility.read-timeout-ms:10000}") int readMs) {
-        this.client = ResilienceClientFactory.buildRestClient(baseUrl, connectMs, readMs);
+            @Value("${scmplatform.demand-planning.inventory-visibility.read-timeout-ms:10000}") int readMs,
+            ObservationRegistry observationRegistry) {
+        this.client = ResilienceClientFactory.buildRestClient(baseUrl, connectMs, readMs, observationRegistry);
     }
 
     @Override

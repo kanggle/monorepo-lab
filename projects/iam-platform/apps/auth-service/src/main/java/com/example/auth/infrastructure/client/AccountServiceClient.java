@@ -20,6 +20,7 @@ import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.retry.Retry;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -68,6 +69,7 @@ public class AccountServiceClient implements AccountServicePort {
     private final Environment environment;
     private final int connectTimeoutMs;
     private final int readTimeoutMs;
+    private final ObservationRegistry observationRegistry;
     /** Registry name of this client's breaker — the {@code name} label AuthAccountServiceDown filters on. */
     static final String CIRCUIT_BREAKER_NAME = "accountService";
 
@@ -95,8 +97,10 @@ public class AccountServiceClient implements AccountServicePort {
             @Value("${auth.account-service.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${auth.account-service.read-timeout-ms:5000}") int readTimeoutMs,
             IamClientCredentialsTokenProvider tokenProvider,
-            CircuitBreakerRegistry circuitBreakerRegistry) {
+            CircuitBreakerRegistry circuitBreakerRegistry,
+            ObservationRegistry observationRegistry) {
         this.environment = environment;
+        this.observationRegistry = observationRegistry;
         this.connectTimeoutMs = connectTimeoutMs;
         this.readTimeoutMs = readTimeoutMs;
         // TASK-BE-665: taken from Spring's registry (same standard config as before) so that
@@ -118,8 +122,10 @@ public class AccountServiceClient implements AccountServicePort {
      * benefits from the lazy URL resolution that Cluster C of TASK-MONO-046-1 added.
      */
     public AccountServiceClient(String baseUrl, int connectTimeoutMs, int readTimeoutMs,
-                                IamClientCredentialsTokenProvider tokenProvider) {
+                                IamClientCredentialsTokenProvider tokenProvider,
+                                ObservationRegistry observationRegistry) {
         this.environment = null;
+        this.observationRegistry = observationRegistry;
         this.connectTimeoutMs = connectTimeoutMs;
         this.readTimeoutMs = readTimeoutMs;
         this.circuitBreaker = ResilienceClientFactory.buildCircuitBreaker("accountService");
@@ -127,7 +133,7 @@ public class AccountServiceClient implements AccountServicePort {
         this.tokenProvider = tokenProvider;
         this.cachedBaseUrl = baseUrl;
         this.cachedRestClient = ResilienceClientFactory.buildRestClient(
-                baseUrl, connectTimeoutMs, readTimeoutMs);
+                baseUrl, connectTimeoutMs, readTimeoutMs, observationRegistry);
     }
 
     /**
@@ -160,7 +166,7 @@ public class AccountServiceClient implements AccountServicePort {
                 return this.cachedRestClient;
             }
             RestClient fresh = ResilienceClientFactory.buildRestClient(
-                    baseUrl, connectTimeoutMs, readTimeoutMs);
+                    baseUrl, connectTimeoutMs, readTimeoutMs, observationRegistry);
             this.cachedBaseUrl = baseUrl;
             this.cachedRestClient = fresh;
             return fresh;

@@ -1,5 +1,6 @@
 package com.example.admin.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.admin.application.exception.NonRetryableDownstreamException;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -45,7 +46,7 @@ class AccountServiceTenantClientCallerRefusalTest {
                 .withHeader("Content-Type", "application/json").withBody(FORBIDDEN_BODY)));
         IamClientCredentialsTokenProvider tokenProvider = mock(IamClientCredentialsTokenProvider.class);
         when(tokenProvider.currentBearer()).thenReturn("test-jwt");
-        client = new AccountServiceTenantClient(wireMock.baseUrl(), 3000, 5000, tokenProvider);
+        client = new AccountServiceTenantClient(wireMock.baseUrl(), 3000, 5000, tokenProvider, ObservationRegistry.NOOP);
     }
 
     @AfterEach

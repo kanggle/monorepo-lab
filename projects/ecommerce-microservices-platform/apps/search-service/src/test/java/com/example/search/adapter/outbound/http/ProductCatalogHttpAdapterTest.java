@@ -1,5 +1,6 @@
 package com.example.search.adapter.outbound.http;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.search.domain.model.SearchDocument;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -60,7 +61,7 @@ class ProductCatalogHttpAdapterTest {
                         {"id":"p-1","name":"Widget","description":"d","price":1000,
                          "status":"ON_SALE","categoryId":"c-1","thumbnailUrl":null,"variants":[]}"""));
 
-        ProductCatalogHttpAdapter adapter = new ProductCatalogHttpAdapter(baseUrl(), 2000, 5000);
+        ProductCatalogHttpAdapter adapter = new ProductCatalogHttpAdapter(baseUrl(), 2000, 5000, ObservationRegistry.NOOP);
 
         List<SearchDocument> result = adapter.fetchAll(10);
 
@@ -72,7 +73,7 @@ class ProductCatalogHttpAdapterTest {
     void fetchAll_listCallHangsBeyondReadTimeout_failsFastWithinBound() {
         // No response enqueued: MockWebServer accepts the connection but never writes a
         // response body, simulating a hung downstream call.
-        ProductCatalogHttpAdapter adapter = new ProductCatalogHttpAdapter(baseUrl(), 2000, 300);
+        ProductCatalogHttpAdapter adapter = new ProductCatalogHttpAdapter(baseUrl(), 2000, 300, ObservationRegistry.NOOP);
 
         long start = System.nanoTime();
         assertThatThrownBy(() -> adapter.fetchAll(10)).isInstanceOf(Exception.class);

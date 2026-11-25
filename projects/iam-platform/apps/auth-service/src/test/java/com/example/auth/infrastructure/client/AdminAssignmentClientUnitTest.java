@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.auth.application.exception.AssumeTenantDeniedException;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -49,7 +50,7 @@ class AdminAssignmentClientUnitTest {
         wireMockServer.start();
         IamClientCredentialsTokenProvider tokenProvider = mock(IamClientCredentialsTokenProvider.class);
         when(tokenProvider.currentBearer()).thenReturn("test-jwt");
-        client = new AdminAssignmentClient(wireMockServer.baseUrl(), 3000, 5000, tokenProvider);
+        client = new AdminAssignmentClient(wireMockServer.baseUrl(), 3000, 5000, tokenProvider, ObservationRegistry.NOOP);
 
         HttpClient jdkHttp11 = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
         RestClient http11RestClient = RestClient.builder()

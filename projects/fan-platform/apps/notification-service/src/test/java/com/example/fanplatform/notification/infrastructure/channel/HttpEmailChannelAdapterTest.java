@@ -1,5 +1,6 @@
 package com.example.fanplatform.notification.infrastructure.channel;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.fanplatform.notification.domain.channel.NotificationChannelPort.DeliveryResult;
 import com.example.fanplatform.notification.domain.notification.Notification;
 import com.example.fanplatform.notification.domain.notification.NotificationType;
@@ -51,7 +52,7 @@ class HttpEmailChannelAdapterTest {
 
     private HttpEmailChannelAdapter adapter(String baseUrl) {
         return new HttpEmailChannelAdapter(registry, baseUrl, "test-api-key",
-                "no-reply@fan-platform.example", "fan-platform.example", 2000, 5000);
+                "no-reply@fan-platform.example", "fan-platform.example", 2000, 5000, ObservationRegistry.NOOP);
     }
 
     private static Notification sample() {

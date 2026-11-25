@@ -1,5 +1,6 @@
 package com.example.batch.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.common.resilience.ResilienceClientFactory;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -53,7 +54,7 @@ class SearchServiceClientTest {
                 .setBody("""
                         {"query":"widget","content":[],"page":0,"size":20,"totalElements":0}"""));
 
-        SearchServiceClient client = new SearchServiceClient(baseUrl());
+        SearchServiceClient client = new SearchServiceClient(baseUrl(), ObservationRegistry.NOOP);
 
         SearchServiceClient.SearchResponse result = client.searchByName("widget");
 
@@ -63,9 +64,9 @@ class SearchServiceClientTest {
     @Test
     @DisplayName("read timeout honored: hung search-service -> call fails within a bound, not forever")
     void searchByName_hungSearchService_failsFastWithinBound() throws Exception {
-        SearchServiceClient client = new SearchServiceClient(baseUrl());
+        SearchServiceClient client = new SearchServiceClient(baseUrl(), ObservationRegistry.NOOP);
         RestClient shortTimeoutClient = ResilienceClientFactory.buildRestClient(
-                baseUrl(), 2_000, 300);
+                baseUrl(), 2_000, 300, ObservationRegistry.NOOP);
         Field field = SearchServiceClient.class.getDeclaredField("restClient");
         field.setAccessible(true);
         field.set(client, shortTimeoutClient);

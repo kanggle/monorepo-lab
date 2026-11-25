@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.auth.application.port.AccountServicePort.EmailVerificationConfirmOutcome;
 import com.example.auth.application.port.AccountServicePort.EmailVerificationRequestOutcome;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
@@ -44,7 +45,7 @@ class AccountServiceClientEmailVerificationTest {
         wireMockServer = new WireMockServer(wireMockConfig().dynamicPort());
         wireMockServer.start();
         client = new AccountServiceClient(wireMockServer.baseUrl(), 3000, 5000,
-                mock(IamClientCredentialsTokenProvider.class));
+                mock(IamClientCredentialsTokenProvider.class), ObservationRegistry.NOOP);
         RestClient http11 = RestClient.builder()
                 .baseUrl(wireMockServer.baseUrl())
                 .requestFactory(new JdkClientHttpRequestFactory(

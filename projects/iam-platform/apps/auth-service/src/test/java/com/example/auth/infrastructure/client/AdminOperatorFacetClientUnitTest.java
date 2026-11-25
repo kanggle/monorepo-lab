@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.auth.application.exception.OperatorFacetUnavailableException;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -42,7 +43,7 @@ class AdminOperatorFacetClientUnitTest {
         when(tokenProvider.currentBearer()).thenReturn("test-jwt");
         MockEnvironment environment = new MockEnvironment()
                 .withProperty(AdminAssignmentClient.BASE_URL_PROPERTY, wireMockServer.baseUrl());
-        client = new AdminOperatorFacetClient(environment, 3000, 5000, tokenProvider);
+        client = new AdminOperatorFacetClient(environment, 3000, 5000, tokenProvider, ObservationRegistry.NOOP);
     }
 
     @AfterEach

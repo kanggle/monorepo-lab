@@ -1,5 +1,6 @@
 package com.example.product.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.product.application.port.SellerAccountProvisioner.ProvisioningResult;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -57,7 +58,7 @@ class AccountServiceSellerProvisionerTimeoutTest {
 
         // configured read timeout is 300ms; the stub delays 5s, far beyond that bound
         AccountServiceSellerProvisioner provisioner = new AccountServiceSellerProvisioner(
-                wireMock.baseUrl(), 2000, 300, "SELLER", tenantTokenProvider);
+                wireMock.baseUrl(), 2000, 300, "SELLER", tenantTokenProvider, ObservationRegistry.NOOP);
 
         wireMock.stubFor(post(urlPathEqualTo("/internal/tenants/tenant-a/accounts"))
                 .willReturn(aResponse().withFixedDelay(5000).withStatus(201)));

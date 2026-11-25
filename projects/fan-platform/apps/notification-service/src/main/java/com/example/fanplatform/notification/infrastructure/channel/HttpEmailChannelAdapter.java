@@ -5,6 +5,7 @@ import com.example.fanplatform.notification.domain.channel.NotificationChannelPo
 import com.example.fanplatform.notification.domain.notification.Notification;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -61,13 +62,14 @@ public class HttpEmailChannelAdapter implements NotificationChannelPort {
             @Value("${fanplatform.notification.email.from-address:no-reply@fan-platform.example}") String fromAddress,
             @Value("${fanplatform.notification.email.recipient-domain:fan-platform.example}") String recipientDomain,
             @Value("${fanplatform.notification.email.connect-timeout-ms:2000}") int connectTimeoutMs,
-            @Value("${fanplatform.notification.email.read-timeout-ms:5000}") int readTimeoutMs) {
+            @Value("${fanplatform.notification.email.read-timeout-ms:5000}") int readTimeoutMs,
+            ObservationRegistry observationRegistry) {
         this.meterRegistry = meterRegistry;
         this.apiKey = apiKey;
         this.fromAddress = fromAddress;
         this.recipientDomain = recipientDomain;
         this.restClient = ResilienceClientFactory.buildRestClient(
-                providerBaseUrl, connectTimeoutMs, readTimeoutMs);
+                providerBaseUrl, connectTimeoutMs, readTimeoutMs, observationRegistry);
     }
 
     @Override

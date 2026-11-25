@@ -5,6 +5,7 @@ import com.example.erp.notification.application.port.outbound.NotificationChanne
 import com.example.erp.notification.config.ExternalNotificationProperties;
 import com.example.erp.notification.domain.delivery.DeliveryChannel;
 import com.example.erp.notification.domain.notification.Notification;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
@@ -33,10 +34,11 @@ public class SlackWebhookChannelAdapter implements NotificationChannelPort {
 
     private final RestClient restClient;
 
-    public SlackWebhookChannelAdapter(ExternalNotificationProperties properties) {
+    public SlackWebhookChannelAdapter(ExternalNotificationProperties properties,
+                                     ObservationRegistry observationRegistry) {
         ExternalNotificationProperties.Slack slack = properties.getSlack();
         this.restClient = ResilienceClientFactory.buildRestClient(
-                slack.getWebhookUrl(), slack.getConnectTimeoutMs(), slack.getReadTimeoutMs());
+                slack.getWebhookUrl(), slack.getConnectTimeoutMs(), slack.getReadTimeoutMs(), observationRegistry);
     }
 
     @Override

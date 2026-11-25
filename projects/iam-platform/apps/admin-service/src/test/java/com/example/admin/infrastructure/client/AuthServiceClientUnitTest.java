@@ -1,5 +1,6 @@
 package com.example.admin.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.admin.application.exception.DownstreamFailureException;
 import com.example.admin.application.exception.NonRetryableDownstreamException;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
@@ -39,7 +40,7 @@ class AuthServiceClientUnitTest {
         IamClientCredentialsTokenProvider tokenProvider = mock(IamClientCredentialsTokenProvider.class);
         when(tokenProvider.currentBearer()).thenReturn("test-jwt");
         // AuthServiceClient constructor explicitly sets HTTP/1.1 — no H2C fix needed.
-        client = new AuthServiceClient(wireMockServer.baseUrl(), 3000, 5000, tokenProvider);
+        client = new AuthServiceClient(wireMockServer.baseUrl(), 3000, 5000, tokenProvider, ObservationRegistry.NOOP);
     }
 
     @AfterEach

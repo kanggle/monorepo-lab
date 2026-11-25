@@ -1,5 +1,6 @@
 package com.example.batch.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -25,7 +26,7 @@ class PromotionServiceClientTest {
         promotionService = new MockWebServer();
         promotionService.start();
         client = new PromotionServiceClient(
-                "http://" + promotionService.getHostName() + ":" + promotionService.getPort());
+                "http://" + promotionService.getHostName() + ":" + promotionService.getPort(), ObservationRegistry.NOOP);
     }
 
     @AfterEach

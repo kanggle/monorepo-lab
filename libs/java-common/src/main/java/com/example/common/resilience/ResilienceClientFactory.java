@@ -5,12 +5,14 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.core.IntervalFunction;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
@@ -53,10 +55,26 @@ public final class ResilienceClientFactory {
      * cancelled}. Forcing HTTP/1.1 eliminates multiplexing and removes this
      * race entirely. For single-host internal clients the performance difference
      * is negligible. (TASK-BE-273 Phase 2, ADR-004 § Phase 1 Findings)
+     *
+     * <p><b>{@code observationRegistry} is required — pass the application's
+     * {@link ObservationRegistry} bean.</b> A {@link RestClient} built without one
+     * uses {@link ObservationRegistry#NOOP}: the call produces no client span and,
+     * because the W3C {@code traceparent} header is injected by the tracing
+     * observation handler, the downstream service starts a <em>new</em> trace
+     * (TASK-MONO-845 — every factory-built client was like that). There is
+     * deliberately no overload without it, so a new caller cannot drop
+     * propagation silently. Tests that construct a client by hand pass
+     * {@link ObservationRegistry#NOOP}.
+     *
+     * <p>This takes the registry, not Spring Boot's {@code RestClient.Builder}:
+     * that builder also carries Boot's message converters / {@code ObjectMapper},
+     * which would change serialisation for every caller.
      */
     public static RestClient buildRestClient(String baseUrl,
                                              Duration connectTimeout,
-                                             Duration readTimeout) {
+                                             Duration readTimeout,
+                                             ObservationRegistry observationRegistry) {
+        Objects.requireNonNull(observationRegistry, "observationRegistry");
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(connectTimeout)
@@ -66,16 +84,19 @@ public final class ResilienceClientFactory {
         return RestClient.builder()
                 .baseUrl(baseUrl)
                 .requestFactory(requestFactory)
+                .observationRegistry(observationRegistry)
                 .build();
     }
 
     /** Convenience overload for callers that pass timeouts in milliseconds. */
     public static RestClient buildRestClient(String baseUrl,
                                              int connectTimeoutMs,
-                                             int readTimeoutMs) {
+                                             int readTimeoutMs,
+                                             ObservationRegistry observationRegistry) {
         return buildRestClient(baseUrl,
                 Duration.ofMillis(connectTimeoutMs),
-                Duration.ofMillis(readTimeoutMs));
+                Duration.ofMillis(readTimeoutMs),
+                observationRegistry);
     }
 
     // -------- Circuit breaker --------

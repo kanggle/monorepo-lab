@@ -1,5 +1,6 @@
 package com.example.batch.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.common.resilience.ResilienceClientFactory;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -58,7 +59,7 @@ class OrderServiceClientTest {
                 .setBody("""
                         {"scanned":0,"confirmed":0,"skipped":0,"confirmedOrderIds":[]}"""));
 
-        OrderServiceClient client = new OrderServiceClient(baseUrl(), 30, 200, tokenProvider);
+        OrderServiceClient client = new OrderServiceClient(baseUrl(), 30, 200, tokenProvider, ObservationRegistry.NOOP);
 
         OrderServiceClient.ConfirmPaidStaleResponse result = client.confirmPaidStale();
 
@@ -68,9 +69,9 @@ class OrderServiceClientTest {
     @Test
     @DisplayName("read timeout honored: hung order-service -> call fails within a bound, not forever")
     void confirmPaidStale_hungOrderService_failsFastWithinBound() throws Exception {
-        OrderServiceClient client = new OrderServiceClient(baseUrl(), 30, 200, tokenProvider);
+        OrderServiceClient client = new OrderServiceClient(baseUrl(), 30, 200, tokenProvider, ObservationRegistry.NOOP);
         RestClient shortTimeoutClient = ResilienceClientFactory.buildRestClient(
-                baseUrl(), 2_000, 300);
+                baseUrl(), 2_000, 300, ObservationRegistry.NOOP);
         Field field = OrderServiceClient.class.getDeclaredField("restClient");
         field.setAccessible(true);
         field.set(client, shortTimeoutClient);

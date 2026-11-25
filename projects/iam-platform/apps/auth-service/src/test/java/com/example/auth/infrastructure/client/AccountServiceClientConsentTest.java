@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.auth.application.exception.AccountServiceUnavailableException;
 import com.example.auth.application.result.ConsumerSiteMembershipLookupResult;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
@@ -45,7 +46,7 @@ class AccountServiceClientConsentTest {
         wireMockServer.start();
         IamClientCredentialsTokenProvider tokenProvider = mock(IamClientCredentialsTokenProvider.class);
         when(tokenProvider.currentBearer()).thenReturn("test-jwt");
-        client = new AccountServiceClient(wireMockServer.baseUrl(), 3000, 5000, tokenProvider);
+        client = new AccountServiceClient(wireMockServer.baseUrl(), 3000, 5000, tokenProvider, ObservationRegistry.NOOP);
         RestClient http11 = RestClient.builder()
                 .baseUrl(wireMockServer.baseUrl())
                 .requestFactory(new JdkClientHttpRequestFactory(

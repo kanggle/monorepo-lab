@@ -1,5 +1,6 @@
 package com.example.fanplatform.artist.application.service;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.common.page.PageResult;
 import com.example.fanplatform.artist.application.ActorContext;
 import com.example.fanplatform.artist.application.exception.StoreSellerClosedException;
@@ -62,7 +63,7 @@ class AgencyStoreSellerTransportTest {
         service = new AgencyService(agencies, mock(ArtistRepository.class), mock(ArtistGroupRepository.class),
                 new StoreSellerDirectoryConfig().httpStoreSellerDirectory(
                         fake.tokenUri(), "artist-service-client", "secret", "store.seller.read",
-                        "ecommerce", fake.baseUrl(), 1000, 1000),
+                        "ecommerce", fake.baseUrl(), 1000, 1000, ObservationRegistry.NOOP),
                 mock(ArtistEventPublisher.class), mock(ArtistDirectoryCache.class));
     }
 
@@ -145,7 +146,7 @@ class AgencyStoreSellerTransportTest {
                 mock(ArtistGroupRepository.class),
                 new StoreSellerDirectoryConfig().httpStoreSellerDirectory(
                         fake.tokenUri(), "artist-service-client", "secret", "store.seller.read",
-                        "ecommerce", fake.baseUrl(), 1000, 1000),
+                        "ecommerce", fake.baseUrl(), 1000, 1000, ObservationRegistry.NOOP),
                 mock(ArtistEventPublisher.class), mock(ArtistDirectoryCache.class));
         long storeCallsBefore = fake.storeCalls();
         assertThatThrownBy(() -> coldService.linkStoreSeller(ADMIN, AGENCY, "s-1"))

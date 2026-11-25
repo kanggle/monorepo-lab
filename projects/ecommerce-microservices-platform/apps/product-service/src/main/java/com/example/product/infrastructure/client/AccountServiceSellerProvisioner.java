@@ -4,6 +4,7 @@ import com.example.common.resilience.ResilienceClientFactory;
 import com.example.product.application.port.SellerAccountProvisioner;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
@@ -98,8 +99,9 @@ public class AccountServiceSellerProvisioner implements SellerAccountProvisioner
             @Value("${iam.downstream.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${iam.downstream.read-timeout-ms:10000}") int readTimeoutMs,
             @Value("${iam.seller.role:SELLER}") String sellerRole,
-            TenantScopedIamTokenProvider tenantTokenProvider) {
-        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
+            TenantScopedIamTokenProvider tenantTokenProvider,
+            ObservationRegistry observationRegistry) {
+        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs, observationRegistry);
         this.tenantTokenProvider = tenantTokenProvider;
         this.sellerRole = sellerRole;
     }

@@ -1,5 +1,6 @@
 package com.example.product.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.product.application.port.SellerAccountProvisioner.ProvisioningResult;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import org.junit.jupiter.api.AfterEach;
@@ -44,7 +45,7 @@ class AccountServiceSellerProvisionerTest {
         tenantTokenProvider = mock(TenantScopedIamTokenProvider.class);
         org.mockito.Mockito.lenient().when(tenantTokenProvider.bearerFor("tenant-a")).thenReturn("test-jwt-tenant-a");
         provisioner = new AccountServiceSellerProvisioner(
-                wireMock.baseUrl(), 3000, 5000, "SELLER", tenantTokenProvider);
+                wireMock.baseUrl(), 3000, 5000, "SELLER", tenantTokenProvider, ObservationRegistry.NOOP);
     }
 
     @AfterEach

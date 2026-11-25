@@ -5,6 +5,7 @@ import com.example.common.resilience.ResilienceClientFactory;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.retry.Retry;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
@@ -59,12 +60,13 @@ public class AuthServiceClient implements AuthServicePort {
             @Value("${account.auth-service.base-url:http://localhost:8081}") String baseUrl,
             @Value("${account.auth-service.connect-timeout-ms:3000}") int connectTimeoutMs,
             @Value("${account.auth-service.read-timeout-ms:15000}") int readTimeoutMs,
-            IamClientCredentialsTokenProvider tokenProvider) {
+            IamClientCredentialsTokenProvider tokenProvider,
+            ObservationRegistry observationRegistry) {
         // HTTP/1.1 is pinned inside ResilienceClientFactory.buildRestClient: the JDK
         // HttpClient defaults to HTTP/2 negotiation which causes RST_STREAM failures
         // against WireMock (integration tests) and adds unnecessary upgrade round-trips
         // for cleartext internal traffic.
-        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs);
+        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, connectTimeoutMs, readTimeoutMs, observationRegistry);
         this.circuitBreaker = ResilienceClientFactory.buildCircuitBreaker("authService");
         this.retry = ResilienceClientFactory.buildRetry("authService");
         this.tokenProvider = tokenProvider;

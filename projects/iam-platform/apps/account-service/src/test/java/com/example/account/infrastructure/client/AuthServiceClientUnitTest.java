@@ -1,5 +1,6 @@
 package com.example.account.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.account.application.port.AuthServicePort;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -49,7 +50,7 @@ class AuthServiceClientUnitTest {
                 wireMockServer.baseUrl() + TOKEN_PATH, "account-service-client", "secret",
                 "internal.invoke", Duration.ofSeconds(3), Duration.ofSeconds(5));
         // AuthServiceClient now enforces HTTP/1.1 internally, so no workaround needed here.
-        client = new AuthServiceClient(wireMockServer.baseUrl(), 3000, 5000, tokenProvider);
+        client = new AuthServiceClient(wireMockServer.baseUrl(), 3000, 5000, tokenProvider, ObservationRegistry.NOOP);
     }
 
     @AfterEach

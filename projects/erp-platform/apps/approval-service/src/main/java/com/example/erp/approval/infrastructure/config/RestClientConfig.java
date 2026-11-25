@@ -1,5 +1,6 @@
 package com.example.erp.approval.infrastructure.config;
 
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.ClientHttpRequestFactorySettings;
 import org.springframework.context.annotation.Bean;
@@ -22,11 +23,13 @@ public class RestClientConfig {
             @org.springframework.beans.factory.annotation.Value(
                     "${erpplatform.approval.masterdata.connect-timeout-ms:2000}") long connectMs,
             @org.springframework.beans.factory.annotation.Value(
-                    "${erpplatform.approval.masterdata.read-timeout-ms:3000}") long readMs) {
+                    "${erpplatform.approval.masterdata.read-timeout-ms:3000}") long readMs,
+            ObservationRegistry observationRegistry) {
         ClientHttpRequestFactorySettings settings = ClientHttpRequestFactorySettings.defaults()
                 .withConnectTimeout(Duration.ofMillis(connectMs))
                 .withReadTimeout(Duration.ofMillis(readMs));
         return RestClient.builder()
+                .observationRegistry(observationRegistry)
                 .requestFactory(ClientHttpRequestFactoryBuilder.detect().build(settings));
     }
 }

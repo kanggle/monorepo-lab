@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.common.resilience.ResilienceClientFactory;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
@@ -49,7 +50,7 @@ class AccountServiceCircuitBreakerMetricsTest {
 
     private static AccountServiceClient productionClient(CircuitBreakerRegistry registry) {
         return new AccountServiceClient(new MockEnvironment(), 3000, 5000,
-                mock(IamClientCredentialsTokenProvider.class), registry);
+                mock(IamClientCredentialsTokenProvider.class), registry, ObservationRegistry.NOOP);
     }
 
     private static String stateLine(String scrape, String state) {

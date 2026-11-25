@@ -1,5 +1,6 @@
 package com.example.product.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.product.domain.exception.SellerInvitationEmailMismatchException;
 import com.example.product.domain.exception.SellerInvitationEmailNotVerifiedException;
 import com.example.product.domain.exception.SellerMemberAccountNotEligibleException;
@@ -42,7 +43,7 @@ class AccountServiceSellerSiteRoleClientTest {
         wireMock.start();
         TenantScopedIamTokenProvider tokens = mock(TenantScopedIamTokenProvider.class);
         when(tokens.bearerFor("ecommerce")).thenReturn("jwt-for-ecommerce");
-        client = new AccountServiceSellerSiteRoleClient(wireMock.baseUrl(), 3000, 5000, tokens);
+        client = new AccountServiceSellerSiteRoleClient(wireMock.baseUrl(), 3000, 5000, tokens, ObservationRegistry.NOOP);
     }
 
     @AfterEach

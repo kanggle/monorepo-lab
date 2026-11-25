@@ -2,6 +2,7 @@ package com.example.fanplatform.community.infrastructure.artist;
 
 import com.example.fanplatform.community.domain.follow.ArtistAccountChecker;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -96,7 +97,8 @@ public class ArtistAccountCheckerConfig {
             @Value("${community.artist-service.scope:artist.read}") String scope,
             @Value("${community.artist-service.base-url:http://artist-service:8080}") String baseUrl,
             @Value("${community.artist-service.connect-timeout-ms:2000}") int connectTimeoutMs,
-            @Value("${community.artist-service.read-timeout-ms:3000}") int readTimeoutMs) {
+            @Value("${community.artist-service.read-timeout-ms:3000}") int readTimeoutMs,
+            ObservationRegistry observationRegistry) {
         IamClientCredentialsTokenProvider tokenProvider = new IamClientCredentialsTokenProvider(
                 tokenUri,
                 clientId,
@@ -111,6 +113,7 @@ public class ArtistAccountCheckerConfig {
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
         RestClient restClient = RestClient.builder()
+                .observationRegistry(observationRegistry)
                 .baseUrl(baseUrl)
                 .requestFactory(factory)
                 .requestInterceptor((request, body, execution) -> {

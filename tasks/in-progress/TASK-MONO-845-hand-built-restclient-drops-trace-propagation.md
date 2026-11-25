@@ -8,7 +8,7 @@ TASK-MONO-845
 
 # Status
 
-ready
+in-progress
 
 # Owner
 
@@ -113,3 +113,28 @@ monorepo
 - 가드의 술어가 «파일에 `ObservationRegistry` 라는 글자가 있다» 수준이면 → import 만 하고 빌더에 걸지 않은 파일이 통과한다. 빌더 체인 단위로 문다.
 - AC-2 가 `TestObservationRegistry` 로 «관측이 시작됐다» 만 재면 → 헤더 주입(전파)은 재지 않는다. 받는 쪽 서버에서 헤더를 읽어야 한다.
 - Boot `RestClient.Builder` 로 바꾸면 → 직렬화 설정이 바뀌어 계약 테스트가 깨지거나, 더 나쁘게는 통과한 채 응답 형식이 달라진다(In Scope 2 가 막는 이유).
+
+# Implementation Evidence
+
+## AC-0 (2026-11-25 UTC, `origin/main` = `a0a94bcd0`)
+
+- **(a) 재집계** — 기안 수치 그대로: 팩토리 main 호출 파일 **34** · 테스트 **4**(`git grep -l 'buildRestClient('`) · 25개 tracer 서비스의 «팩토리 밖» 직접 빌더 **6**(새 가드를 수정 전 트리에 돌린 결과가 정확히 그 6 파일 — rc=1). finance · wms 에는 직접 빌더 0, `WebClient.builder` 0.
+- **(b) gateway 전달 경로** — 전파한다 → 범위 밖. Spring Cloud 2024.0.0 → `spring-cloud-gateway-server:4.2.0`(scm gateway runtimeClasspath). 그 jar 의 `org/springframework/cloud/gateway/config/GatewayMetricsAutoConfiguration$ObservabilityConfiguration` 이 `ObservedRequestHttpHeadersFilter`(+ `GatewayPropagatingSenderTracingObservationHandler`)를 켜고, 조건은 `spring.cloud.gateway.observability.enabled` · `matchIfMissing`(기본 켜짐). 이 속성을 끈 `application*.yml` 0곳.
+- **(c) 부수효과** — 레지스트리를 넘기면 Boot 의 meter 핸들러가 `http.client.requests` 를 새로 낸다(이 PR 로 iam · ecommerce 내부 호출에도 생긴다). 가드 영향 없음: `scripts/check-alert-rule-metrics.sh:64` 가 `http_client_requests_` 를 프레임워크 접두어로 이미 허용, `check-metric-name-registry.sh` 는 코드의 리터럴 이름만 본다. 카디널리티 상한: Boot 3.4.1 `HttpClientObservationsAutoConfiguration$MeterFilterConfiguration` 의 `OnlyOnceLoggingDenyMeterFilter` ← `management.metrics.web.client.max-uri-tags`(기본 **100**, 메타데이터 인용). ecommerce(agent) 와의 겹침 없음: `order-service` runtimeClasspath 에 `micrometer-tracing` · `opentelemetry-sdk` **0** 줄 → Micrometer 쪽은 span 을 만들지 않는다.
+
+## 변경
+
+- `ResilienceClientFactory.buildRestClient` — 두 오버로드 모두 마지막 인자 `ObservationRegistry` **필수**(null 이면 NPE), 옛 3-인자 오버로드 **삭제**, `.observationRegistry(registry)`. `libs/java-common/build.gradle` 에 `micrometer-observation` 명시(공개 시그니처의 타입).
+- 호출 파일 34 + 그 빈을 만드는 `@Bean` 설정(shipping `DeliveryTrackerConfig`, order `StandaloneConfig`) — 전부 주입받은 빈을 넘긴다. main 코드의 `ObservationRegistry.NOOP` **0**(javadoc 두 줄만). iam auth 의 지연 생성 클라이언트 5개는 필드로 보관.
+- 직접 빌더 6 파일 + scm logistics 의 정적 헬퍼 `pooledRestClient(…, observationRegistry)` 를 부르는 `EasyPostDispatchClientConfig` · `GoodsflowDispatchClientConfig`.
+- 테스트: 생성자가 늘어 깨진 48 파일 → `ObservationRegistry.NOOP`; `ApplicationContextRunner` 테스트 3개(fan `StoreSellerDirectoryConfigTest` · `ArtistAccountCheckerConfigTest` · `MembershipCheckerAutoConfigTest`)에 `.withBean(ObservationRegistry.class, () -> ObservationRegistry.NOOP)`.
+- 새 가드 `scripts/check-outbound-client-observation.mjs` + `ci.yml` 잡 `outbound-client-observation`(필터: `projects/*/apps/*/build.gradle` · `projects/*/apps/*/src/main/**/*.java` · 스크립트 자신).
+- `platform/observability.md` § Tracing 개정(프로젝트 · 서비스 이름 없음).
+- **하지 않은 것**: tracer 없는 서비스(ecommerce · iam)의 직접 빌더 7곳(ecommerce `GoogleOAuthClient` · `NaverOAuthClient` · batch `RestClients` · product `IamTokenProviderConfig`, iam `IamOidcJwksSubjectTokenValidator` · `OAuthClientSupport` · gateway `WebClientConfig`) — 가드 모집단 밖(이을 tracer 가 없거나 agent 가 JDK HttpClient 를 계측). `libs/java-security` `IamClientCredentialsTokenProvider` — § Out of Scope 대로.
+
+## 검증
+
+- **AC-2** `ResilienceClientFactoryPropagationTest` 3/3 — OTel SDK + `OtelTracer` + `PropagatingSenderTracingObservationHandler`, JDK `HttpServer` 가 **받은** `traceparent` 의 trace-id = 호출자 부모 span 의 trace-id; 대조군(`NOOP`)은 헤더 null. **bite**: 팩토리의 `.observationRegistry(observationRegistry)` 줄 삭제(`grep -c` = 0 확인) → `failures="2"`(전파 단언 둘, 대조군은 통과) · 원복(`grep -c` = 1) → `:libs:java-common:test` rc=0.
+- **가드** self-test 16/16 · 수정 전 트리(`e7f4ced99` 체크아웃) rc=1 로 6 파일 지목 · 수정 후 rc=0 «6 builder call site(s) in 2473 file(s) of 25 trace-exporting service(s)».
+- **컴파일/유닛** (위임 에이전트 실행, 오케스트레이터가 diff 대조): `./gradlew compileJava compileTestJava` rc=0. 18 모듈 `:test --continue` 첫 실행 rc=1 — 실패는 fan artist(ContextRunner 2) · community(ContextRunner 7 + 병렬 실행 중 `Could not initialize plugin: MockMaker` 다수) 두 모듈뿐 → ContextRunner 수정 후 두 모듈 단독 재실행 rc=0. 나머지 16 모듈은 첫 실행에서 초록. 🔴 최종 판정은 CI(AC-6).
+- **전체 가드 스윕** (`scripts/` 에 파일 추가 → CLAUDE.md § Task Rules, stage 뒤): 52개 중 rc≠0 셋 — `check-ls-files-guard-count.sh`(새 가드가 `git ls-files` 를 읽어 32/73 → **33/74**; `CLAUDE.md` · `platform/git-workflow-policy.md` 의 두 문장씩 고친 뒤 rc=0) · `check-erp-single-tenant-ratchet.sh`(데모 스택 필요) · `check-prerendered-demo-verdict.sh`(환경 변수 필요) — 뒤의 둘은 `main` 에서도 rc=1(843 때 측정). 두 산문 파일을 읽는 가드 13개 재실행 전부 rc=0.

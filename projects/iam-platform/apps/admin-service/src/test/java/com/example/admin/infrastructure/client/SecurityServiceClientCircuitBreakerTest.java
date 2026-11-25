@@ -1,5 +1,6 @@
 package com.example.admin.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.admin.application.exception.DownstreamFailureException;
 import com.example.admin.application.exception.NonRetryableDownstreamException;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
@@ -55,7 +56,7 @@ class SecurityServiceClientCircuitBreakerTest {
                 "http://localhost:" + wireMock.port(),
                 500,
                 1000,
-                tokenProvider);
+                tokenProvider, ObservationRegistry.NOOP);
 
         CircuitBreakerConfig cbConfig = CircuitBreakerConfig.custom()
                 .failureRateThreshold(50f)

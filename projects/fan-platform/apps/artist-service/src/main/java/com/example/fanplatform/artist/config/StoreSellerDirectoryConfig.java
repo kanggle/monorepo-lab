@@ -4,6 +4,7 @@ import com.example.fanplatform.artist.adapter.out.store.HttpStoreSellerDirectory
 import com.example.fanplatform.artist.adapter.out.store.StoreTenantTokenProvider;
 import com.example.fanplatform.artist.application.port.out.StoreSellerDirectory;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -56,7 +57,8 @@ public class StoreSellerDirectoryConfig {
             @Value("${artist.store-seller.tenant-id:ecommerce}") String storeTenant,
             @Value("${artist.store-seller.base-url:http://ecommerce.local}") String baseUrl,
             @Value("${artist.store-seller.connect-timeout-ms:2000}") int connectTimeoutMs,
-            @Value("${artist.store-seller.read-timeout-ms:3000}") int readTimeoutMs) {
+            @Value("${artist.store-seller.read-timeout-ms:3000}") int readTimeoutMs,
+            ObservationRegistry observationRegistry) {
         requireNonBlank("iam.internal-client.token-uri", tokenUri);
         requireNonBlank("iam.internal-client.client-id", clientId);
         requireNonBlank("iam.internal-client.client-secret", clientSecret);
@@ -70,19 +72,23 @@ public class StoreSellerDirectoryConfig {
         IamClientCredentialsTokenProvider ccToken = new IamClientCredentialsTokenProvider(
                 tokenUri, clientId, clientSecret, scope, connect, read);
         StoreTenantTokenProvider storeToken = new StoreTenantTokenProvider(
-                ccToken, restClient(null, connect, read), tokenUri, clientId, clientSecret,
-                scope, storeTenant);
-        return new HttpStoreSellerDirectory(restClient(baseUrl, connect, read), storeToken);
+                ccToken, restClient(null, connect, read, observationRegistry), tokenUri, clientId,
+                clientSecret, scope, storeTenant);
+        return new HttpStoreSellerDirectory(
+                restClient(baseUrl, connect, read, observationRegistry), storeToken);
     }
 
-    private static RestClient restClient(String baseUrl, Duration connect, Duration read) {
+    private static RestClient restClient(String baseUrl, Duration connect, Duration read,
+                                         ObservationRegistry observationRegistry) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(connect)
                 .build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(read);
-        RestClient.Builder b = RestClient.builder().requestFactory(factory);
+        RestClient.Builder b = RestClient.builder()
+                .observationRegistry(observationRegistry)
+                .requestFactory(factory);
         if (baseUrl != null) {
             b.baseUrl(baseUrl);
         }

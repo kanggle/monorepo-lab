@@ -2,6 +2,7 @@ package com.example.batch.infrastructure.client;
 
 import com.example.common.resilience.ResilienceClientFactory;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -45,12 +46,13 @@ public class OrderServiceClient {
             @Value("${order-service.base-url}") String baseUrl,
             @Value("${batch.jobs.stale-paid-order-confirmation.older-than-minutes:30}") int defaultOlderThanMinutes,
             @Value("${batch.jobs.stale-paid-order-confirmation.limit:200}") int defaultLimit,
-            IamClientCredentialsTokenProvider tokenProvider) {
+            IamClientCredentialsTokenProvider tokenProvider,
+            ObservationRegistry observationRegistry) {
         // Explicit timeouts: prevent a hung order-service from blocking the scheduler thread
         // for the entire ShedLock window. 5s connect / 10s read.
         // ADR-MONO-058 D7 (TASK-BE-570) — migrated from the local RestClients.timed(...) helper
         // to the shared ResilienceClientFactory (same values, shared mechanism).
-        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, 5_000, 10_000);
+        this.restClient = ResilienceClientFactory.buildRestClient(baseUrl, 5_000, 10_000, observationRegistry);
         this.tokenProvider = tokenProvider;
         this.defaultOlderThanMinutes = defaultOlderThanMinutes;
         this.defaultLimit = defaultLimit;

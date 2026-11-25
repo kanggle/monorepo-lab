@@ -1,5 +1,6 @@
 package com.example.fanplatform.artist.adapter.out.store;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.fanplatform.artist.application.exception.StoreSellerLookupUnavailableException;
 import com.example.fanplatform.artist.application.port.out.StoreSellerDirectory;
 import com.example.fanplatform.artist.config.StoreSellerDirectoryConfig;
@@ -45,7 +46,7 @@ class HttpStoreSellerDirectoryTest {
     private StoreSellerDirectory build(String tenant, int connectMs, int readMs) {
         return new StoreSellerDirectoryConfig().httpStoreSellerDirectory(
                 fake.tokenUri(), "artist-service-client", "secret", "store.seller.read",
-                tenant, fake.baseUrl(), connectMs, readMs);
+                tenant, fake.baseUrl(), connectMs, readMs, ObservationRegistry.NOOP);
     }
 
     // ------------------------------------------------------------------ definite answers

@@ -2,6 +2,7 @@ package com.example.fanplatform.community.infrastructure.membership;
 
 import com.example.fanplatform.community.domain.membership.MembershipChecker;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -99,7 +100,8 @@ public class MembershipCheckerAutoConfig {
             IamClientCredentialsTokenProvider tokenProvider,
             @Value("${community.membership-service.base-url:http://membership-service:8080}") String baseUrl,
             @Value("${community.membership-service.connect-timeout-ms:2000}") int connectTimeoutMs,
-            @Value("${community.membership-service.read-timeout-ms:3000}") int readTimeoutMs) {
+            @Value("${community.membership-service.read-timeout-ms:3000}") int readTimeoutMs,
+            ObservationRegistry observationRegistry) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofMillis(connectTimeoutMs))
@@ -107,6 +109,7 @@ public class MembershipCheckerAutoConfig {
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
         RestClient restClient = RestClient.builder()
+                .observationRegistry(observationRegistry)
                 .baseUrl(baseUrl)
                 .requestFactory(factory)
                 .requestInterceptor((request, body, execution) -> {

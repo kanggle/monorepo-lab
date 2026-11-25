@@ -1,5 +1,6 @@
 package com.example.auth.infrastructure.client;
 
+import io.micrometer.observation.ObservationRegistry;
 import com.example.auth.application.port.ConsumerPoolSignupPort.Outcome;
 import com.example.security.oauth2.client.IamClientCredentialsTokenProvider;
 import com.github.tomakehurst.wiremock.WireMockServer;
@@ -39,7 +40,7 @@ class AccountServicePoolSignupClientUnitTest {
         when(tokenProvider.currentBearer()).thenReturn("test-jwt");
         MockEnvironment environment = new MockEnvironment()
                 .withProperty(AccountServiceClient.BASE_URL_PROPERTY, wireMockServer.baseUrl());
-        client = new AccountServicePoolSignupClient(environment, 3000, 5000, tokenProvider);
+        client = new AccountServicePoolSignupClient(environment, 3000, 5000, tokenProvider, ObservationRegistry.NOOP);
     }
 
     @AfterEach
