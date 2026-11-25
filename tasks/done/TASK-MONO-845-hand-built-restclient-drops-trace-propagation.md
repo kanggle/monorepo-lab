@@ -8,7 +8,7 @@ TASK-MONO-845
 
 # Status
 
-in-progress
+done
 
 # Owner
 
@@ -138,3 +138,18 @@ monorepo
 - **가드** self-test 16/16 · 수정 전 트리(`e7f4ced99` 체크아웃) rc=1 로 6 파일 지목 · 수정 후 rc=0 «6 builder call site(s) in 2473 file(s) of 25 trace-exporting service(s)».
 - **컴파일/유닛** (위임 에이전트 실행, 오케스트레이터가 diff 대조): `./gradlew compileJava compileTestJava` rc=0. 18 모듈 `:test --continue` 첫 실행 rc=1 — 실패는 fan artist(ContextRunner 2) · community(ContextRunner 7 + 병렬 실행 중 `Could not initialize plugin: MockMaker` 다수) 두 모듈뿐 → ContextRunner 수정 후 두 모듈 단독 재실행 rc=0. 나머지 16 모듈은 첫 실행에서 초록. 🔴 최종 판정은 CI(AC-6).
 - **전체 가드 스윕** (`scripts/` 에 파일 추가 → CLAUDE.md § Task Rules, stage 뒤): 52개 중 rc≠0 셋 — `check-ls-files-guard-count.sh`(새 가드가 `git ls-files` 를 읽어 32/73 → **33/74**; `CLAUDE.md` · `platform/git-workflow-policy.md` 의 두 문장씩 고친 뒤 rc=0) · `check-erp-single-tenant-ratchet.sh`(데모 스택 필요) · `check-prerendered-demo-verdict.sh`(환경 변수 필요) — 뒤의 둘은 `main` 에서도 rc=1(843 때 측정). 두 산문 파일을 읽는 가드 13개 재실행 전부 rc=0.
+
+# Closure Evidence
+
+4-dim (2026-11-25 UTC):
+- (a) `gh pr view 4719` → `MERGED` 2026-11-25T17:54:13Z, squash `c896c19f6`.
+- (b) `origin/main` tip = `c896c19f6`.
+- (c) 머지 전 `statusCheckRollup` — `SUCCESS=53` · `SKIPPED=25` · 실패 0. Integration 11 레인(ecommerce A/B/C · erp · fan · finance · iam A/B · scm · wms 두 레인) · E2E 4 · `Outbound client observation` · `Guard-count figure` 전부 pass.
+- (d) AC 를 동사대로:
+  - AC-0 ✅ (a)(b)(c) 수치 · 인용 — § Implementation Evidence.
+  - AC-1 ✅ 레지스트리 없는 오버로드 0; 옛 시그니처를 부르는 코드는 컴파일되지 않는다(CI `Build & Test` · `compileJava compileTestJava` 초록).
+  - AC-2 ✅ 받는 서버의 `traceparent` trace-id 단언 + NOOP 대조군 + bite(`failures="2"`).
+  - AC-3 ✅ 6 파일 — 가드가 «6 builder call site(s) … each observed».
+  - AC-4 ✅ `ci.yml` 잡 pass. bite 를 AC 문구대로 **한 줄**로 다시 쟀다(머지 뒤 `main` 트리): logistics `VendorHttpClientFactory` 의 `.observationRegistry(observationRegistry)` 한 줄 삭제(`grep -c` = 0) → rc=1, 그 파일 `:80` 지목 · 원복(`grep -c` = 1) → rc=0.
+  - AC-5 ✅ § Tracing 개정, 프로젝트 · 서비스 이름 없음.
+  - AC-6 ✅ (c).
