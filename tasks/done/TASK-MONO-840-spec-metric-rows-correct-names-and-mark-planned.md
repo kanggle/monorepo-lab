@@ -8,7 +8,7 @@ TASK-MONO-840
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -59,7 +59,7 @@ monorepo
 - [x] AC-1: 837 의 D2 120 · E 23 이름이 전부 표시됐다 — 스펙 전체에서 그 이름이 첫 칸인 행 중 표시 없는 행 0(스크립트로 세고 수를 증거에).
 - [x] AC-2: A2 · B · C 21행의 새 이름이 코드 · 프레임워크에 실제로 있다(A2 는 등록 이름, B 는 837 B 표의 근거, C 는 식의 재료가 등록됐거나 «계획»).
 - [x] AC-3: 표시된 행이 구현된 이름(837 A)을 하나도 포함하지 않는다(오표시 0).
-- [ ] AC-4: `check-metric-name-registry.sh` rc=0(코드 → 스펙 방향이 깨지지 않음) · 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께) · PR CI 실패 0.
+- [x] AC-4: `check-metric-name-registry.sh` rc=0(코드 → 스펙 방향이 깨지지 않음) · 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께) · PR CI 실패 0.
 
 # Related Specs
 
@@ -93,7 +93,7 @@ monorepo
 - **AC-1** — 검사 스크립트(같은 모집단): 표시 행 **171**(= 134 + 23 + 14), «계획 이름인데 표시 없는 행» **0**. **bite**: auth 스펙에서 표시 하나를 지우면 1 → 복원 0.
 - **AC-2** — A2 새 이름 3개 모두 코드의 meter 등록(위 파일:줄). B 는 837 B 표의 근거(665 실측 · `@CircuitBreaker` + 런타임 클래스패스 · Boot WebFlux 내장). C 식 재료 4종 모두 등록됨(`admin_command_total` — TASK-BE-662, `*_idempotency_lookup_count_total` — 위).
 - **AC-3** — 표시 행 중 코드에 등록된 이름(접미사 정규화 포함)을 담은 행 **0**. 668 · 669 머지 뒤에 다시 돌려도 0(D1 6행은 처음부터 표시하지 않았다).
-- **AC-4** — `check-metric-name-registry.sh` rc=0(«113 literal metric name(s) across 31 service(s)»). 스테이지 뒤 `check-*.sh` 43: 41 rc=0, 비0 둘 = 환경 전제(erp 래칫 · prerendered verdict). `.mjs` 7/7. PR CI: 대기.
+- **AC-4** — `check-metric-name-registry.sh` rc=0(«113 literal metric name(s) across 31 service(s)»). 스테이지 뒤 `check-*.sh` 43: 41 rc=0, 비0 둘 = 환경 전제(erp 래칫 · prerendered verdict). `.mjs` 7/7. PR CI(#4706): 첫 실행 실패 2 = `Integration (ecommerce B)` · `Integration (fan-platform)` — 둘 다 `compileJava` 의 Maven Central 다운로드 실패(단언 전, 이 PR 은 문서 · 주석만) → `gh run rerun --failed` 로 둘 다 pass. 최종 실패 0 · SUCCESS 33.
 
 # Definition of Done
 
