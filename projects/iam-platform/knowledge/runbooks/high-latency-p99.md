@@ -9,11 +9,11 @@ for 5 minutes, severity `warning`. The series is Spring Boot's built-in HTTP ser
 class in this repo.
 
 🔴 **The alert can only fire if `_bucket` series exist.** Spring Boot does not publish histogram
-buckets for `http.server.requests` unless `management.metrics.distribution.percentiles-histogram`
-is set, and no `percentiles-histogram` / `publishPercentileHistogram` setting was found in
-`projects/iam-platform/apps/*/src/main` or `libs/*/src/main`. Whether another source (the optional
-`application-defaults.yml` import every service declares — no such file exists in this repository)
-supplies it is **not verified**. Check first:
+buckets for `http.server.requests` by default. `libs/java-observability`
+(`ObservabilityAutoConfig.HttpServerRequestsHistogramConfig`, TASK-MONO-836) turns them on, and all
+five iam services depend on that library — before 836 nothing did and this alert was permanently
+no-data. A service that sets `management.metrics.distribution.percentiles-histogram.http.server.requests=false`
+(or `...percentiles-histogram.all=false`) turns them back off. Check that the series exist:
 
 ```bash
 docker exec iam-prometheus wget -qO- --post-data='query=count by (service) (http_server_requests_seconds_bucket)' http://localhost:9090/api/v1/query

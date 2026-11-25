@@ -113,6 +113,21 @@ class HealthSurfaceIntegrationTest extends NotificationServiceIntegrationBase {
     }
 
     @Test
+    @DisplayName("http.server.requests publishes histogram buckets — HighLatencyP99 queries them (TASK-MONO-836)")
+    void httpServerRequestsHistogramBucketsAreExported() {
+        // This service does not use libs/java-observability, so the buckets come
+        // only from application.yml management.metrics.distribution.percentiles-histogram.
+        // Record one request first: a request's own sample lands after its response.
+        restTemplate.getForEntity(url("/actuator/health"), String.class);
+
+        ResponseEntity<String> response =
+                restTemplate.getForEntity(url("/actuator/prometheus"), String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).contains("http_server_requests_seconds_bucket{");
+    }
+
+    @Test
     @DisplayName("the datasource participates in the health verdict — this is what makes it fail")
     void datasourceContributesToHealth() {
         assertThat(contributorNames())

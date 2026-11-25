@@ -85,6 +85,12 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+    # TASK-MONO-836: p99 latency alerts query http_server_requests_seconds_bucket,
+    # which Boot exports only with this on. This service does not use
+    # libs/java-observability (which turns it on for its consumers), so it is set here.
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
   tracing:
     sampling:
       probability: 1.0

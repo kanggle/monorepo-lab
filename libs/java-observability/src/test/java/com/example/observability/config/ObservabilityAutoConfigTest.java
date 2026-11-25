@@ -26,6 +26,7 @@ class ObservabilityAutoConfigTest {
     @DisplayName("Micrometer 공통 태그 MeterFilter가 등록된다")
     void commonTagsMeterFilter_registered() {
         contextRunner.run(context ->
-                assertThat(context).hasSingleBean(MeterFilter.class));
+                assertThat(context).hasBean("commonTagsMeterFilter")
+                        .getBean("commonTagsMeterFilter").isInstanceOf(MeterFilter.class));
     }
 }

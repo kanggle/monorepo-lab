@@ -7,8 +7,12 @@
 - Expression: `histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket[5m])) by (le,
   service)) > 1`, `for: 5m` — p99 HTTP server latency above 1 second.
 - `http_server_requests_seconds_bucket` comes from the Spring Boot / Micrometer HTTP server
-  instrumentation (framework, not a wms class). Whether histogram buckets are enabled for every
-  service: not verified — if the query below returns nothing for a service, that is why.
+  instrumentation (framework, not a wms class). Spring Boot publishes its buckets only when
+  histogram buckets are turned on (TASK-MONO-836; before that this alert was permanently no-data):
+  gateway · master · inbound · inventory · outbound get them from `libs/java-observability`;
+  admin-service and notification-service do not use that library and set
+  `management.metrics.distribution.percentiles-histogram.http.server.requests: true` in their
+  `application.yml`. If the query below returns nothing for a service, check that first.
 - p99 over a low request rate is noisy; check the rate before acting.
 
 ## 2. First checks

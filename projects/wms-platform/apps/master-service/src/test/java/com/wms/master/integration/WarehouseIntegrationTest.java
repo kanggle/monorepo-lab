@@ -202,6 +202,10 @@ class WarehouseIntegrationTest extends MasterServiceIntegrationBase {
                     String scrape = response.getBody();
                     assertThat(scrape).contains(PENDING_COUNT.replace('.', '_'));
                     assertThat(scrape).contains(PUBLISH_SUCCESS_TOTAL.replace('.', '_'));
+                    // TASK-MONO-836: HighLatencyP99 queries this; Boot exports it only
+                    // with histogram buckets on (libs/java-observability does that).
+                    // The POST above recorded an http.server.requests sample.
+                    assertThat(scrape).contains("http_server_requests_seconds_bucket{");
                 });
         // sanity: ADMIN role unused here; kept as reference for role table completeness
         assertThat(ADMIN_ROLE).isNotBlank();
