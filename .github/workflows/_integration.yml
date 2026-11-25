@@ -62,6 +62,21 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.timeout-minutes }}
+    # TASK-MONO-843 — one gradle-home cache entry per CALLER, not one for all of them.
+    # setup-gradle keys the home as `<job id>[hash(workflow name, matrix)]-<sha>`. In a
+    # reusable workflow the job id is always `integration`, the workflow name is the
+    # CALLER's (`CI`) and the matrix is empty, so every caller computed the same key
+    # (`integration[b8a35c2f…]`, iam and ecommerce alike — measured 2026-11-25). Each lane
+    # then restored whichever sibling saved last, re-downloaded its own extra dependencies
+    # on every run, and from 2026-11-23 Maven Central answered those with HTTP 429: 11
+    # failed jobs in three days, 6 of them red on main. The override replaces only the
+    # bracketed part, so restore still falls back to `integration` (any sibling) and then
+    # to the OS — a lane's first run is no worse than before. `artifact-name` is required,
+    # unique per caller and fixed (shards are fixed matrix values), which is what a cache
+    # key needs: a per-run value here would make every restore a miss.
+    # Env is set on the JOB, not the step, so setup-gradle's post step (the save) sees it too.
+    env:
+      GRADLE_BUILD_ACTION_CACHE_KEY_JOB_INSTANCE: ${{ inputs.artifact-name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

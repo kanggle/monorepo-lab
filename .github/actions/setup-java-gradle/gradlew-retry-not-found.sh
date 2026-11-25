@@ -13,6 +13,9 @@
 #   3. gradle/actions/setup-gradle saves ~/.gradle/caches even when the build FAILED
 #      (only cache-cleanup is skipped), and every caller of _platform-e2e.yml shares one
 #      gradle-home key prefix (`e2e[<hash>]-<sha>` — the reusable job is always `e2e`).
+#      (TASK-MONO-843, 2026-11-25: each caller now has its own `e2e[<report-artifact>]`
+#      entry. The restore fallback to `e2e` — any sibling — still exists for a caller's
+#      first run, so the mechanism below is narrowed, not gone.)
 #   4. So every later run restored the record and failed WITHOUT asking the repository
 #      (stack frame: CachingModuleComponentRepository$LocateInCacheRepositoryAccess
 #      .resolveArtifactFromCache), and re-saved it for the run after. ci.yml's lanes have

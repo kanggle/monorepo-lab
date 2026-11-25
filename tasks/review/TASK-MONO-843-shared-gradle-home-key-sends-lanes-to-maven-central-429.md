@@ -8,7 +8,7 @@ TASK-MONO-843
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -95,6 +95,40 @@ monorepo
 # Test Requirements
 
 - CI 로그 대조 · (래퍼를 바꿨다면) fixture 기반 bite · 가드 · CI.
+
+# Implementation Evidence (2026-11-25 UTC)
+
+## AC-0 실측
+
+- **(a) 레인별 키 방법 — 있다.** `gradle/actions` `v4`(`ed408507e`) `sources/src/caching/cache-key.ts`:
+  - 키 = `${prefix}gradle-<name>-v1|<env>|<job>[<jobInstance>]-<execution>`, restore 키 = `[<jobInstance>]` 까지 → `<job>` 까지 → `<env>` 까지.
+  - `getCacheKeyJobInstance()` 는 `GRADLE_BUILD_ACTION_CACHE_KEY_JOB_INSTANCE` 가 있으면 그 값을, 없으면 `hashStrings([github.context.workflow, matrix])`. 재사용 워크플로 안에서 `github.context.workflow` 는 **호출한 쪽** 이름(`CI` · `Nightly …`)이고 matrix 는 비어 있다 → 호출자 14곳이 워크플로마다 같은 해시(`integration[b8a35c2f…]` · CI `e2e[b8a35c2f…]` · nightly `e2e[e9cc7a5f…]`).
+  - 🔵 `_JOB` 이 아니라 `_JOB_INSTANCE` 를 덮는 이유: `[…]` 만 바뀌어 restore 의 둘째 단계(`integration` — 아무 형제)가 남는다. 첫 실행은 지금과 같은 수준으로 복원되고, 둘째 실행부터 자기 것.
+  - 레인 식별자 = `_integration.yml` 의 `artifact-name` · `_platform-e2e.yml` 의 `report-artifact`. 둘 다 `required: true`. 호출자 14곳(`ci.yml` 11 · `nightly-e2e.yml` 3)의 값 14개가 전부 다르고, 실행마다 바뀌는 값이 없다(iam · ecommerce 의 `${{ matrix.shard }}` 는 고정 A/B/C).
+- **(b) 기준값 — 받으러 간 레인 수.** 🔴 단위 정정: 티켓은 «다운로드 파일 수» 를 적었지만 로그에 그 숫자가 없다(Gradle 은 `--info` 없이 다운로드를 찍지 않는다). 대신 setup-gradle 이 **복원한 것과 다른 `gradle-dependencies-v1-<hash>` 항목을 저장한 레인** = 그 실행에서 무언가를 새로 받은 레인을 센다(항목 키는 내용 해시라, 새 항목 = 새 파일).
+  - `main` 2026-11-25 12:09 · 12:32 CI 2 런, 12:09~13:30 nightly 8 런(`lanes.js` — scratchpad, 커밋 안 함). 통합 레인 11개는 전부 같은 의존성 항목 `…ad79619b` 를 복원했고, **12:32 CI 에서 5개(master · fan · iam A · iam B · erp)**, 12:09 CI 에서 2개(scm · fan)가 두 번째 항목을 저장했다. CI e2e 3개 중 1(12:32) · 2(12:09). nightly e2e: scm 은 레인이 돈 7 런 중 7, fan 은 7 중 6(12:09 는 정확 키 복원이라 없음), wms 0.
+  - 같은 레인이 매번 **같은** 두 번째 항목을 쓴다(fan 통합 `…1fbd036e` 2/2 · nightly scm `…9abcce89` 7/7 · nightly fan `…ce28d12c` 6/6). 그 파일들은 캐시에 이미 있는데, 복원되는 gradle-home 이 형제의 것이라 가리키지 않을 뿐이다 = 이 티켓의 기전이 그대로 보인다.
+- **(c) 캐시 사용량.** `actions/cache/usage` = **10.68 GB · 1,145 항목**(2026-11-25 13:4xZ) — 이미 기본 한도 10 GB 근처라 LRU 로 밀어내는 중. 내역: gradle-home 300 항목 4.7 GB(평균 ≈16 MB) · gradle-dependencies 22 항목 3.6 GB(97~317 MB) · groovy-dsl 426 · instrumented-jars 426 · node 캐시 4.
+  - 바뀌는 것: 지금도 런마다 레인별로 저장을 시도하지만 키가 같아 첫 레인만 쓰인다 → 바꾸면 `main` 런마다 gradle-home 이 최대 14개(≈220 MB) 쓰인다. 의존성 항목은 내용 해시라 **늘지 않는다**(위 두 번째 항목들은 이미 있다). 늘어나는 gradle-home 항목은 한 번도 다시 복원되지 않는 옛 sha 항목부터 LRU 로 밀린다. 매 런 복원되는 큰 의존성 항목은 최근 사용이라 남는다 — 🔴 이것은 추론이다. AC-5 재측정 때 `restore-key` 미스(=OS 단계까지 내려간 복원)를 같이 센다.
+- **(d) Gradle 의 429 재시도 — 이미 한다.** `gradle/gradle` `v8.14.3`:
+  - `NetworkingIssueVerifier.isTransientClientError` = `SC_REQUEST_TIMEOUT || SC_TOO_MANY_REQUESTS`.
+  - `NetworkOperationBackOffAndRetry` = 3회, 1000 ms 에서 시작해 두 배(= 1 s · 2 s 대기, 내부 속성 `org.gradle.internal.network.retry.max.attempts` · `.initial.backOff`).
+  - 즉 실패한 11잡은 Gradle 의 재시도 3회 **뒤의** 실패다.
+
+## In Scope 3 판단 — 429 재시도 래퍼: **하지 않음**
+
+- Gradle 이 이미 429 를 일시 오류로 보고 재시도한다. 그 위에 빌드 전체를 다시 도는 래퍼를 얹으면, 429 가 계속될 때 레인 시간이 두 배가 되고 원인은 그대로다.
+- `org.gradle.internal.*` 속성으로 재시도를 늘리는 것도 하지 않는다 — 내부 속성이라 Gradle 업그레이드에서 조용히 사라질 수 있다.
+- 키 분리 뒤에도 429 가 남으면(AC-5) 그 수치가 미러 결정(소유자)의 근거다. → **AC-3 은 해당 없음(⚪ — 래퍼를 바꾸지 않았다).**
+
+## 변경
+
+- `_integration.yml` · `_platform-e2e.yml`: 잡 수준 `env: GRADLE_BUILD_ACTION_CACHE_KEY_JOB_INSTANCE: ${{ inputs.artifact-name }}` / `${{ inputs.report-artifact }}`. 잡 수준인 이유: setup-gradle 의 post 단계(저장)도 같은 키를 봐야 한다. 잡 id · 체크 이름은 그대로(필수 체크 이름 영향 없음).
+- `gradlew-retry-not-found.sh` 머리 주석 · `_platform-e2e.yml` 797 주석: «모든 호출자가 키 하나를 공유한다» 를 현재 사실로 고침(첫 실행 fallback 은 남는다).
+
+## 로컬 가드 (스테이지 뒤)
+
+- `scripts/check-*.sh` · `*.mjs` 51개: 49 rc=0, 비0 둘 = 환경 전제 — `check-erp-single-tenant-ratchet.sh`(데모 스택 미기동 — «안 떠 있으면 실패») · `check-prerendered-demo-verdict.sh`(환경 변수 필요). 둘 다 `main` 에서도 rc=1(같은 사유, 842 때와 같음). YAML 두 파일 `yaml.safe_load` 통과.
 
 # Definition of Done
 
