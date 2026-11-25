@@ -220,10 +220,9 @@ _(없음)_
 
 ## review
 
-- `TASK-MONO-842-platform-observability-doc-real-names-and-guards.md` — **`platform/observability.md` 필수 metric 표의 없는 이름 3개 + 스펙↔코드↔소비자 규약 문서화** (REVIEW, 2026-11-25 UTC). 분석=Opus 5.5 / 구현 권장=Sonnet 5.5.
-
 ## done
 
+- ✅ `TASK-MONO-842-platform-observability-doc-real-names-and-guards.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4713 머지, `7d5ce56f1`, 실패 0) · 기안 #4712. `platform/observability.md` 필수 metric 표의 없는 이름 3개 → 실제 이름 + 출처 · 새 절 «Spec ↔ Code ↔ Consumers»(세 방향 가드 · «계획» 표시 형식 · 대기 목록 · 이름 변환 실측).
 - ✅ `TASK-MONO-841-guard-spec-declared-metrics-are-exported.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4710 머지, `4ed1c0592`, 실패 0 · SUCCESS 43) · 기안 #4708(#4707 대체 — 충돌 해소본을 강제 push 대신 새 ref). 셋째 방향 가드 `check-spec-metrics-implemented.mjs`(스펙 → 코드) — 판정은 `check-alert-rule-metrics.sh --unexported`(같은 술어). 274행 위반 0 · bite 정확 · self-test 13/13. 가드 수 산문 32/73.
 - ✅ `TASK-MONO-840-spec-metric-rows-correct-names-and-mark-planned.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4706 머지, `a77406801`, 실패 0 — ecommerce B · fan 통합은 Maven Central 다운로드 실패 → 재실행 pass) · 기안 #4703. 837 권장안: A2 3 · B 5 · C 파생식 4 / 재료 미구현 14 · D2 134행 · span 23행 «계획» 표시 · iam «필수 메트릭» → «핵심 메트릭»(16 파일 21곳). 표시 누락 0 · 오표시 0.
 - ✅ `TASK-MONO-839-dashboards-query-metrics-nothing-exports.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4698 머지, `ca6941244`, 실패 0 · SUCCESS 42 — ecommerce B 는 Maven Central 다운로드 실패 → 재실행 pass) · 기안 #4697. 대시보드가 없는 지표를 묻던 iam 20 · ecommerce 1 → iam 고침(차단기 → resilience4j · 스펙 이름 6 · 스펙에도 없는 패널 5 삭제) + `pending-metrics.txt`(837 결정 대기 iam 11 · ecommerce 1, 내보내지거나 안 쓰이면 실패) + `check-alert-rule-metrics.sh` 대시보드 확장(`-` 정규화 · `ALERTS`). self-test 25/25.
