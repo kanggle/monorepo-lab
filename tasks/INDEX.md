@@ -220,11 +220,10 @@ _(없음)_
 
 ## review
 
-- `TASK-MONO-839-dashboards-query-metrics-nothing-exports.md` — **대시보드 패널이 없는 지표를 묻는다(iam 20 · ecommerce 1)** (REVIEW, 2026-11-25 UTC). 있는 이름으로 · 스펙에도 없는 패널 5 삭제 · 837 결정 대기 이름은 프로젝트별 `pending-metrics.txt` · `check-alert-rule-metrics.sh` 를 대시보드로 확장(+ `-` 정규화 구멍). 분석=Opus 5.5 / 구현 권장=Sonnet 5.5.
-
 
 ## done
 
+- ✅ `TASK-MONO-839-dashboards-query-metrics-nothing-exports.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4698 머지, `ca6941244`, 실패 0 · SUCCESS 42 — ecommerce B 는 Maven Central 다운로드 실패 → 재실행 pass) · 기안 #4697. 대시보드가 없는 지표를 묻던 iam 20 · ecommerce 1 → iam 고침(차단기 → resilience4j · 스펙 이름 6 · 스펙에도 없는 패널 5 삭제) + `pending-metrics.txt`(837 결정 대기 iam 11 · ecommerce 1, 내보내지거나 안 쓰이면 실패) + `check-alert-rule-metrics.sh` 대시보드 확장(`-` 정규화 · `ALERTS`). self-test 25/25.
 - ✅ `TASK-MONO-838-grafana-dashboard-datasource-uid-not-provisioned.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4695 머지, `535edace0`, 실패 0 · SUCCESS 42) · 기안 #4693. iam · ecommerce `alerts.json` 이 프로비저닝 안 된 uid `prometheus` 를 11곳씩(Grafana 404) → 수정 + `check-grafana-datasource-uid.mjs`(대시보드 uid ⊆ 그 프로젝트 프로비저닝, 고치기 전 22곳 bite, self-test 13/13). 가드 수 산문 31/72.
 - ✅ `TASK-MONO-837-classify-spec-declared-metrics-not-implemented.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4688 머지, 실패 0 — 분석 티켓, 코드 없음) · 기안 #4687. 스펙 선언 metric·span 고유 251(4 프로젝트): A 구현 74 · A2 이름만 다름 3 · B 프레임워크 6 · C 파생 12 · D1 미구현+대시보드 6 · D2 미구현 120 · E span 23 · F 폐기 7. 오탐 두 종(«Contract»→span 217행 · 토픽/태그 리터럴→구현) 처리. 곁가지: wms Grafana 대시보드 = iam 복사본. 소유자 결정 선택지 = 증거 AC-5.
 - ✅ `TASK-MONO-836-http-latency-histogram-never-exported.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4682 머지, `4359256ec`, 실패 0 · SUCCESS 35 · SKIPPED 40) · 기안 #4681. p99 알림 5개(iam·wms·ecommerce)가 묻는 `http_server_requests_seconds_bucket` 을 아무도 안 내보냄 → `libs/java-observability` 정확 일치 MeterFilter(명시적 `false` 존중) + 라이브러리 밖 wms admin·notification 은 yml. 대조군 테스트(필터 없이 `_bucket` 없음) · wms 실서버 IT 두 경로 · bite 2.
