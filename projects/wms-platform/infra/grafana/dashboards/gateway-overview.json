@@ -1,48 +1,235 @@
 {
   "uid": "gateway-overview",
-  "title": "Gateway Service Overview",
-  "tags": ["gateway"],
+  "title": "wms gateway-service Overview",
+  "tags": [
+    "wms",
+    "gateway"
+  ],
   "timezone": "browser",
   "schemaVersion": 39,
   "version": 1,
   "refresh": "30s",
-  "time": { "from": "now-1h", "to": "now" },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "editable": true,
   "panels": [
-    { "id": 1, "title": "Request Rate (req/s)", "type": "timeseries", "gridPos": { "h": 6, "w": 12, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "sum(rate(http_server_requests_seconds_count{service=\"gateway-service\"}[5m]))", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    {
+      "id": 1,
+      "title": "Request rate",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{service=\"gateway-service\"}[5m]))",
+          "legendFormat": "req/s",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
     },
-    { "id": 2, "title": "Latency p50", "type": "timeseries", "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{service=\"gateway-service\"}[5m])) by (le))", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "s" } }
+    {
+      "id": 2,
+      "title": "Latency p50 / p99",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket{service=\"gateway-service\"}[5m])))",
+          "legendFormat": "p50",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{service=\"gateway-service\"}[5m])))",
+          "legendFormat": "p99",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
     },
-    { "id": 3, "title": "Latency p99", "type": "timeseries", "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{service=\"gateway-service\"}[5m])) by (le))", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "s" } }
+    {
+      "id": 3,
+      "title": "Requests by status",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(http_server_requests_seconds_count{service=\"gateway-service\"}[5m]))",
+          "legendFormat": "{{status}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
     },
-    { "id": 4, "title": "JWT Validation Failures", "type": "timeseries", "gridPos": { "h": 6, "w": 12, "x": 0, "y": 6 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "rate(gateway_jwt_validation_total{result=\"failure\"}[5m])", "refId": "A" }]
+    {
+      "id": 4,
+      "title": "5xx by uri",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "sum by (uri) (rate(http_server_requests_seconds_count{service=\"gateway-service\",status=~\"5..\"}[5m]))",
+          "legendFormat": "{{uri}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
     },
-    { "id": 5, "title": "Rate Limit 429", "type": "timeseries", "gridPos": { "h": 6, "w": 12, "x": 12, "y": 6 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "rate(gateway_ratelimit_rejected_total[5m])", "refId": "A" }]
+    {
+      "id": 5,
+      "title": "JWT audience check by outcome",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(gateway_jwt_audience_total{service=\"gateway-service\"}[5m]))",
+          "legendFormat": "{{outcome}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      }
     },
-    { "id": 6, "title": "JWKS Cache Hit Rate", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 0, "y": 12 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "rate(gateway_jwks_cache_hits_total[5m]) / (rate(gateway_jwks_cache_hits_total[5m]) + rate(gateway_jwks_cache_misses_total[5m]))", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "percentunit" } }
-    },
-    { "id": 7, "title": "Upstream 5xx", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 8, "y": 12 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "sum(rate(http_server_requests_seconds_count{service=\"gateway-service\",status=~\"5..\"}[5m])) by (uri)", "legendFormat": "{{uri}}", "refId": "A" }]
-    },
-    { "id": 8, "title": "Status Code Breakdown", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 16, "y": 12 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "sum(rate(http_server_requests_seconds_count{service=\"gateway-service\"}[5m])) by (status)", "legendFormat": "{{status}}", "refId": "A" }]
+    {
+      "id": 6,
+      "title": "Rate limiter fail-open",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "expr": "rate(gateway_ratelimit_redis_unavailable_total{service=\"gateway-service\"}[5m])",
+          "legendFormat": "redis unavailable",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        },
+        {
+          "expr": "rate(gateway_ratelimit_unexpected_error_total{service=\"gateway-service\"}[5m])",
+          "legendFormat": "unexpected error",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      }
     }
-  ]
+  ],
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  }
 }
