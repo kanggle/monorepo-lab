@@ -71,10 +71,11 @@ FRAMEWORK_EXACT=(up ALERTS ALERTS_FOR_STATE)
 
 usage() {
     cat <<'EOF'
-usage: check-alert-rule-metrics.sh [--self-test]
+usage: check-alert-rule-metrics.sh [--self-test | --unexported <project>]
 
   (no args)    Check this repository.
   --self-test  Run the predicate against mutated copies of the real inputs.
+  --unexported <project>  Print the stdin names (one per line) that project does NOT export.
 EOF
 }
 
@@ -229,6 +230,48 @@ is_framework() {
     return 1
 }
 
+# exported <name> — THE predicate (alerts, dashboards, pending entries, and — TASK-MONO-841 —
+# spec rows via --unexported). Reads the caller's `defined`, `registered` and `nl` (bash dynamic
+# scope): run_check and unexported_mode each set them for one project before calling it.
+exported() {
+    local m="$1" base
+    is_framework "$m" && return 0
+    # exact name: any string literal (a constant's value is a literal)
+    case "${nl}${defined}${nl}" in *"${nl}${m}${nl}"*) return 0 ;; esac
+    # suffix-stripped name: only a name handed to a meter registration (TASK-MONO-835)
+    for base in "$(printf '%s' "$m" | sed -E 's/_(total|count|sum|bucket|max)$//')" \
+                "$(printf '%s' "$m" | sed -E 's/_(total|count|sum|bucket|max)$//; s/_seconds$//')"; do
+        case "${nl}${registered}${nl}" in *"${nl}${base}${nl}"*) return 0 ;; esac
+    done
+    return 1
+}
+
+# TASK-MONO-841 — `--unexported <project>`: names on stdin (one per line, `.`/`-` spellings
+# allowed); prints the ones `exported` rejects for that project, in their original spelling.
+# Lets scripts/check-spec-metrics-implemented.mjs judge spec rows with this exact predicate
+# instead of a second copy of it.
+unexported_mode() {
+    local root="$1" p="$2" nl=$'\n' defined registered recs rules name norm
+    [[ -n "$p" && -d "$root/projects/$p" ]] || { echo "usage: --unexported <project>  (names on stdin)" >&2; return 2; }
+    defined="$(defined_names "$root" "$p")"
+    registered="$(registered_names "$root" "$p")"
+    rules="projects/$p/infra/prometheus/alert-rules.yml"
+    recs=""
+    if git -C "$root" ls-files --error-unmatch -- "$rules" >/dev/null 2>&1; then
+        recs="$(rule_metrics "$root" "$rules" | awk -F'\t' '$2 == "#record" { print $3 }')"
+    fi
+    defined="${defined}${nl}${recs}"
+    while IFS= read -r name; do
+        name="${name%$'\r'}"
+        [[ -z "$name" ]] && continue
+        norm="$(printf '%s' "$name" | tr '.-' '__')"
+        # A spec row may name the Micrometer METER (`http.server.requests`), whose exported
+        # series are `<name>_<suffix>` — so the bare name also passes as the base of a framework series.
+        exported "$norm" || is_framework "${norm}_" || printf '%s\n' "$name"
+    done
+    return 0
+}
+
 run_check() {
     local root="$1" quiet="${2:-}"
     local files rows="" f
@@ -262,19 +305,6 @@ run_check() {
     fi
 
     local missing="" dmissing="" pend_bad="" nl=$'\n' p defined registered recs pending used proj alert m n_refs=0 n_drefs=0 n_pend=0
-    # exported <name> — the predicate, once, for alerts, dashboards and pending entries alike.
-    exported() {
-        local m="$1" base
-        is_framework "$m" && return 0
-        # exact name: any string literal (a constant's value is a literal)
-        case "${nl}${defined}${nl}" in *"${nl}${m}${nl}"*) return 0 ;; esac
-        # suffix-stripped name: only a name handed to a meter registration (TASK-MONO-835)
-        for base in "$(printf '%s' "$m" | sed -E 's/_(total|count|sum|bucket|max)$//')" \
-                    "$(printf '%s' "$m" | sed -E 's/_(total|count|sum|bucket|max)$//; s/_seconds$//')"; do
-            case "${nl}${registered}${nl}" in *"${nl}${base}${nl}"*) return 0 ;; esac
-        done
-        return 1
-    }
     local projects
     projects="$( { printf '%s' "$rows" | cut -f1; git -C "$root" ls-files -- ':(glob)projects/*/infra/grafana/pending-metrics.txt' | cut -d/ -f2; } | grep -v '^$' | sort -u || true)"
     for p in $projects; do
@@ -557,6 +587,7 @@ self_test() {
 
 case "${1:-}" in
     --self-test) self_test ;;
+    --unexported) unexported_mode "$ROOT" "${2:-}" ;;
     -h|--help)   usage ;;
     "")          run_check "$ROOT" ;;
     *)           usage >&2; exit 2 ;;

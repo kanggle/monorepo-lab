@@ -8,7 +8,7 @@ TASK-MONO-841
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -50,8 +50,8 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] AC-1: 실제 트리에서 rc=0. 위반을 하나 넣으면(표시 하나 지우기) rc=1 — 파일:줄을 정확히.
-- [ ] AC-2: `--self-test` 전부 PASS · 알림 가드 `--self-test` 도 PASS(새 모드가 기존 판정을 안 바꿈).
+- [x] AC-1: 실제 트리에서 rc=0. 위반을 하나 넣으면(표시 하나 지우기) rc=1 — 파일:줄을 정확히.
+- [x] AC-2: `--self-test` 전부 PASS · 알림 가드 `--self-test` 도 PASS(새 모드가 기존 판정을 안 바꿈).
 - [ ] AC-3: 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께) · `check-ls-files-guard-count.sh` · PR CI 에서 새 잡이 **실행되어** success.
 
 # Related Specs
@@ -74,6 +74,15 @@ monorepo
 # Test Requirements
 
 - self-test 두 개 · bite · 가드 전수 · CI.
+
+# Implementation Evidence (2026-11-25 UTC)
+
+- **판정 재사용** — `check-alert-rule-metrics.sh`: `exported()` 를 `run_check` 안에서 최상위 함수로 꺼냈다(본문 그대로, 호출자의 `defined` · `registered` · `nl` 을 읽는다). `--unexported <project>` 모드 = stdin 이름 중 그 프로젝트가 내보내지 **않는** 것만 출력(`.`/`-` 정규화). 스펙 행은 Micrometer **meter 이름**(`http.server.requests`)을 쓸 수 있으므로 이 모드에서만 «이름 + `_` 가 프레임워크 접두사» 도 통과 — 자기 시험이 이 구멍을 잡았다(실제 트리에선 fan 코드에 그 리터럴이 우연히 있어 통과하고 있었다). 기존 모드의 판정은 바뀌지 않았다: `run_check` 출력 동일(«55 … 239 … except 6 listed as pending») · `--self-test` 25/25.
+- **새 가드** `scripts/check-spec-metrics-implemented.mjs` — 모집단 · 면제 · span 규칙은 티켓 Scope 2 그대로. 프로젝트당 `--unexported` 1회(이름을 모아 stdin). 실제 트리: rc=0 — «**274** metric/span row(s) … **92** exported, **182** marked planned / derived / deprecated»(274 = 837 의 중복 제거 전 행 수와 같다 · 182 = 계획 표시 171 + 파생식 4 + deprecated 7). 로컬 20초.
+- **AC-1 bite** — auth 스펙에서 «계획» 표시 하나를 지우고 스테이지 → rc=1, 정확히 `projects/iam-platform/specs/services/auth-service/observability.md:16  auth_login_duration_seconds — projects/iam-platform does not export it` → 복원 rc=0.
+- **AC-2** — 새 `--self-test` **13/13**(표시 없는 미구현 bite · 표시 통과 · 구현된 이름(점 표기 · `_total`) 통과 · 파생 통과 · `-deprecated` 면제 · 로그 표 무시 · «Contract» 제목을 span 으로 안 잡음 · 표시 없는 span bite · 표시 있는 span 통과 · 프레임워크 meter 이름 통과 · 한 행 두 이름 중 하나 미구현 bite · 다른 프로젝트가 내보내도 bite · 빈 모집단 fail-closed). 🔴 첫 실행 10/13: 둘은 **고정물** 이 틀렸다(모집단 밖 행만 넣어 빈 모집단 → fail-closed — 유효한 행을 하나씩 추가), 하나는 위의 **진짜 구멍**(meter 이름). 알림 가드 `--self-test` 25/25.
+- **CI** — 잡 `spec-metrics-implemented`(paths: `projects/*/specs/**` · 앱 · `libs` 의 `src/main/**/*.java` · 두 스크립트, timeout 10). 가드 수 산문 `CLAUDE.md` · `platform/git-workflow-policy.md` 31/72 → **32/73**(`check-ls-files-guard-count.sh` «2 homes agree with the measured 32/73»).
+- **AC-3** — 스테이지 뒤 `check-*.sh` 43: 41 rc=0, 비0 둘 = 환경 전제(erp 래칫 · prerendered verdict). `check-*.mjs` **8/8**(새 가드 포함). `check-ls-files-guard-count.sh` rc=0. PR CI: 대기.
 
 # Definition of Done
 
