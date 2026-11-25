@@ -31,11 +31,6 @@
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [{ "expr": "rate(gateway_ratelimit_rejected_total[5m])", "refId": "A" }]
     },
-    { "id": 6, "title": "JWKS Cache Hit Rate", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 0, "y": 12 },
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "targets": [{ "expr": "rate(gateway_jwks_cache_hits_total[5m]) / (rate(gateway_jwks_cache_hits_total[5m]) + rate(gateway_jwks_cache_misses_total[5m]))", "refId": "A" }],
-      "fieldConfig": { "defaults": { "unit": "percentunit" } }
-    },
     { "id": 7, "title": "Upstream 5xx", "type": "timeseries", "gridPos": { "h": 6, "w": 8, "x": 8, "y": 12 },
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [{ "expr": "sum(rate(http_server_requests_seconds_count{service=\"gateway-service\",status=~\"5..\"}[5m])) by (uri)", "legendFormat": "{{uri}}", "refId": "A" }]

@@ -1,0 +1,25 @@
+# Metrics an iam Grafana dashboard queries although nothing exports them YET.
+#
+# Every entry is declared by an iam spec and its implementation is a pending owner
+# decision (TASK-MONO-837: D1 = "spec-declared, a dashboard asks, not implemented";
+# D2 = "spec-declared, not implemented"). Until then the panel renders empty — this
+# file says so out loud instead of leaving it to be discovered.
+#
+# scripts/check-alert-rule-metrics.sh (TASK-MONO-839) reads this file and FAILS when an
+# entry starts being exported (delete it — the exemption must not outlive the gap) or
+# when no dashboard queries it any more (delete the stale entry). It never exempts an
+# alert rule.
+#
+# <prometheus name>   # <spec> — <837 category>
+
+account_signup_total                               # account-service/observability.md 필수 메트릭 — D1
+account_status_transition_total                    # account-service/observability.md 필수 메트릭 — D2
+account_total_by_status                            # account-service/observability.md 비즈니스 메트릭 — D2
+admin_audit_write_total                            # admin-service/observability.md 필수 메트릭 — D1
+admin_audit_query_total                            # admin-service/observability.md 필수 메트릭 — D1
+admin_downstream_duration_seconds_bucket           # admin-service/observability.md 필수 메트릭 (admin_downstream_duration_seconds) — D2
+auth_token_issued_total                            # auth-service/observability.md 필수 메트릭 — D1
+auth_token_refresh_total                           # auth-service/observability.md 필수 메트릭 — D1
+security_event_processing_duration_seconds_bucket  # security-service/observability.md 필수 메트릭 (security_event_processing_duration_seconds) — D2
+security_suspicious_detected_total                 # security-service/observability.md 필수 메트릭 — D2
+security_risk_score_distribution_bucket            # security-service/observability.md 비즈니스 메트릭 (security_risk_score_distribution) — D2

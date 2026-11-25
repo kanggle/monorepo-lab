@@ -1028,6 +1028,9 @@ jobs:
             # Pure-positive.
             alert-rule-metrics:
               - 'projects/*/infra/prometheus/**'
+              # TASK-MONO-839: dashboards and their pending list go through the same predicate.
+              - 'projects/*/infra/grafana/dashboards/**'
+              - 'projects/*/infra/grafana/pending-metrics.txt'
               - 'projects/*/apps/*/src/main/**/*.java'
               - 'libs/*/src/main/**/*.java'
               - 'scripts/check-alert-rule-metrics.sh'
@@ -1660,7 +1663,8 @@ jobs:
   alert-rule-metrics:
     name: Alert rule metrics (every queried metric is exported)
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # TASK-MONO-839: 10, not 5 — the self-test grew to 25 cases and now also parses dashboards.
+    timeout-minutes: 10
     needs: changes
     if: >-
       github.repository == 'kanggle/monorepo-lab' &&
