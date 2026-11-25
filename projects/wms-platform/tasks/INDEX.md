@@ -89,10 +89,11 @@ _(없음)_
 
 ## review
 
-- `TASK-BE-667-cache-hit-rate-gauge-turns-nan-after-gc.md` — **`admin.query.cache.hit.rate` 가 GC 뒤 NaN** (REVIEW, 2026-11-25 UTC · 666 기록 ① 정정). «v1 항상 0» 은 BE-048 설계(유지) — 결함은 `registry.gauge(name, 0.0d)` 의 약한 참조. 강한 참조 등록 + GC 확인 테스트. 분석=Opus 5.5 / 구현 권장=Haiku·Sonnet.
+(empty)
 
 ## done
 
+- ✅ `TASK-BE-667-cache-hit-rate-gauge-turns-nan-after-gc.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4701 머지, `3034b4af0`, 실패 0 · SUCCESS 18) · 기안 #4700. «v1 항상 0»(BE-048 #8) 은 설계라 유지 — 결함은 `registry.gauge(name, 0.0d)` 의 약한 참조로 GC 뒤 NaN(실측) → Supplier 빌더. GC 확인 테스트 + bite(`expected 0.0 but was NaN`). 666 의 «코드 결함» 진단 정정.
 - ✅ `TASK-BE-666-grafana-dashboards-are-iam-copies.md` — **DONE 2026-11-25 UTC (4-dim verified)** — (impl PR #4691 머지, 실패 0 · SUCCESS 11) · 기안 #4690. 대시보드 9개 중 8개가 iam 바이트 복사본 → wms 에 없는 서비스 3개 삭제 · admin · gateway 를 wms 지표로 · `wms-operations` 신설 · `alerts.json` 없는 datasource uid(404) 11곳 수정. 이름은 실제 scrape 로 — 알 수 없는 이름 0(옛 36). Grafana 11.2.0 프로비저닝 7개 오류 0.
 - ✅ `TASK-BE-661-inventory-seed-lacks-wh01-warehouse-snapshot.md` — **DONE 2026-10-28 UTC (4-dim verified)** — impl PR #4568(`d5e2928b1`, 실패 0) · AC-4 36차 창 라이브 ✅
 - ✅ `TASK-BE-652-admin-settings-list-without-filters-500.md` — **DONE 2026-10-26 UTC (4-dim verified)** — impl PR #4502(`adae12ea4`, 실패 0) · AC-0 닫힘(코드·CI: run `39969962421` 83건 중 `users_noFilters…` 1건 빨강 · master-service 형제 6줄은 `:q = ''` 모양이 달라 범위 밖 — Partner·Sku null-q 실 PG 는 미측정 ⚪ · 콘솔 settings 는 GET 만, 쓰기 경로 0) · AC-1 · AC-2(34·35차 창) — 조건 없는 `GET /settings` 500 수선. 기록 = 티켓 끝 `## CORRECTION — AC-0 닫힘`.
