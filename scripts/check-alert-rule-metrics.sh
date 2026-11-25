@@ -31,6 +31,17 @@
 #         client auto-instrumentation, and Prometheus's own `up`).
 #   FAIL CLOSED when no rules file or no expr is found.
 #
+# TASK-MONO-839 — DASHBOARDS TOO. Every `expr` in a tracked
+# projects/<p>/infra/grafana/dashboards/**/*.json goes through the same parser and the
+# same predicate (JSON read by node, so escaped label values arrive unescaped). Measured
+# 2026-11-25 UTC: iam dashboards queried 20 names nothing exported, ecommerce 1. A panel on
+# a missing metric renders empty, which reads as "nothing happened", not "broken".
+#   The one exemption: projects/<p>/infra/grafana/pending-metrics.txt lists names the
+#   project's SPEC declares whose implementation is a pending owner decision
+#   (TASK-MONO-837). It applies to dashboards only — never to an alert rule — and an
+#   entry FAILS the check once it is exported (retract it) or once no dashboard queries
+#   it (stale). `-` in a registered name normalises to `_`, as Prometheus does.
+#
 # DELIBERATELY LOOSE ON (a): any string literal counts, so a log message that
 # happens to contain the name passes too. That direction misses rather than
 # bites wrongly; constants count, because a constant's value is a literal.
@@ -39,7 +50,7 @@
 #   * Label selectors ({service="…"}) matching real series labels — names only.
 #   * Names chosen by regex on __name__ — invisible to any name check. Rules here
 #     spell names out instead.
-#   * Runbook links in annotations.
+#   * Grafana datasource uids (scripts/check-grafana-datasource-uid.mjs, TASK-MONO-838).
 #
 # Population is read from the INDEX (git ls-files): stage before running locally.
 # =============================================================================
@@ -54,7 +65,9 @@ FRAMEWORK_PREFIXES=(
     kafka_consumer_ kafka_producer_ spring_ resilience4j_ tomcat_ logback_
     executor_ disk_ lettuce_
 )
-FRAMEWORK_EXACT=(up)
+# `ALERTS` / `ALERTS_FOR_STATE` are series Prometheus itself synthesises from its rules
+# (the dashboards' alert overview panels read them — TASK-MONO-839).
+FRAMEWORK_EXACT=(up ALERTS ALERTS_FOR_STATE)
 
 usage() {
     cat <<'EOF'
@@ -73,7 +86,54 @@ rules_files() {  # tracked rules files, one per line
 rule_metrics() {
     local root="$1" file="$2" project
     project="$(printf '%s' "$file" | cut -d/ -f2)"
-    tr -d '\r' < "$root/$file" | awk -v proj="$project" '
+    tr -d '\r' < "$root/$file" | parse_rules "$project"
+}
+
+# TASK-MONO-839 — tracked Grafana dashboards, one per line.
+dashboard_files() {
+    git -C "$1" ls-files -- ':(glob)projects/*/infra/grafana/dashboards/**/*.json' || true
+}
+
+# project<TAB>dashboard:<file><TAB>metric — every `expr` string in a project's dashboards, fed
+# through the SAME parser as the rules files (one predicate, not two copies). JSON is read
+# by node so an escaped label value (`{service=\"x\"}`) arrives unescaped — read raw, the
+# backslashes would split the string literal and leak label values in as metric names.
+# One node process per PROJECT (not per file): the self-test re-runs this ~25 times.
+dashboard_metrics() {  # dashboard_metrics <root> <project> <file>...
+    local root="$1" project="$2"
+    shift 2
+    node -e '
+        const fs = require("fs");
+        const [root, ...files] = process.argv.slice(1);
+        const out = [];
+        for (const f of files) {
+            const tag = "dashboard:" + f.split("/").pop();
+            const d = JSON.parse(fs.readFileSync(root + "/" + f, "utf8"));
+            (function walk(o) {
+                if (Array.isArray(o)) { o.forEach(walk); return; }
+                if (o && typeof o === "object") {
+                    if (typeof o.expr === "string" && o.expr.trim() !== "")
+                        out.push("- alert: " + tag + "\n  expr: " + o.expr.replace(/[\r\n]+/g, " "));
+                    Object.values(o).forEach(walk);
+                }
+            })(d);
+        }
+        process.stdout.write(out.join("\n") + (out.length ? "\n" : ""));
+    ' "$root" "$@" | parse_rules "$project"
+}
+
+# TASK-MONO-839 — names a project's dashboards may query although nothing exports them YET:
+# declared by that project's spec, decision pending (TASK-MONO-837 D1/D2). One per line,
+# `#` comments. Never applies to alert rules — an alert on a pending metric is still a dead alert.
+pending_names() {  # pending_names <root> <project>
+    local f="$1/projects/$2/infra/grafana/pending-metrics.txt"
+    git -C "$1" ls-files --error-unmatch -- "projects/$2/infra/grafana/pending-metrics.txt" >/dev/null 2>&1 || return 0
+    { tr -d '\r' < "$f" | sed -E 's/#.*$//; s/^[[:space:]]+//; s/[[:space:]]+$//' | grep -v '^$' | sort -u; } || true
+}
+
+# project<TAB>alert<TAB>metric from rules text on stdin.
+parse_rules() {
+    awk -v proj="$1" '
         function flush(   e, n, i, t, rest, ch) {
             if (expr == "") return
             e = expr
@@ -132,8 +192,8 @@ defined_names() {
     { git -C "$root" ls-files -z -- \
           ":(glob)projects/$project/apps/*/src/main/**/*.java" \
           ':(glob)libs/*/src/main/**/*.java' \
-        | (cd "$root" && xargs -0 -r grep -ohE '"[A-Za-z][A-Za-z0-9_.]*"') \
-        | tr -d '"' | tr '.' '_' | sort -u; } || true
+        | (cd "$root" && xargs -0 -r grep -ohE '"[A-Za-z][A-Za-z0-9_.-]*"') \
+        | tr -d '"' | tr '.-' '__' | sort -u; } || true
 }
 
 # Normalised names that are actually HANDED TO A METER REGISTRATION — either as a literal
@@ -152,14 +212,14 @@ registered_names() {
     idents="$( { printf '%s\n' "$files" | (cd "$root" && tr '\n' '\0' | xargs -0 -r grep -ohE "${reg}[A-Z][A-Z0-9_]*[[:space:]]*[,)]") \
                  | sed -E "s/.*[(][[:space:]]*//; s/[[:space:]]*[,)]\$//" | sort -u; } || true)"
     {
-        printf '%s\n' "$files" | (cd "$root" && tr '\n' '\0' | xargs -0 -r grep -ohE "${reg}\"[A-Za-z][A-Za-z0-9_.]*\"") \
+        printf '%s\n' "$files" | (cd "$root" && tr '\n' '\0' | xargs -0 -r grep -ohE "${reg}\"[A-Za-z][A-Za-z0-9_.-]*\"") \
             | grep -oE '"[^"]+"' || true
         if [[ -n "$idents" ]]; then
             printf '%s\n' "$files" | (cd "$root" && tr '\n' '\0' | xargs -0 -r grep -ohE \
-                "\\b($(printf '%s' "$idents" | paste -sd'|' -))[[:space:]]*=[[:space:]]*\"[A-Za-z][A-Za-z0-9_.]*\"") \
+                "\\b($(printf '%s' "$idents" | paste -sd'|' -))[[:space:]]*=[[:space:]]*\"[A-Za-z][A-Za-z0-9_.-]*\"") \
                 | grep -oE '"[^"]+"' || true
         fi
-    } | tr -d '"' | tr '.' '_' | sort -u
+    } | tr -d '"' | tr '.-' '__' | sort -u
 }
 
 is_framework() {
@@ -186,30 +246,67 @@ run_check() {
         return 1
     fi
 
-    local missing="" nl=$'\n' p defined registered recs proj alert m base hit n_refs=0
-    for p in $(printf '%s' "$rows" | cut -f1 | sort -u); do
+    # TASK-MONO-839 — Grafana dashboards go through the same parser and the same predicate.
+    local dfiles
+    dfiles="$(dashboard_files "$root")"
+    if [[ -n "$dfiles" ]]; then
+        if ! command -v node >/dev/null 2>&1; then
+            echo "FAIL: node is required to read the tracked Grafana dashboards (JSON) and is not on PATH." >&2
+            return 1
+        fi
+        local dp
+        for dp in $(printf '%s\n' "$dfiles" | cut -d/ -f2 | sort -u); do
+            # shellcheck disable=SC2046 — tracked paths here never contain whitespace
+            rows="${rows}$(dashboard_metrics "$root" "$dp" $(printf '%s\n' "$dfiles" | awk -F/ -v p="$dp" '$2 == p'))"$'\n'
+        done
+    fi
+
+    local missing="" dmissing="" pend_bad="" nl=$'\n' p defined registered recs pending used proj alert m n_refs=0 n_drefs=0 n_pend=0
+    # exported <name> — the predicate, once, for alerts, dashboards and pending entries alike.
+    exported() {
+        local m="$1" base
+        is_framework "$m" && return 0
+        # exact name: any string literal (a constant's value is a literal)
+        case "${nl}${defined}${nl}" in *"${nl}${m}${nl}"*) return 0 ;; esac
+        # suffix-stripped name: only a name handed to a meter registration (TASK-MONO-835)
+        for base in "$(printf '%s' "$m" | sed -E 's/_(total|count|sum|bucket|max)$//')" \
+                    "$(printf '%s' "$m" | sed -E 's/_(total|count|sum|bucket|max)$//; s/_seconds$//')"; do
+            case "${nl}${registered}${nl}" in *"${nl}${base}${nl}"*) return 0 ;; esac
+        done
+        return 1
+    }
+    local projects
+    projects="$( { printf '%s' "$rows" | cut -f1; git -C "$root" ls-files -- ':(glob)projects/*/infra/grafana/pending-metrics.txt' | cut -d/ -f2; } | grep -v '^$' | sort -u || true)"
+    for p in $projects; do
         defined="$(defined_names "$root" "$p")"
         registered="$(registered_names "$root" "$p")"
         recs="$(printf '%s' "$rows" | awk -F'\t' -v p="$p" '$1 == p && $2 == "#record" { print $3 }')"
         defined="${defined}${nl}${recs}"
+        pending="$(pending_names "$root" "$p")"
+        used=""
         while IFS=$'\t' read -r proj alert m; do
             [[ "$proj" != "$p" || "$alert" == "#record" || "$alert" == "#runbook" || -z "$m" ]] && continue
-            n_refs=$((n_refs + 1))
-            if is_framework "$m"; then continue; fi
-            hit=0
-            # exact name: any string literal (a constant's value is a literal)
-            case "${nl}${defined}${nl}" in *"${nl}${m}${nl}"*) hit=1 ;; esac
-            # suffix-stripped name: only a name handed to a meter registration (TASK-MONO-835)
-            if [[ "$hit" == 0 ]]; then
-                for base in "$(printf '%s' "$m" | sed -E 's/_(total|count|sum|bucket|max)$//')" \
-                            "$(printf '%s' "$m" | sed -E 's/_(total|count|sum|bucket|max)$//; s/_seconds$//')"; do
-                    case "${nl}${registered}${nl}" in *"${nl}${base}${nl}"*) hit=1; break ;; esac
-                done
-            fi
-            if [[ "$hit" == 0 ]]; then
+            if [[ "$alert" == dashboard:* ]]; then n_drefs=$((n_drefs + 1)); else n_refs=$((n_refs + 1)); fi
+            exported "$m" && continue
+            if [[ "$alert" == dashboard:* ]]; then
+                case "${nl}${pending}${nl}" in *"${nl}${m}${nl}"*) used="${used}${m}${nl}"; continue ;; esac
+                dmissing="${dmissing}  projects/${proj}  ${alert#dashboard:}  ${m}${nl}"
+            else
                 missing="${missing}  projects/${proj}  ${alert}  ${m}${nl}"
             fi
         done <<< "$rows"
+        # A pending entry must keep earning its place: still unexported, still queried.
+        while IFS= read -r m; do
+            [[ -z "$m" ]] && continue
+            if exported "$m"; then
+                pend_bad="${pend_bad}  projects/${p}  ${m}  — now EXPORTED: delete the entry (an exemption must not outlive the defect)${nl}"
+            else
+                case "${nl}${used}${nl}" in
+                    *"${nl}${m}${nl}"*) n_pend=$((n_pend + 1)) ;;
+                    *) pend_bad="${pend_bad}  projects/${p}  ${m}  — no dashboard queries it: delete the stale entry${nl}" ;;
+                esac
+            fi
+        done <<< "$pending"
     done
 
     # TASK-MONO-835: a runbook link that leads nowhere is the next thing an on-call reader
@@ -245,10 +342,25 @@ run_check() {
         echo "  FRAMEWORK_PREFIXES at the top of this script — say which library exports it." >&2
         return 1
     fi
+    if [[ -n "$dmissing" ]]; then
+        echo "FAIL: Grafana dashboard panel(s) query a metric nothing exports — they render empty:" >&2
+        printf '%s' "$(printf '%s' "$dmissing" | sort -u)" >&2; echo >&2
+        echo >&2
+        echo "  Query a metric that exists, or delete the panel. Only if the project's spec declares the" >&2
+        echo "  metric and its implementation is a pending decision, list it in" >&2
+        echo "  projects/<p>/infra/grafana/pending-metrics.txt with the spec location (TASK-MONO-839)." >&2
+        return 1
+    fi
+    if [[ -n "$pend_bad" ]]; then
+        echo "FAIL: pending-metrics.txt entr(y/ies) no longer justified:" >&2
+        printf '%s' "$pend_bad" >&2
+        return 1
+    fi
     if [[ "$quiet" != "quiet" ]]; then
-        local nf
+        local nf nd
         nf="$(printf '%s\n' "$files" | grep -c .)"
-        echo "check-alert-rule-metrics: OK — ${n_refs} metric reference(s) in ${nf} rules file(s), all exported by code, libs, a record rule, or a framework; ${n_rb} runbook link(s), all to tracked files."
+        nd="$(printf '%s\n' "$dfiles" | grep -c . || true)"
+        echo "check-alert-rule-metrics: OK — ${n_refs} metric reference(s) in ${nf} rules file(s), all exported by code, libs, a record rule, or a framework; ${n_rb} runbook link(s), all to tracked files; ${n_drefs} reference(s) in ${nd} dashboard(s), all exported except ${n_pend} listed as pending."
     fi
     return 0
 }
@@ -266,17 +378,23 @@ self_test() {
     mkdir -p "$base"
     (cd "$ROOT" && git ls-files -z -- ':(glob)projects/*/infra/prometheus/alert-rules.yml' \
             ':(glob)projects/*/knowledge/runbooks/**' \
+            ':(glob)projects/*/infra/grafana/dashboards/**' ':(glob)projects/*/infra/grafana/pending-metrics.txt' \
         | xargs -0 -r cp --parents -t "$base")
     for p in $(cd "$base" && ls projects); do
         mkdir -p "$base/projects/$p/apps/real/src/main/java"
         { (cd "$ROOT" && git ls-files -z -- ":(glob)projects/$p/apps/*/src/main/**/*.java" \
-              | xargs -0 -r grep -ohE '"[A-Za-z][A-Za-z0-9_.]*"') || true; } | sort -u \
+              | xargs -0 -r grep -ohE '"[A-Za-z][A-Za-z0-9_.-]*"') || true; } | sort -u \
           | awk 'BEGIN { print "class RealLiterals {" } { print "  String s" NR " = " $0 ";" } END { print "}" }' \
           > "$base/projects/$p/apps/real/src/main/java/RealLiterals.java"
+        # TASK-MONO-839: the names the real tree hands to meter registrations, re-registered,
+        # so a suffix-stripped name (`_seconds_sum`, `_total`) resolves in the copy as it does live.
+        registered_names "$ROOT" "$p" \
+          | awk 'BEGIN { print "class RealRegistrations {" } NF { print "  Object r" NR " = io.micrometer.core.instrument.Counter.builder(\"" $0 "\");" } END { print "}" }' \
+          > "$base/projects/$p/apps/real/src/main/java/RealRegistrations.java"
     done
     mkdir -p "$base/libs/real/src/main/java"
     { (cd "$ROOT" && git ls-files -z -- ':(glob)libs/*/src/main/**/*.java' \
-          | xargs -0 -r grep -ohE '"[A-Za-z][A-Za-z0-9_.]*"') || true; } | sort -u \
+          | xargs -0 -r grep -ohE '"[A-Za-z][A-Za-z0-9_.-]*"') || true; } | sort -u \
       | awk 'BEGIN { print "class LibLiterals {" } { print "  String s" NR " = " $0 ";" } END { print "}" }' \
       > "$base/libs/real/src/main/java/LibLiterals.java"
     git -C "$base" init -q; git -C "$base" config core.autocrlf false; git -C "$base" add -A
@@ -389,6 +507,46 @@ self_test() {
         >> "$d/projects/$P1/infra/prometheus/alert-rules.yml"
     git -C "$d" add -- "projects/$P1/infra/prometheus/alert-rules.yml" >/dev/null 2>&1
     expect "a runbook that exists on disk but is not tracked bites" 1 "$d"
+
+    # TASK-MONO-839 — dashboards. A dashboard file the case writes, then the predicate.
+    add_dash() {  # add_dash <dir> <project> <expr-as-JSON-string-body>
+        mkdir -p "$1/projects/$2/infra/grafana/dashboards"
+        printf '{ "uid": "selftest", "panels": [ { "id": 1, "targets": [ { "expr": "%s", "refId": "A" } ] } ] }\n' "$3" \
+            > "$1/projects/$2/infra/grafana/dashboards/selftest.json"
+    }
+    add_pending() {  # add_pending <dir> <project> <name>
+        mkdir -p "$1/projects/$2/infra/grafana"
+        printf '%s   # selftest\n' "$3" >> "$1/projects/$2/infra/grafana/pending-metrics.txt"
+    }
+
+    d="$(clone dash_unknown)"; add_dash "$d" "$P1" 'rate(selftest_dash_nobody_total[5m])'; restage "$d"
+    expect "a dashboard metric nothing exports bites" 1 "$d"
+
+    d="$(clone dash_escaped_label)"; add_dash "$d" "$P1" 'sum(rate(http_server_requests_seconds_count{service=\"selftest_label_value_total\"}[5m]))'; restage "$d"
+    expect "an escaped label value inside a dashboard expr is not a metric" 0 "$d"
+
+    d="$(clone dash_pending)"; add_dash "$d" "$P1" 'rate(selftest_dash_pending_total[5m])'; add_pending "$d" "$P1" selftest_dash_pending_total; restage "$d"
+    expect "a dashboard metric listed in pending-metrics.txt passes" 0 "$d"
+
+    d="$(clone pending_now_exported)"
+    mkdir -p "$d/projects/$P1/apps/x/src/main/java"
+    printf 'class M { Object c = io.micrometer.core.instrument.Counter.builder("selftest.now.exported"); }\n' > "$d/projects/$P1/apps/x/src/main/java/M.java"
+    add_dash "$d" "$P1" 'rate(selftest_now_exported_total[5m])'; add_pending "$d" "$P1" selftest_now_exported_total; restage "$d"
+    expect "a pending entry that is now exported bites (retract the exemption)" 1 "$d"
+
+    d="$(clone pending_stale)"; add_pending "$d" "$P1" selftest_nobody_asks_total; restage "$d"
+    expect "a pending entry no dashboard queries bites (stale)" 1 "$d"
+
+    d="$(clone pending_not_for_alerts)"; add_pending "$d" "$P1" selftest_alert_pending_total
+    add_dash "$d" "$P1" 'rate(selftest_alert_pending_total[5m])'
+    add_rule "$d" "$P1" 'rate(selftest_alert_pending_total[5m]) > 0'; restage "$d"
+    expect "pending-metrics.txt never exempts an alert rule" 1 "$d"
+
+    d="$(clone hyphen_name)"
+    mkdir -p "$d/projects/$P1/apps/x/src/main/java"
+    printf 'class M { Object c = io.micrometer.core.instrument.Counter.builder("selftest.with-hyphen.count"); }\n' > "$d/projects/$P1/apps/x/src/main/java/M.java"
+    add_dash "$d" "$P1" 'rate(selftest_with_hyphen_count_total[5m])'; restage "$d"
+    expect "a registered name with '-' matches its '_' Prometheus spelling" 0 "$d"
 
     d="$tmp/empty"; mkdir -p "$d"; git -C "$d" init -q
     expect "no rules file fails closed" 1 "$d"

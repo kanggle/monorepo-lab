@@ -1,0 +1,13 @@
+# Metrics an ecommerce Grafana dashboard queries although nothing exports them YET.
+#
+# Every entry is declared by an ecommerce spec and its implementation is a pending owner
+# decision (TASK-MONO-837 D1 = "spec-declared, a dashboard asks, not implemented"). Until
+# then the panel renders empty — this file says so out loud.
+#
+# scripts/check-alert-rule-metrics.sh (TASK-MONO-839) FAILS when an entry starts being
+# exported (delete it) or when no dashboard queries it any more (delete the stale entry).
+# It never exempts an alert rule.
+#
+# <prometheus name>   # <spec> — <837 category>
+
+payment_failed_total   # payment-service/observability.md Business Metrics — D1
