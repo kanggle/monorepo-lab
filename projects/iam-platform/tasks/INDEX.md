@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 
 ## ready
 
-(empty)
+- `TASK-BE-668-implement-dashboard-d1-metrics.md` — **iam 837 D1 5개 구현**(`account_signup_total` · `admin_audit_write_total` · `admin_audit_query_total` · `auth_token_issued_total` · `auth_token_refresh_total`) + 대기 목록에서 삭제 (READY, 2026-11-25 UTC). 분석=Opus 5.5 / 구현 권장=Opus 5.5.
 
 (아래는 과거 로드맵/스윕의 완결 기록)
 

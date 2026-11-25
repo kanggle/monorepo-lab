@@ -76,7 +76,7 @@ continuing there is the lifecycle working as designed, not an exception to it.
 | TASK-BE-081 | 배송 추적 서비스 — 주문 배송 상태 관리 및 추적 | shipping-service (신규) | code, api, event |
 ## ready
 
-_(없음)_
+- `TASK-BE-669-implement-payment-failed-total.md` — **payment-service `payment_failed_total{reason}` 구현**(837 D1, 비즈니스 대시보드 패널이 빔) + 대기 목록에서 삭제 (READY, 2026-11-25 UTC). 분석=Opus 5.5 / 구현 권장=Sonnet 5.5.
 
 _(TASK-BE-390 은 TASK-MONO-367 로 흡수됨, 2026-08-01 fleet-wide sunset, DONE. `../../../tasks/done/TASK-MONO-367-fleet-wide-legacy-issuer-sunset.md` 참조.)_
 
