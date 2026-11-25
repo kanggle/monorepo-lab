@@ -11,7 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Exposes the {@code auth_outbox_lag_seconds} gauge (auth-service observability.md § 필수 메트릭):
+ * Exposes the {@code auth_outbox_lag_seconds} gauge (auth-service observability.md § 핵심 메트릭):
  * the age in seconds of the oldest unpublished row in the v2 {@code auth_outbox} table
  * ({@code published_at IS NULL}); 0 when nothing is pending. {@code AuthOutboxLagHigh}
  * ({@code > 60}) alerts on it.

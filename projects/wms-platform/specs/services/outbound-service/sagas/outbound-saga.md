@@ -511,15 +511,17 @@ outbound saga — the saga's terminal states are `COMPLETED`, `CANCELLED`,
 
 Per [`../architecture.md`](../architecture.md) § Observability:
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Metric | Type | Description |
 |---|---|---|
-| `outbound.saga.active.count` | gauge | Currently in-progress sagas (state ∉ terminal set) |
-| `outbound.saga.state.transitions{from, to}` | counter | Transition counter, labelled by from/to state |
-| `outbound.saga.completed.duration.seconds` | histogram | Receipt-to-COMPLETED latency, p50/p95/p99 |
+| `outbound.saga.active.count` | gauge | Currently in-progress sagas (state ∉ terminal set) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.saga.state.transitions{from, to}` | counter | Transition counter, labelled by from/to state — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.saga.completed.duration.seconds` | histogram | Receipt-to-COMPLETED latency, p50/p95/p99 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `outbound.saga.failed.count{reason=reserve_failed | stuck_recovery_failed}` | counter | Terminal failures by reason |
-| `outbound.saga.compensation.fired.count` | counter | `outbound.picking.cancelled` outbox emissions |
-| `outbound.saga.event.already_applied.count{saga_state, event_kind}` | counter | Saga-guard no-op count |
-| `outbound.saga.event.invalid_transition.count{saga_state, event_kind}` | counter | Genuinely impossible transitions (alert at >0) |
+| `outbound.saga.compensation.fired.count` | counter | `outbound.picking.cancelled` outbox emissions — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.saga.event.already_applied.count{saga_state, event_kind}` | counter | Saga-guard no-op count — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `outbound.saga.event.invalid_transition.count{saga_state, event_kind}` | counter | Genuinely impossible transitions (alert at >0) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `outbound.saga.sweeper.run.count` | counter | Sweeper scheduler tick count |
 | `outbound.saga.sweeper.recovery.fired{from_state}` | counter | Sweeper re-emission count per stuck state (`REQUESTED|CANCELLATION_REQUESTED|SHIPPED`) |
 | `outbound.saga.sweeper.exhausted.count{from_state}` | counter | Saga transitions to `STUCK_RECOVERY_FAILED` (cap exceeded), tagged by originating state |

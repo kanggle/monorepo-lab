@@ -291,12 +291,14 @@ For human ops calling `POST /adjustments`:
 
 ## 5. Observability
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Metric | Description |
 |---|---|
-| `inventory.idempotency.hit.rate` | % of POST requests served from Redis cache |
+| `inventory.idempotency.hit.rate` | % of POST requests served from Redis cache — 파생 — PromQL: `sum(rate(inventory_idempotency_lookup_count_total{result="hit"}[5m])) / sum(rate(inventory_idempotency_lookup_count_total[5m]))` |
 | `inventory.idempotency.mismatch.count` | `DUPLICATE_REQUEST` body mismatches (usually a bug) |
-| `inventory.event.dedupe.hit.rate` | % of consumed events skipped as duplicate |
-| `inventory.event.dedupe.table.size` | Current row count (alert if unexpectedly large) |
+| `inventory.event.dedupe.hit.rate` | % of consumed events skipped as duplicate — 파생(계측 아님) · 재료 카운터 미구현 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `inventory.event.dedupe.table.size` | Current row count (alert if unexpectedly large) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 
 Log events (structured JSON, INFO level):
 

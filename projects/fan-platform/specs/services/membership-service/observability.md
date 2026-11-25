@@ -4,12 +4,14 @@
 
 ## Metrics (Micrometer / Prometheus)
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Name | Type | Tags | Purpose |
 |---|---|---|---|
 | `membership_outbox_publish_failures_total` | Counter | (none) | outbox → Kafka send failures (drives alerting on broker outages) |
-| `membership_payment_declined_total` | Counter | (none) | PG mock declines (funnel + fraud-signal placeholder) |
-| `membership_access_check_total` | Counter | `result` (`allow`/`deny`) | internal access-check volume + grant/deny ratio |
-| `membership_access_check_fail_closed_total` | Counter | (none) | access-checks that denied due to infra error (fail-closed path) — alert when > 0 |
+| `membership_payment_declined_total` | Counter | (none) | PG mock declines (funnel + fraud-signal placeholder) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `membership_access_check_total` | Counter | `result` (`allow`/`deny`) | internal access-check volume + grant/deny ratio — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `membership_access_check_fail_closed_total` | Counter | (none) | access-checks that denied due to infra error (fail-closed path) — alert when > 0 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `membership_auto_renewed_total` | Counter | (none) | memberships auto-renewed by charging a stored billing key; incremented by the number renewed in each `BillingKeyAutoRenewalScheduler` tick (daily by default, batch-capped by `max-batch`). A tick that throws is logged and not counted |
 | `http.server.requests` | Timer (Spring Boot default) | `method`, `uri`, `status` | per-endpoint latency + traffic |
 | `jvm.*`, `process.*`, `system.*` | gauges | (default) | runtime telemetry |

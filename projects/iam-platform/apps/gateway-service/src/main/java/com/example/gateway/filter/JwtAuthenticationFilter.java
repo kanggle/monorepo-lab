@@ -64,7 +64,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     private static final Pattern INTERNAL_PATH_DISGUISE_PATTERN =
             Pattern.compile("(?i)(/\\.{1,2}(/|$)|%2e|%2f|%5c|;|\\\\)");
     private static final String FALLBACK_METRIC_NAME = "gateway_tenant_fallback_total";
-    /** observability.md § 필수 메트릭 — counter, tag {@code result}. Public routes are not counted. */
+    /** observability.md § 핵심 메트릭 — counter, tag {@code result}. Public routes are not counted. */
     static final String JWT_VALIDATION_METRIC_NAME = "gateway_jwt_validation_total";
     static final String JWT_RESULT_VALID = "valid";
     static final String JWT_RESULT_EXPIRED = "expired";
@@ -366,7 +366,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
      * {@code exp} expiry is the only failure with its own value; the shared
      * {@code Rs256JwtVerifier} keeps JJWT's {@link ExpiredJwtException} as the cause.
      * Everything else — format, missing/unknown kid, signature, issuer, an unexpected
-     * error — is {@code invalid_signature} (observability.md § 필수 메트릭).
+     * error — is {@code invalid_signature} (observability.md § 핵심 메트릭).
      */
     static String classifyVerificationFailure(Throwable e) {
         for (Throwable t = e; t != null; t = t.getCause()) {

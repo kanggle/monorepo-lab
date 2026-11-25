@@ -12,9 +12,9 @@
 #
 # <prometheus name>   # <spec> — <837 category>
 
-account_status_transition_total                    # account-service/observability.md 필수 메트릭 — D2
+account_status_transition_total                    # account-service/observability.md 핵심 메트릭 — D2
 account_total_by_status                            # account-service/observability.md 비즈니스 메트릭 — D2
-admin_downstream_duration_seconds_bucket           # admin-service/observability.md 필수 메트릭 (admin_downstream_duration_seconds) — D2
-security_event_processing_duration_seconds_bucket  # security-service/observability.md 필수 메트릭 (security_event_processing_duration_seconds) — D2
-security_suspicious_detected_total                 # security-service/observability.md 필수 메트릭 — D2
+admin_downstream_duration_seconds_bucket           # admin-service/observability.md 핵심 메트릭 (admin_downstream_duration_seconds) — D2
+security_event_processing_duration_seconds_bucket  # security-service/observability.md 핵심 메트릭 (security_event_processing_duration_seconds) — D2
+security_suspicious_detected_total                 # security-service/observability.md 핵심 메트릭 — D2
 security_risk_score_distribution_bucket            # security-service/observability.md 비즈니스 메트릭 (security_risk_score_distribution) — D2

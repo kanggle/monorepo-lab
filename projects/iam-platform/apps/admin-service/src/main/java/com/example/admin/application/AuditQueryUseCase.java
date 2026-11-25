@@ -47,7 +47,7 @@ public class AuditQueryUseCase {
     private final QueryTenantScopeGate queryTenantScopeGate;
 
     /**
-     * TASK-BE-668 — observability.md § 필수 메트릭: counter {@code admin_audit_query_total}, tag
+     * TASK-BE-668 — observability.md § 핵심 메트릭: counter {@code admin_audit_query_total}, tag
      * {@code query_type} = the {@code source} the operator asked for ({@code admin} ·
      * {@code login_history} · {@code suspicious}, or {@code all} when none — admin-api.md §
      * GET /api/admin/audit; the controller refuses any other value, so the tag set is closed).

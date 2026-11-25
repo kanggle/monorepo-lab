@@ -6,19 +6,21 @@
 
 ## Metrics (Prometheus)
 
-### 필수 메트릭
+### 핵심 메트릭
+
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
 
 | 이름 | 타입 | 라벨 | 설명 |
 |---|---|---|---|
-| `gateway_requests_total` | counter | `method`, `route`, `status` | 전체 요청 수 |
-| `gateway_request_duration_seconds` | histogram | `method`, `route` | 요청 처리 시간 (p50/p95/p99) |
+| `http_server_requests_seconds_count` | counter (Timer) | `method`, `uri`, `status` | 전체 요청 수 — Spring Boot WebFlux 내장. ⚠️ `route` 라벨 없음(SCG 자체 metrics `spring.cloud.gateway.metrics.enabled` 기본 false) |
+| `http_server_requests_seconds_bucket` | histogram | `method`, `uri` | 요청 처리 시간 (p50/p95/p99) — Spring Boot 내장, 버킷은 `libs/java-observability`(TASK-MONO-836). ⚠️ `route` 라벨 없음 |
 | `gateway_jwt_validation_total` | counter | `result` (valid/expired/invalid_signature/missing) | JWT 검증 결과 (JWT 를 검사한 요청마다 한 번, 공개 경로는 세지 않음). `invalid_signature` = `exp` 만료가 아닌 **모든** 검증 실패(`Bearer` 형식 · kid 없음/모름 · 서명 · issuer 등) |
 | `gateway_ratelimit_total` | counter | `scope`, `result` (allowed/rejected) | Rate limit 판정 |
 | `gateway_ratelimit_rejected_total` | counter | `scope` | 429 응답 수 |
-| `gateway_jwks_fetch_total` | counter | `result` (success/failure/cache_hit) | JWKS 페치 결과 |
-| `gateway_jwks_cache_age_seconds` | gauge | — | 현재 캐시된 JWKS의 나이 |
-| `gateway_upstream_duration_seconds` | histogram | `upstream_service` | 다운스트림 서비스 응답 시간 |
-| `gateway_circuit_breaker_state` | gauge | `upstream_service` | 0=closed, 1=half_open, 2=open |
+| `gateway_jwks_fetch_total` | counter | `result` (success/failure/cache_hit) | JWKS 페치 결과 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `gateway_jwks_cache_age_seconds` | gauge | — | 현재 캐시된 JWKS의 나이 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `gateway_upstream_duration_seconds` | histogram | `upstream_service` | 다운스트림 서비스 응답 시간 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `gateway_circuit_breaker_state` | gauge | `upstream_service` | 0=closed, 1=half_open, 2=open — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 
 ### 비즈니스 메트릭
 
@@ -47,12 +49,14 @@
 
 ## Traces (OTel)
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Span 이름 | 설명 |
 |---|---|
-| `gateway.filter.jwt` | JWT 검증 처리 |
-| `gateway.filter.ratelimit` | Rate limit 판정 |
+| `gateway.filter.jwt` | JWT 검증 처리 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `gateway.filter.ratelimit` | Rate limit 판정 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `gateway.route.{upstream}` | 다운스트림 포워딩 (HTTP client span) |
-| `gateway.jwks.fetch` | JWKS 원격 페치 |
+| `gateway.jwks.fetch` | JWKS 원격 페치 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 
 **Trace propagation**: 인바운드 `traceparent` 헤더를 존중하고, 없으면 root span 생성. 다운스트림 호출 시 `traceparent` 전파.
 

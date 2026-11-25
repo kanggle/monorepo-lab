@@ -72,7 +72,7 @@ public class AdminActionAuditor {
     public static final String REASON_SELF_INVITATION_ACCEPT = "<self_invitation_accept>";
 
     /**
-     * TASK-BE-662 — observability.md § 필수 메트릭: counter, tags {@code action_code}
+     * TASK-BE-662 — observability.md § 핵심 메트릭: counter, tags {@code action_code}
      * ({@link ActionCode} name, {@code UNKNOWN} when null — the same rule as the
      * {@code admin.audit.*} counters) and {@code outcome} (success/failure/denied).
      * Counted here, once per finished command record; {@link #recordStart} (IN_PROGRESS)
@@ -81,7 +81,7 @@ public class AdminActionAuditor {
     static final String COMMAND_METRIC_NAME = "admin_command_total";
 
     /**
-     * TASK-BE-668 — observability.md § 필수 메트릭: counter, tag {@code result} (success/failure),
+     * TASK-BE-668 — observability.md § 핵심 메트릭: counter, tag {@code result} (success/failure),
      * one per audit-ledger write attempt. Every {@code admin_actions} row is written through this
      * facade (the two writers have no other caller), so counting here sees every write once:
      * {@code success} when the write returned, {@code failure} when it threw (the fail-closed

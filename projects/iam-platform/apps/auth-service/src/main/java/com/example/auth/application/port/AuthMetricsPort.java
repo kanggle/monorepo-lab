@@ -2,7 +2,7 @@ package com.example.auth.application.port;
 
 /**
  * TASK-BE-664 (+ TASK-BE-668: {@code auth_token_issued_total{type}} and
- * {@code auth_token_refresh_total{result}}) — the two security counters auth-service observability.md § 필수 메트릭 requires and
+ * {@code auth_token_refresh_total{result}}) — the two security counters auth-service observability.md § 핵심 메트릭 requires and
  * that nothing produced before: {@code auth_login_total{result}} and
  * {@code auth_token_reuse_detected_total}.
  *

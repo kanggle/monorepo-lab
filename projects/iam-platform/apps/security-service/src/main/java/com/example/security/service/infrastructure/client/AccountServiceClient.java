@@ -41,7 +41,7 @@ public class AccountServiceClient implements AccountLockClient {
     private final IamClientCredentialsTokenProvider tokenProvider;
     private final Counter retryCounter;
     private final Counter failureCounter;
-    /** security-service observability.md § 필수 메트릭 — counter, tag {@code result} (success/failure). */
+    /** security-service observability.md § 핵심 메트릭 — counter, tag {@code result} (success/failure). */
     static final String ISSUED_METRIC_NAME = "security_auto_lock_issued_total";
     private final Counter issuedSuccessCounter;
     private final Counter issuedFailureCounter;

@@ -6,27 +6,31 @@
 
 ## Metrics (Prometheus)
 
-### 필수 메트릭
+### 핵심 메트릭
+
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
 
 | 이름 | 타입 | 라벨 | 설명 |
 |---|---|---|---|
 | `auth_login_total` | counter | `result` (success/failure/rate_limited/account_locked) | 로그인 시도 결과 |
-| `auth_login_duration_seconds` | histogram | `result` | 로그인 처리 시간 |
+| `auth_login_duration_seconds` | histogram | `result` | 로그인 처리 시간 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `auth_token_issued_total` | counter | `type` (access/refresh) | 토큰 발급 수 |
 | `auth_token_refresh_total` | counter | `result` (success/expired/reuse_detected/revoked) | Refresh 시도 결과 |
 | `auth_token_reuse_detected_total` | counter | — | 재사용 탐지 횟수 (보안 KPI) |
-| `auth_credential_verify_duration_seconds` | histogram | — | 패스워드 해시 검증 시간 (argon2 튜닝 지표) |
-| `auth_redis_failure_counter_ops_total` | counter | `op` (incr/get/reset) | Redis 실패 카운터 연산 |
+| `auth_credential_verify_duration_seconds` | histogram | — | 패스워드 해시 검증 시간 (argon2 튜닝 지표) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `auth_redis_failure_counter_ops_total` | counter | `op` (incr/get/reset) | Redis 실패 카운터 연산 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `auth_outbox_lag_seconds` | gauge | — | 아직 발행되지 않은 outbox 이벤트의 최대 나이 |
-| `auth_account_service_duration_seconds` | histogram | `endpoint` | account-service 내부 HTTP 호출 시간 |
-| `auth_circuit_breaker_state` | gauge | `target` | account-service circuit breaker 상태 |
+| `auth_account_service_duration_seconds` | histogram | `endpoint` | account-service 내부 HTTP 호출 시간 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `resilience4j_circuitbreaker_state` | gauge | `name` (`accountService`), `state` | account-service circuit breaker 상태 — Resilience4j 가 낸다, 현재 state 줄이 1(TASK-BE-665). `AuthAccountServiceDown` 이 묻는다 |
 
 ### 비즈니스 메트릭
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | 이름 | 타입 | 설명 |
 |---|---|---|
-| `auth_active_sessions_total` | gauge | 현재 유효한 refresh token 수 (추정) |
-| `auth_login_failure_streak_max` | gauge | 현재 가장 긴 연속 실패 streak (이상 탐지 보조) |
+| `auth_active_sessions_total` | gauge | 현재 유효한 refresh token 수 (추정) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `auth_login_failure_streak_max` | gauge | 현재 가장 긴 연속 실패 streak (이상 탐지 보조) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 
 ---
 
@@ -51,15 +55,17 @@
 
 ## Traces (OTel)
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Span 이름 | 설명 |
 |---|---|
-| `auth.login` | 전체 로그인 흐름 (root) |
-| `auth.credential.verify` | argon2 해시 비교 |
-| `auth.token.issue` | JWT access + refresh 발급 |
-| `auth.token.refresh` | Refresh rotation 흐름 |
-| `auth.token.reuse.detect` | 재사용 탐지 경로 |
+| `auth.login` | 전체 로그인 흐름 (root) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `auth.credential.verify` | argon2 해시 비교 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `auth.token.issue` | JWT access + refresh 발급 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `auth.token.refresh` | Refresh rotation 흐름 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `auth.token.reuse.detect` | 재사용 탐지 경로 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `auth.account-service.lookup` | account-service 내부 HTTP 호출 |
-| `auth.outbox.write` | Outbox 이벤트 저장 |
+| `auth.outbox.write` | Outbox 이벤트 저장 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `auth.redis.fail-counter` | Redis 실패 카운터 조회/증가 |
 
 ---

@@ -366,8 +366,8 @@ Standard event-consumer + outbox-relay metrics, plus channel-specific:
 - `notification.delivery.attempts{channel, status}` — for SLA dashboards
 - `notification.delivery.duration.seconds{channel, status}` — vendor
   latency
-- `notification.channel.circuit.state{channel}` — Resilience4j circuit
-  breaker open/half-open/closed gauge
+- `resilience4j_circuitbreaker_state{name="slack",state}` — Resilience4j circuit
+  breaker gauge (exported by resilience4j-micrometer; the current state reads 1)
 - `notification.routing.dedupe{outcome}` — Counter. `AlertRoutingService`
   increments `outcome=DUPLICATE` when an `eventId` was already processed (fast-exit
   check or lost insert race); replay is a safe no-op

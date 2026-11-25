@@ -8,7 +8,7 @@ TASK-MONO-840
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -56,9 +56,9 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] AC-1: 837 의 D2 120 · E 23 이름이 전부 표시됐다 — 스펙 전체에서 그 이름이 첫 칸인 행 중 표시 없는 행 0(스크립트로 세고 수를 증거에).
-- [ ] AC-2: A2 · B · C 21행의 새 이름이 코드 · 프레임워크에 실제로 있다(A2 는 등록 이름, B 는 837 B 표의 근거, C 는 식의 재료가 등록됐거나 «계획»).
-- [ ] AC-3: 표시된 행이 구현된 이름(837 A)을 하나도 포함하지 않는다(오표시 0).
+- [x] AC-1: 837 의 D2 120 · E 23 이름이 전부 표시됐다 — 스펙 전체에서 그 이름이 첫 칸인 행 중 표시 없는 행 0(스크립트로 세고 수를 증거에).
+- [x] AC-2: A2 · B · C 21행의 새 이름이 코드 · 프레임워크에 실제로 있다(A2 는 등록 이름, B 는 837 B 표의 근거, C 는 식의 재료가 등록됐거나 «계획»).
+- [x] AC-3: 표시된 행이 구현된 이름(837 A)을 하나도 포함하지 않는다(오표시 0).
 - [ ] AC-4: `check-metric-name-registry.sh` rc=0(코드 → 스펙 방향이 깨지지 않음) · 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께) · PR CI 실패 0.
 
 # Related Specs
@@ -82,6 +82,18 @@ monorepo
 # Test Requirements
 
 - 표시 · 오표시 · 셀 수 스크립트 검사 · 가드 · CI.
+
+# Implementation Evidence (2026-11-25 UTC)
+
+- **입력**: `TASK-MONO-837` 증거의 범주별 이름 목록(C · D2 · E — 스크립트가 그 절을 그대로 읽는다) + 837 의 A2 · B 표. 모집단 규칙도 837 과 같다(가장 안쪽 분류 제목 · 로그 표 제외 · 첫 칸의 백틱 이름).
+- **D2 · E · C 표시** — 스크립트가 행의 **마지막 칸만** 고친다(칸 수 보존을 행마다 단언): D2 **134행** · span **23행** · C 18행(재료 카운터가 등록돼 식을 쓸 수 있는 것 4 = `admin_lock_unlock_ratio` → `admin_command_total{action_code="LOCK"/"UNLOCK"}` · `outbound/inventory.idempotency.hit.rate` → `*_idempotency_lookup_count_total{result="hit"}` 비율(값 `hit`/`miss`/`conflict` 는 `libs/java-web-servlet/.../IdempotencyMetrics.java:14-18`) · `outbound.idempotency.mismatch.count` → `…{result="conflict"}`(lock-held 503 포함 단서), 재료도 미구현 14 = «파생(계측 아님) · 재료 카운터 미구현» + 계획 표시). 28 파일. 표시 행이 있는 표마다 범례 한 줄. 837 목록의 이름 중 모집단에서 못 찾은 것 **0**(D2 120 · E 23 · C 12 전부).
+- **A2(3)** — fan `artist-service/observability.md` 알림 표 `outbox_pending_count` → `artist_outbox_pending_count`(`ArtistOutboxPublisher.java:76`) · iam `security_consumer_lag` → `kafka_consumer_lag{topic,group,partition}`(`SecurityMetricsConfig.java:151`) · wms `idempotency.md` `wms.notification.delivery.attempt{channel,outcome}` → `notification.delivery.attempts{channel,status=SUCCEEDED|RETRIED|FAILED}`(`DeliveryDispatchPerRow.java:76-78` — 같은 서비스의 `external-integrations.md` 가 이미 이 이름).
+- **B(6 → 실제 편집 5)** — iam admin · auth 차단기 행 → `resilience4j_circuitbreaker_state{name="accountService",state}` · iam gateway 두 행 → `http_server_requests_seconds_count` / `_bucket`(⚠️ `route` 라벨 없음, SCG metrics 기본 off) · wms notification 표 행 → `resilience4j_circuitbreaker_state{name="slack"}`. fan `http.server.requests` 2행은 이미 «Timer (Spring Boot default)» 라 편집 없음. 같은 사실을 적은 wms 산문 세 곳(`external-integrations.md:90` · `:148` · `architecture.md:369`)도 같은 이름으로 — 한 사실이 세 곳에 있으면 한 곳만 고쳐진다.
+- **iam 제목** — `### 필수 메트릭` → `### 핵심 메트릭` 5곳 + 그 제목을 가리키는 코드 주석 · 대기 목록 주석 → **16 파일 21곳**(`tasks/` 의 기록은 동결 문서라 그대로). `TASK-BE-668` 이 같은 주석 파일들을 고치고 있어 그 머지 뒤로 미뤄 충돌을 피했다.
+- **AC-1** — 검사 스크립트(같은 모집단): 표시 행 **171**(= 134 + 23 + 14), «계획 이름인데 표시 없는 행» **0**. **bite**: auth 스펙에서 표시 하나를 지우면 1 → 복원 0.
+- **AC-2** — A2 새 이름 3개 모두 코드의 meter 등록(위 파일:줄). B 는 837 B 표의 근거(665 실측 · `@CircuitBreaker` + 런타임 클래스패스 · Boot WebFlux 내장). C 식 재료 4종 모두 등록됨(`admin_command_total` — TASK-BE-662, `*_idempotency_lookup_count_total` — 위).
+- **AC-3** — 표시 행 중 코드에 등록된 이름(접미사 정규화 포함)을 담은 행 **0**. 668 · 669 머지 뒤에 다시 돌려도 0(D1 6행은 처음부터 표시하지 않았다).
+- **AC-4** — `check-metric-name-registry.sh` rc=0(«113 literal metric name(s) across 31 service(s)»). 스테이지 뒤 `check-*.sh` 43: 41 rc=0, 비0 둘 = 환경 전제(erp 래칫 · prerendered verdict). `.mjs` 7/7. PR CI: 대기.
 
 # Definition of Done
 

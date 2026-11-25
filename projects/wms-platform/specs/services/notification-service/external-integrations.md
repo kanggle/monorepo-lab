@@ -87,7 +87,7 @@ call is issued.
 | 5xx | `RuntimeException` (caught by `@Retry`) | retry per § 1.8; on exhaustion `→ FAILED` | metric `..{status=FAILED_TRANSIENT}` per attempt |
 | IO error / timeout | `RuntimeException` (caught by `@Retry`) | same as 5xx | same |
 | Webhook URL unset for alias | `ChannelNotConfiguredException` | `NotificationDelivery → FAILED` (fail-closed) | metric `..{status=FAILED_NOT_CONFIGURED}` + alert |
-| Circuit OPEN | `CallNotPermittedException` (Resilience4j fast-fail) | re-tried on next outer-budget poll (per § 1.13) | gauge `notification.channel.circuit.state{channel=SLACK}` = 2 |
+| Circuit OPEN | `CallNotPermittedException` (Resilience4j fast-fail) | re-tried on next outer-budget poll (per § 1.13) | gauge `resilience4j_circuitbreaker_state{name="slack",state="open"}` = 1 |
 
 ### 1.5 Adapter Layout
 
@@ -145,8 +145,8 @@ delivery dispatcher catches and translates to a `RETRY_SCHEDULED`
 delivery state; the next outer-budget poll picks the row up after the
 back-off window (§ 1.13).
 
-State exposed as gauge `notification.channel.circuit.state{channel=SLACK}`
-(0=closed, 1=half-open, 2=open).
+State exposed by Resilience4j as gauge `resilience4j_circuitbreaker_state{name="slack",state=…}`
+(the current state's line reads 1, the others 0).
 
 ### 1.8 Retry (I3, Adapter-Inner)
 
@@ -435,17 +435,19 @@ consumer pools and the HTTP server's request thread pool.
 
 Per `rules/traits/integration-heavy.md` § Interaction with Common Rules:
 
+> 🔵 *계획* 표시 행은 아직 코드가 내보내지 않는다(2026-11-25 UTC 전수, TASK-MONO-837). 알림 · 대시보드가 필요해질 때 구현한다.
+
 | Metric | Vendor | Description |
 |---|---|---|
 | `notification.delivery.attempts{channel, status}` | Slack-out | Counter of delivery attempts by channel + outcome |
 | `notification.delivery.duration.seconds` | Slack-out | Histogram p50/p95/p99 of adapter `send()` duration |
-| `notification.channel.circuit.state{channel}` | Slack-out | Gauge 0=closed, 1=half-open, 2=open |
-| `notification.channel.send.failed{channel, reason}` | Slack-out | Counter by failure reason (`PERMANENT_4XX`, `RETRY_EXHAUSTED`, `NOT_CONFIGURED`, `CIRCUIT_OPEN`) |
+| `resilience4j_circuitbreaker_state{name="slack"}` | Slack-out | Gauge — Resilience4j 가 낸다, 현재 state 줄(`state="open"` 등)이 1 (`@CircuitBreaker(name = "slack")`) |
+| `notification.channel.send.failed{channel, reason}` | Slack-out | Counter by failure reason (`PERMANENT_4XX`, `RETRY_EXHAUSTED`, `NOT_CONFIGURED`, `CIRCUIT_OPEN`) — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 | `notification.outbox.pending.count` | Kafka-out | Gauge of unpublished audit-outbox rows |
-| `notification.outbox.lag.seconds` | Kafka-out | Histogram of oldest unpublished row age |
-| `notification.consumer.received.total{topic, outcome}` | Kafka-in | Counter by topic + applied/duplicate/failed |
-| `notification.consumer.dlt.records.total{topic}` | Kafka-in | Counter; alerts at >0 |
-| `notification.event.dedupe.hit.rate` | Kafka-in | Computed metric |
+| `notification.outbox.lag.seconds` | Kafka-out | Histogram of oldest unpublished row age — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `notification.consumer.received.total{topic, outcome}` | Kafka-in | Counter by topic + applied/duplicate/failed — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `notification.consumer.dlt.records.total{topic}` | Kafka-in | Counter; alerts at >0 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
+| `notification.event.dedupe.hit.rate` | Kafka-in | Computed metric — 파생(계측 아님) · 재료 카운터 미구현 — 🔵 *계획 · 미구현 (TASK-MONO-837)* |
 
 Logs (structured JSON, INFO level — see
 [`idempotency.md`](idempotency.md) § Observability for the precise event
