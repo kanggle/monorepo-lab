@@ -103,6 +103,13 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.timeout-minutes }}
+    # TASK-MONO-843 — one gradle-home cache entry per CALLER. Without this every caller
+    # computed the same key (`e2e[<hash of the caller workflow's name>]`): the job id is
+    # always `e2e` and the matrix is empty. Full mechanism and numbers: the same comment in
+    # _integration.yml. `report-artifact` is required, unique per caller and fixed.
+    # Job-level so setup-gradle's post step (the save) sees it too.
+    env:
+      GRADLE_BUILD_ACTION_CACHE_KEY_JOB_INSTANCE: ${{ inputs.report-artifact }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -126,8 +133,9 @@ jobs:
           path: ${{ inputs.extra-download-path }}
 
       # TASK-MONO-797 — both Gradle calls in this lane go through the not-found retry
-      # wrapper. Every caller of this workflow shares one gradle-home cache key prefix
-      # (the job is always `e2e`), and setup-gradle saves that home even from a failed
+      # wrapper. Every caller of this workflow shared one gradle-home cache key prefix
+      # (the job is always `e2e`; TASK-MONO-843 gave each caller its own entry, but a
+      # first run still falls back to a sibling's), and setup-gradle saves that home even from a failed
       # build, so one transient "not found" from the repository used to be restored and
       # replayed by every lane that needs the artifact, on every later run (3 red main
       # nightlies, 2026-10-16). The wrapper retries ONLY on Gradle's not-found exceptions,
