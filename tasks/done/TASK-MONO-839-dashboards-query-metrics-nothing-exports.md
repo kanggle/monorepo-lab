@@ -8,7 +8,7 @@ Grafana 대시보드 패널이 아무도 내보내지 않는 지표를 묻는다
 
 # Status
 
-review
+done
 
 # Owner
 
@@ -71,7 +71,7 @@ iam 20개의 성격:
 - [x] AC-1: 고치기 전 트리에서 확장 가드 rc=1 · iam 20 · ecommerce 1 · wms 0(`-` 정규화 뒤). 고친 뒤 rc=0, 대기 목록 통과 수 = iam 11 · ecommerce 1.
 - [x] AC-2: `--self-test` 전부 PASS(기존 18 + 새 case).
 - [x] AC-3: 고친 iam 대시보드 5개가 Grafana 11.2.0 에 오류 없이 프로비저닝된다.
-- [ ] AC-4: 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께) · PR CI 에서 `Alert rule metrics …` 잡이 **실행되어** success.
+- [x] AC-4: 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께) · PR CI 에서 `Alert rule metrics …` 잡이 **실행되어** success.
 
 # Related Specs
 
@@ -105,7 +105,7 @@ iam 20개의 성격:
 - **AC-1** — 확장 가드를 고치기 **전** 트리에 돌린 결과: rc=1, `ALERTS` 3줄(위 FRAMEWORK_EXACT 로 해소) 외에 **iam 20 · ecommerce 1 · wms 0**(기안의 사전 측정 — 같은 술어를 `-` 정규화 없이 파이썬으로 — 에서는 wms 1: `inventory_optimistic_lock_retry_count_total`, `TASK-BE-666` 의 실제 scrape 로 존재가 확인된 이름. 가드에 정규화를 넣은 뒤 돌렸으므로 가드 출력에는 처음부터 없다). 고친 뒤 rc=0: «55 metric reference(s) in 3 rules file(s) … 20 runbook link(s) …; **239** reference(s) in **20** dashboard(s), all exported except **12** listed as pending»(iam 11 + ecommerce 1).
 - **AC-2** — `--self-test` **25/25**(기존 18 + 새 7: 대시보드의 없는 이름 bite · 이스케이프된 라벨 값은 이름 아님 · 대기 목록 통과 · 내보내진 대기 항목 bite · 안 쓰이는 대기 항목 bite · 대기 목록은 알림을 면제하지 않음 · `-` 가 든 등록 이름 매치). 기준 복사본에 실제 대시보드 · 대기 목록 · **실제 등록 이름 파일**(`RealRegistrations.java` — 접미사 뗀 이름이 복사본에서도 풀리게)을 넣어 «unmutated copy passes» 가 실제 트리와 같은 판정을 한다. 로컬(msys) 8분 6초 · 같은 잡의 CI 실적 10~14초.
 - **AC-3** — `grafana/grafana:11.2.0` 에 iam `provisioning` · `dashboards` 마운트: 대시보드 **9개** 프로비저닝, 패널 수 account 7→5 · security 10→8 · gateway 8→7 · auth 8(그대로), 대시보드 · datasource 관련 error 0. 컨테이너 · 이미지 삭제.
-- **AC-4** — 스테이지 뒤 `check-*.sh` 43: 41 rc=0, 비0 둘 = 환경 전제(erp 래칫 · prerendered verdict). `.mjs` 7/7. PR CI: 대기.
+- **AC-4** — 스테이지 뒤 `check-*.sh` 43: 41 rc=0, 비0 둘 = 환경 전제(erp 래칫 · prerendered verdict). `.mjs` 7/7. PR CI(#4698): 첫 실행 실패 1 = `Integration (ecommerce B …)` — `compileJava` 의 Maven Central 의존성 다운로드 실패(`Could not GET … springdoc-openapi-starter-webmvc-ui-2.7.0`, 단언 전 · 이 PR 은 ecommerce 코드를 안 건드림) → `gh run rerun --failed` 로 그 잡 7m40s pass. 최종 실패 0 · SUCCESS 42. `Alert rule metrics …` **실행되어** SUCCESS(27s, 834 시점 10~14s).
 
 # Definition of Done
 
