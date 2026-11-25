@@ -8,7 +8,7 @@ p99 지연 알림이 묻는 `http_server_requests_seconds_bucket` 을 아무 서
 
 # Status
 
-ready
+review
 
 # Owner
 
@@ -57,10 +57,10 @@ monorepo
 
 # Acceptance Criteria
 
-- [ ] AC-1: 테스트 ①~④ 가 통과한다. ② 는 필터를 끈 상태에서 `_bucket` 이 **없음** 을 단언한다.
-- [ ] AC-2: 실제 서비스 하나(iam `auth-service` 권장 — `TASK-BE-664` 가 노출을 열었다)의 기존 Spring 컨텍스트 테스트 또는 새 테스트에서 `/actuator/prometheus` 응답에 `http_server_requests_seconds_bucket` 이 나온다. 띄우지 못하면 ⚪ 와 그 이유.
-- [ ] AC-3: wms `admin-service` · `notification-service` 의 `application.yml` 에 속성이 있고 두 서비스 테스트가 통과한다.
-- [ ] AC-4: `:libs:java-observability:check` 와 영향받는 서비스 모듈의 테스트가 통과한다(라이브러리를 쓰는 41개 모듈 전부는 CI 에 맡기되, 로컬에서 최소 iam 5개).
+- [x] AC-1: 테스트 ①~④ 가 통과한다. ② 는 필터를 끈 상태에서 `_bucket` 이 **없음** 을 단언한다.
+- [x] AC-2: 실제 서비스 하나(iam `auth-service` 권장 — `TASK-BE-664` 가 노출을 열었다)의 기존 Spring 컨텍스트 테스트 또는 새 테스트에서 `/actuator/prometheus` 응답에 `http_server_requests_seconds_bucket` 이 나온다. 띄우지 못하면 ⚪ 와 그 이유.
+- [x] AC-3: wms `admin-service` · `notification-service` 의 `application.yml` 에 속성이 있고 두 서비스 테스트가 통과한다.
+- [x] AC-4: `:libs:java-observability:check` 와 영향받는 서비스 모듈의 테스트가 통과한다(라이브러리를 쓰는 41개 모듈 전부는 CI 에 맡기되, 로컬에서 최소 iam 5개).
 - [ ] AC-5: 가드 전부(스테이지 뒤) rc=0(환경 전제 비0 은 사유와 함께). PR CI 실패 0.
 
 # Related Specs
@@ -87,6 +87,15 @@ monorepo
 # Test Requirements
 
 - 라이브러리 단위 테스트 ①~④ · 서비스 하나의 scrape 테스트 · 영향 모듈 테스트 · 가드 전수 · CI.
+
+# Implementation Evidence (2026-11-25 UTC)
+
+- **변경**: `ObservabilityAutoConfig.HttpServerRequestsHistogramConfig` — `MeterFilter` 하나. 이름이 **정확히** `http.server.requests` 이고 `config.isPercentileHistogram()` 가 `null`(아무도 정하지 않음)일 때만 `percentilesHistogram(true)` 를 merge. 명시적 값이 있으면 그대로 둔다 → Spring Boot 의 속성 필터와 어느 순서로 돌아도 명시적 `false` 가 이긴다. wms `admin-service` · `notification-service` `application.yml` 에 `management.metrics.distribution.percentiles-histogram.http.server.requests: true`. 두 프로젝트 `high-latency-p99.md` 를 고친 뒤 상태로.
+- **AC-1** — `HttpServerRequestsHistogramTest` 5건 PASS(Spring Boot 의 `MetricsAutoConfiguration` + `PrometheusMetricsExportAutoConfiguration` 으로 띄운 실제 `PrometheusMeterRegistry` scrape): ① `_bucket{` 있음 ② **대조군 — 라이브러리 없이 같은 기록에서 `_count` 는 있고 `_bucket` 은 없음**(티켓 전제의 증명) ③ `http.server.requests.other` · `outbox.publish` 에는 `_bucket` 없음 ④ `…http.server.requests=false` 존중 ④' `…all=false` 존중. 기존 `ObservabilityAutoConfigTest` 의 `hasSingleBean(MeterFilter)` 는 필터가 둘이 되어 빈 이름 단언으로 바꿈. **bite**: 필터 이름을 다른 값으로 바꾸면 10건 중 1건(①) 실패 → 복원.
+- **AC-2** — iam auth-service 대신 **wms master-service** 의 기존 실서버 IT `WarehouseIntegrationTest.prometheusEndpoint_exposesOutboxMetrics`(`@AutoConfigureObservability`, 라이브러리 경로)에 `http_server_requests_seconds_bucket{` 단언 추가 — 5/5 PASS. auth-service 에는 `/actuator/prometheus` 를 실제로 긁는 테스트가 없고(노출 테스트는 yml 읽기), 같은 라이브러리 경로를 실서버로 증명하는 기존 IT 가 있어 그것을 썼다.
+- **AC-3** — notification-service `HealthSurfaceIntegrationTest` 에 버킷 case 추가(실서버, yml 경로) 6/6 PASS. **bite**: yml 값을 `false` 로 바꾸면 6건 중 1건 실패 → 복원(점이 든 YAML 키가 실제로 바인딩된다는 증명). admin-service 는 스크레이프 IT 가 없어 `HttpServerRequestsHistogramConfigTest`(실제 `application.yml` 읽기) 1/1 PASS.
+- **AC-4** — 로컬 `:libs:java-observability:check` + wms admin · notification · master · gateway `test` + iam 5개 `test`: 하나만 실패 — security-service `AccountLockHistoryJpaRepository > initializationError`(Testcontainers MySQL 컨테이너 기동 실패 `ContainerLaunchException`, 단언 전) → 그 클래스만 재실행 rc=0. 나머지 라이브러리 소비 모듈은 CI.
+- **AC-5** — 스테이지 뒤 `check-*.sh` 43: 41 rc=0, 비0 둘 = 환경 전제(`check-erp-single-tenant-ratchet` — 실행 중 erp DB · `check-prerendered-demo-verdict` — `DEMO_API_BASE` + 빌드, CI frontend-checks 에서 돈다). `.mjs` 6/6. `scripts/` 추가·삭제 없음. PR CI: 대기.
 
 # Definition of Done
 
